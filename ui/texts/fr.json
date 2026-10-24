@@ -68,5 +68,16 @@
   "owner": "Responsable",
   "attachment": "Pièce jointe",
   "tools": "Plus",
-  "cover": "À la une"
+  "cover": "À la une",
+  "op-add": "Créée",
+  "op-edit": "Modifiée",
+  "op-move": "Déplacée",
+  "op-note": "Note",
+  "op-edit-note": "Note modifiée",
+  "op-remove-note": "Note retirée",
+  "op-attach": "Attaché",
+  "op-detach": "Détaché",
+  "op-archive": "Archivée",
+  "op-restore": "Restaurée",
+  "op-delete": "Supprimée"
 }

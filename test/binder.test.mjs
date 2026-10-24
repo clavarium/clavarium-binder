@@ -300,7 +300,7 @@ test('a card shows the fields set, on one line; empty fields are not there', () 
     assert.equal(facts(n, { fields: { m: 52 } }, 'en')[0].text, 'Minutes: 52');
 });
 
-test('a picture is known by its name; the cover is the one chosen, else the only one, else none', () => {
+test('a picture is known by its name; the cover is the one chosen, else the photo field, else the only one attached, else none', () => {
     for (const ok of ['photos/a.jpg', 'B.JPEG', 'x.png', 'x.webp', 'x.gif', 'x.jpg?v=2']) { assert.equal(isPicture(ok), true, ok); assert.equal(storeIsPicture(ok), true, ok); }
     for (const no of ['report.pdf', 'jpg', 'a.jpg.txt', '', undefined]) { assert.equal(isPicture(no), false, String(no)); assert.equal(storeIsPicture(no), false, String(no)); }
     const l = seed('people', 'en');
@@ -313,10 +313,13 @@ test('a picture is known by its name; the cover is the one chosen, else the only
     assert.equal(imageOf(l, one), null, 'without a hook, nothing');
     const two = { fields: { photo: 'portrait.png' }, attached: [{ id: 'w', kind: 'file', ref: 'photos/wedding.jpg' }] };
     assert.deepEqual(pictures(l, two).map((p) => p.key), ['field:photo', 'w']);
-    assert.equal(coverOf(l, two), null, 'several, none chosen: none');
+    assert.equal(coverOf(l, two).key, 'field:photo', 'none chosen: the photo field, a picture put there on purpose');
+    const many = { fields: {}, attached: [{ id: 'w', kind: 'file', ref: 'a.jpg' }, { id: 'v', kind: 'file', ref: 'b.png' }] };
+    assert.equal(coverOf(l, many), null, 'several attached, none chosen, no photo field: none');
+    assert.equal(coverOf(l, { ...many, cover: 'v' }).key, 'v');
     assert.equal(imageOf(l, { ...two, cover: 'w' }, hook), '/pics/photos/wedding.jpg');
     assert.equal(imageOf(l, { ...two, cover: 'field:photo' }, hook), '/pics/portrait.png');
-    assert.equal(coverOf(l, { ...two, cover: 'gone' }), null, 'a cover no longer there counts for nothing');
+    assert.equal(coverOf(l, { ...many, cover: 'gone' }), null, 'a cover no longer there counts for nothing');
 });
 
 test('the state is shown only when it says something', () => {
@@ -335,6 +338,7 @@ test('the words: every key in both languages, none for an empty thing', () => {
         const words = JSON.parse(readFileSync(new URL(`../ui/texts/${lang}.json`, import.meta.url)));
         assert.deepEqual(KEYS.filter((k) => !(k in words)), [], `${lang}: missing`);
         for (const k of ['nobody', 'no-due']) assert.equal(k in words, false, `${lang}: "${k}" says what is empty`);
+        for (const op of ['add', 'edit', 'move', 'note', 'attach', 'detach', 'archive', 'restore']) assert.ok(words[`op-${op}`] && words[`op-${op}`] !== op, `${lang}: the history says ${op} in words`);
     }
 });
 

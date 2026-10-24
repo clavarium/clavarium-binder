@@ -264,7 +264,8 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
         /* COVER: the one picture a card is shown by, when it has several. It is a
          * picture attached (its id; given by id, the start of it, or its ref) or a
          * photo field set ("field:ID"; given by the field's id or name). Empty
-         * clears it. Without one, a card with exactly one picture is shown by it. */
+         * clears it. Without one, a card is shown by its photo field set, else by
+         * its only picture attached. */
         edit(given, { title, description, fields, owners, due, cover } = {}, who) {
             const w = whoOf(who);
             const { r, list } = recordOf(given, w, 'write');

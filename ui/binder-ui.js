@@ -21,7 +21,8 @@ export const KEYS = Object.freeze(['lists', 'new-list', 'new-item', 'no-lists', 
     'states', 'fields', 'access', 'read', 'write', 'none', 'save', 'empty', 'archived', 'show-archived', 'gate', 'done', 'add-state', 'add-field',
     'kind-message', 'kind-file', 'kind-asset', 'kind-branch', 'kind-link', 'kind-record', 'what', 'name', 'type', 'saved', 'edited', 'by', 'mine', 'all',
     'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'search', 'description', 'edit', 'more', 'approve', 'add', 'ok',
-    'add-what', 'owner', 'attachment', 'tools', 'cover']);
+    'add-what', 'owner', 'attachment', 'tools', 'cover',
+    'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'link', 'record'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', link: '🔗', record: '▣' };
 const TYPES = ['text', 'number', 'date', 'link', 'photo'];
@@ -41,11 +42,12 @@ export function pictures(l, r) {
     for (const a of r.attached ?? []) if (a.kind === 'file' && isPicture(a.ref)) out.push({ key: a.id, value: a.ref });
     return out;
 }
-/* The one put forward: the cover a person or an agent chose; without one, the
- * card's only picture; with several and none chosen, none. */
+/* The one put forward: the cover a person or an agent chose; else a photo field
+ * set (a picture put there on purpose); else the only picture attached; else none. */
 export function coverOf(l, r) {
     const all = pictures(l, r);
-    return all.find((p) => p.key === r.cover) ?? (all.length === 1 ? all[0] : null);
+    const attached = all.filter((p) => !p.key.startsWith('field:'));
+    return all.find((p) => p.key === r.cover) ?? all.find((p) => p.key.startsWith('field:')) ?? (attached.length === 1 ? attached[0] : null);
 }
 /* It, as a picture to show, through the page's `picture` hook; else none. */
 export function imageOf(l, r, picture = () => null) {
@@ -402,7 +404,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         const more = h('details', { class: 'binder-more', open: ui.more, ontoggle: (e) => { ui.more = e.currentTarget.open; } }, h('summary', { 'data-act': 'more' }, `⋯ ${w('more')}`),
             l.fields.length ? h('div', { class: 'binder-fields' }, l.fields.map(field)) : null,
             h('div', { class: 'binder-history' }, h('h3', {}, `${w('history')} · ${history.length}`),
-                history.slice().reverse().map((x) => h('div', { class: 'binder-log' }, h('time', {}, stamp(x.at)), `${x.by.name} · ${x.op}${x.op === 'move' && x.change ? ` → ${stateName(x.change.to)}` : ''}`))),
+                history.slice().reverse().map((x) => h('div', { class: 'binder-log' }, h('time', {}, stamp(x.at)), `${x.by.name} · ${words[`op-${x.op}`] ?? x.op}${x.op === 'move' && x.change ? ` → ${stateName(x.change.to)}` : ''}`))),
             can ? h('div', { class: 'binder-actions' },
                 /* The state said nothing, so it is not shown: closing the card is here. */
                 !stateShown(l, r) ? h('button', { type: 'button', class: 'binder-ghost binder-small', 'data-act': 'to-done', onclick: () => done(ask('move', { id: r.id, state: doneOf(l).id })) }, `✓ ${doneOf(l).name}`) : null,

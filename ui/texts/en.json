@@ -68,5 +68,16 @@
   "owner": "Owner",
   "attachment": "Attachment",
   "tools": "More",
-  "cover": "Cover"
+  "cover": "Cover",
+  "op-add": "Created",
+  "op-edit": "Edited",
+  "op-move": "Moved",
+  "op-note": "Note",
+  "op-edit-note": "Note edited",
+  "op-remove-note": "Note removed",
+  "op-attach": "Attached",
+  "op-detach": "Detached",
+  "op-archive": "Archived",
+  "op-restore": "Restored",
+  "op-delete": "Deleted"
 }
