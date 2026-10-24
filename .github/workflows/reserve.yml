@@ -1,0 +1,34 @@
+# reserve.yml -- ONCE, BY HAND: reserves the npm name before trusted publishing can be set.
+#
+# npm sets a trusted publisher only for a package that exists. This publishes a
+# placeholder (0.0.1, nothing in it but its name) with NPM_TOKEN, a short-lived
+# token kept as a secret of this repository. Afterwards: set the trusted
+# publisher (publish.yml), delete the secret, revoke the token, delete this file.
+name: reserve
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reserve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: The placeholder, made here
+        run: |
+          mkdir placeholder && cd placeholder
+          printf '%s\n' '{"name":"clavarium-binder","version":"0.0.1","description":"Clavarium Binder: name reserved; published from github.com/clavarium/clavarium-binder.","license":"MIT","repository":{"type":"git","url":"git+https://github.com/clavarium/clavarium-binder.git"}}' > package.json
+          echo "# Clavarium Binder (name reserved)" > README.md
+      - name: Published, unless it is there already
+        working-directory: placeholder
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if npm view clavarium-binder@0.0.1 version >/dev/null 2>&1; then echo "already reserved"; exit 0; fi
+          npm publish --access public
