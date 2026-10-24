@@ -64,3 +64,10 @@ whoever wrote it (`edit-note`).
 
 And the screen: `mount(element, { call, words, lang, people, picture, openAttached })`
 from `clavarium-binder/ui`, with `ui/binder-ui.css` and `ui/texts/*.json`.
+
+What a card shows: what is set, nothing about what is empty. The fields set
+make one line under its title; its state is said unless the card is in the
+first state and that is the list's only state not done (with no gate). Its
+picture -- the `cover` chosen (`binder edit ID --cover REF`, an attached
+picture or a photo field), else its only picture, else none -- is put forward
+on its page and in Tiles, through the page's `picture(value)`.

@@ -8,7 +8,8 @@ import { seed } from '../server/templates.mjs';
 import { keeper } from '../host/binder-host.mjs';
 import { ask, asked, TOOLS } from '../server/binder.mjs';
 import { say } from '../host/binder-host.mjs';
-import { blocks, inline, firstLine, rich } from '../ui/binder-ui.js';
+import { blocks, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, KEYS } from '../ui/binder-ui.js';
+import { isPicture as storeIsPicture } from '../server/store.mjs';
 import { DESCRIPTION_MAX } from '../server/store.mjs';
 import { run, read } from '../bin/binder.mjs';
 
@@ -283,4 +284,82 @@ test('a description is drawn element by element: hostile text stays text', () =>
         assert.ok(texts.includes('<img src=x onerror=alert(1)>'));
         assert.ok(texts.some((t) => t.includes('[no](javascript:alert(1))')));
     } finally { globalThis.document = was.document; globalThis.Node = was.Node; }
+});
+
+test('a card shows the fields set, on one line; empty fields are not there', () => {
+    const l = seed('people', 'fr');
+    assert.deepEqual(facts(l, { fields: {} }, 'fr'), [], 'nothing set, nothing said');
+    const set = facts(l, { fields: { born: '1931-04-12', place: 'Saint-Aubin', photo: 'photos/a.jpg' } }, 'fr');
+    assert.deepEqual(set.map((x) => x.id), ['born', 'place'], 'a photo is shown, not said');
+    assert.match(set[0].text, /^Naissance\u202f: 12 avril 1931$/);
+    assert.equal(set[1].text, 'Saint-Aubin', 'a text says itself');
+    assert.deepEqual(facts(l, { fields: { place: '' } }, 'fr'), [], 'an empty value is not there');
+    const crm = seed('customers', 'en');
+    assert.deepEqual(facts(crm, { fields: { site: 'https://www.shop.example.com/about', phone: '0102' } }, 'en').map((x) => x.text), ['0102', 'shop.example.com']);
+    const n = { fields: [{ id: 'm', name: 'Minutes', type: 'number' }] };
+    assert.equal(facts(n, { fields: { m: 52 } }, 'en')[0].text, 'Minutes: 52');
+});
+
+test('a picture is known by its name; the cover is the one chosen, else the only one, else none', () => {
+    for (const ok of ['photos/a.jpg', 'B.JPEG', 'x.png', 'x.webp', 'x.gif', 'x.jpg?v=2']) { assert.equal(isPicture(ok), true, ok); assert.equal(storeIsPicture(ok), true, ok); }
+    for (const no of ['report.pdf', 'jpg', 'a.jpg.txt', '', undefined]) { assert.equal(isPicture(no), false, String(no)); assert.equal(storeIsPicture(no), false, String(no)); }
+    const l = seed('people', 'en');
+    const hook = (v) => `/pics/${v}`;
+    const bare = { fields: {}, attached: [{ id: 'a1', kind: 'file', ref: 'notes.pdf' }, { id: 'a2', kind: 'link', ref: 'https://example.com/x.jpg' }] };
+    assert.deepEqual(pictures(l, bare), [], 'a link or a pdf is no picture');
+    assert.equal(imageOf(l, bare, hook), null, 'no picture: nothing put forward');
+    const one = { fields: {}, attached: [{ id: 'w', kind: 'file', ref: 'photos/wedding.jpg' }] };
+    assert.equal(imageOf(l, one, hook), '/pics/photos/wedding.jpg', 'the only picture is put forward');
+    assert.equal(imageOf(l, one), null, 'without a hook, nothing');
+    const two = { fields: { photo: 'portrait.png' }, attached: [{ id: 'w', kind: 'file', ref: 'photos/wedding.jpg' }] };
+    assert.deepEqual(pictures(l, two).map((p) => p.key), ['field:photo', 'w']);
+    assert.equal(coverOf(l, two), null, 'several, none chosen: none');
+    assert.equal(imageOf(l, { ...two, cover: 'w' }, hook), '/pics/photos/wedding.jpg');
+    assert.equal(imageOf(l, { ...two, cover: 'field:photo' }, hook), '/pics/portrait.png');
+    assert.equal(coverOf(l, { ...two, cover: 'gone' }), null, 'a cover no longer there counts for nothing');
+});
+
+test('the state is shown only when it says something', () => {
+    const at = (t, state) => stateShown(seed(t, 'en'), { state });
+    assert.equal(at('simple', 'open'), false, 'open, where open is all a card is until done');
+    assert.equal(at('simple', 'done'), true);
+    assert.equal(at('people', 'open'), false);
+    assert.equal(at('people', 'closed'), true);
+    assert.equal(at('development', 'todo'), true, 'several states before done: each says where it is');
+    assert.equal(at('customers', 'lead'), true);
+    assert.equal(stateShown({ states: [{ id: 'open' }, { id: 'ok', gate: true }, { id: 'done', done: true }] }, { state: 'open' }), true, 'a gate is something to say');
+});
+
+test('the words: every key in both languages, none for an empty thing', () => {
+    for (const lang of ['en', 'fr']) {
+        const words = JSON.parse(readFileSync(new URL(`../ui/texts/${lang}.json`, import.meta.url)));
+        assert.deepEqual(KEYS.filter((k) => !(k in words)), [], `${lang}: missing`);
+        for (const k of ['nobody', 'no-due']) assert.equal(k in words, false, `${lang}: "${k}" says what is empty`);
+    }
+});
+
+test('the cover: set by a person or an agent, a picture only, gone with its picture', () => {
+    const s = openStore(tmp());
+    const l = s.createList({ template: 'people' }, ME);
+    s.grant(l.id, BOT.id, 'write', ME);
+    const r = s.add(l.id, { title: 'Jeanne', fields: { photo: 'portrait.jpg' } }, ME);
+    const w = s.attach(r.id, { kind: 'file', ref: 'photos/wedding.jpg' }, ME);
+    const pdf = s.attach(r.id, { kind: 'file', ref: 'letter.pdf' }, ME);
+    s.edit(r.id, { cover: 'photos/wedding.jpg' }, BOT);
+    assert.equal(s.record(r.id, ME).record.cover, w.id, 'by its ref, by an agent');
+    assert.throws(() => s.edit(r.id, { cover: pdf.id }, ME), /is a picture/);
+    assert.throws(() => s.edit(r.id, { cover: 'nothing.jpg' }, ME), /picture attached/);
+    s.edit(r.id, { cover: 'Photo' }, ME);
+    assert.equal(s.record(r.id, ME).record.cover, 'field:photo', 'a photo field, by its name');
+    s.edit(r.id, { fields: { photo: '' } }, ME);
+    assert.equal(s.record(r.id, ME).record.cover, undefined, 'the field emptied, the cover goes');
+    assert.throws(() => s.edit(r.id, { cover: 'photo' }, ME), /is empty/);
+    s.edit(r.id, { cover: w.id }, ME);
+    s.detach(r.id, w.id, ME);
+    assert.equal(s.record(r.id, ME).record.cover, undefined, 'the picture detached, the cover goes');
+    s.edit(r.id, { cover: '' }, ME);
+    assert.deepEqual(read(['edit', '7', '--cover', 'photos/a.jpg']), ['edit', { id: '7', title: undefined, description: undefined, due: undefined, owners: undefined, cover: 'photos/a.jpg' }]);
+    assert.equal(read(['edit', '7', '--cover', 'none'])[1].cover, '');
+    assert.equal(asked('edit', { id: '1', cover: 'a.jpg' })[1].cover, 'a.jpg');
+    assert.ok(TOOLS.find((t) => t.name === 'edit').inputSchema.properties.cover);
 });

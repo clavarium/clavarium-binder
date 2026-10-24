@@ -33,7 +33,6 @@
   "none": "Aucun",
   "save": "Enregistrer",
   "empty": "Vide",
-  "nobody": "Personne",
   "archived": "Archivées",
   "show-archived": "Archivées",
   "gate": "À valider",
@@ -60,11 +59,14 @@
   "no-records": "Rien ici.",
   "search": "Chercher",
   "description": "Description",
-  "add-description": "Ajouter une description",
   "edit": "Modifier",
   "more": "Détails",
   "approve": "Valider",
-  "no-due": "Sans échéance",
   "add": "Ajouter",
-  "ok": "OK"
+  "ok": "OK",
+  "add-what": "Ajouter :",
+  "owner": "Responsable",
+  "attachment": "Pièce jointe",
+  "tools": "Plus",
+  "cover": "À la une"
 }

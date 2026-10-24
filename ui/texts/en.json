@@ -33,7 +33,6 @@
   "none": "None",
   "save": "Save",
   "empty": "Empty",
-  "nobody": "Nobody",
   "archived": "Archived",
   "show-archived": "Archived",
   "gate": "Needs approval",
@@ -60,11 +59,14 @@
   "no-records": "Nothing here.",
   "search": "Search",
   "description": "Description",
-  "add-description": "Add a description",
   "edit": "Edit",
   "more": "Details",
   "approve": "Approve",
-  "no-due": "No due date",
   "add": "Add",
-  "ok": "OK"
+  "ok": "OK",
+  "add-what": "Add:",
+  "owner": "Owner",
+  "attachment": "Attachment",
+  "tools": "More",
+  "cover": "Cover"
 }

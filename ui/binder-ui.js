@@ -18,13 +18,74 @@
 
 export const KEYS = Object.freeze(['lists', 'new-list', 'new-item', 'no-lists', 'template', 'create', 'cancel', 'title', 'list', 'columns', 'cards', 'back',
     'state', 'owners', 'due', 'notes', 'add-note', 'attached', 'attach', 'history', 'archive', 'restore', 'delete', 'delete-sure', 'approved', 'settings',
-    'states', 'fields', 'access', 'read', 'write', 'none', 'save', 'empty', 'nobody', 'archived', 'show-archived', 'gate', 'done', 'add-state', 'add-field',
+    'states', 'fields', 'access', 'read', 'write', 'none', 'save', 'empty', 'archived', 'show-archived', 'gate', 'done', 'add-state', 'add-field',
     'kind-message', 'kind-file', 'kind-asset', 'kind-branch', 'kind-link', 'kind-record', 'what', 'name', 'type', 'saved', 'edited', 'by', 'mine', 'all',
-    'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'search', 'description', 'add-description', 'edit', 'more', 'approve', 'no-due', 'add', 'ok']);
+    'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'search', 'description', 'edit', 'more', 'approve', 'add', 'ok',
+    'add-what', 'owner', 'attachment', 'tools', 'cover']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'link', 'record'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', link: '🔗', record: '▣' };
 const TYPES = ['text', 'number', 'date', 'link', 'photo'];
 const DESCRIPTION_MAX = 4000;
+
+/* WHAT A CARD SHOWS: what is set, and nothing about what is empty. These rules
+ * know no template: only a list's states and fields, and a record's values. */
+
+/* A file that is a picture, by its name: what a screen may put forward. */
+export const isPicture = (ref) => /\.(jpe?g|png|webp|gif)$/i.test(String(ref ?? '').split(/[?#]/)[0]);
+
+/* A card's pictures: its photo fields set ("field:ID"), then its files attached
+ * that are pictures (their id): [{ key, value }]. */
+export function pictures(l, r) {
+    const out = [];
+    for (const f of l.fields ?? []) if (f.type === 'photo' && r.fields?.[f.id]) out.push({ key: `field:${f.id}`, value: r.fields[f.id] });
+    for (const a of r.attached ?? []) if (a.kind === 'file' && isPicture(a.ref)) out.push({ key: a.id, value: a.ref });
+    return out;
+}
+/* The one put forward: the cover a person or an agent chose; without one, the
+ * card's only picture; with several and none chosen, none. */
+export function coverOf(l, r) {
+    const all = pictures(l, r);
+    return all.find((p) => p.key === r.cover) ?? (all.length === 1 ? all[0] : null);
+}
+/* It, as a picture to show, through the page's `picture` hook; else none. */
+export function imageOf(l, r, picture = () => null) {
+    const c = coverOf(l, r);
+    return c ? picture(c.value) ?? null : null;
+}
+
+/* The fields set, as one short line: [{ id, text }]. A date or a number says its
+ * field's name ("Naissance : 12 avril 1931": alone, a date or "3" says not what
+ * it is); a text or a link says itself. Photos are shown, not said. Empty fields
+ * are not there. */
+export function facts(l, r, lang = 'en') {
+    const out = [];
+    const named = (name, text) => `${name}${String(lang).startsWith('fr') ? '\u202f: ' : ': '}${text}`;
+    for (const f of l.fields ?? []) {
+        const v = r.fields?.[f.id];
+        if (v === undefined || v === null || v === '' || f.type === 'photo') continue;
+        let text = String(v);
+        if (f.type === 'date') {
+            const t = Date.parse(`${text.slice(0, 10)}T00:00:00`);
+            if (Number.isFinite(t)) { try { text = new Date(t).toLocaleDateString(lang, { day: 'numeric', month: 'long', year: 'numeric' }); } catch { /* as typed */ } }
+            text = named(f.name, text);
+        } else if (f.type === 'number') {
+            try { text = named(f.name, Number(v).toLocaleString(lang)); } catch { text = named(f.name, text); }
+        } else if (f.type === 'link') {
+            try { text = new URL(text).host.replace(/^www\./, ''); } catch { /* as typed */ }
+        }
+        out.push({ id: f.id, text });
+    }
+    return out;
+}
+
+/* Whether a card's state says anything. It says nothing when the card is in the
+ * first state and that is the list's only state not done, with no gate: then
+ * "open" is what every card is until it is done. Any other state is said. */
+export function stateShown(l, r) {
+    const open = l.states.filter((s) => !s.done);
+    if (open.length !== 1 || l.states.some((s) => s.gate)) return true;
+    return r.state !== l.states[0]?.id;
+}
 
 /* A DESCRIPTION, READ: a few lines of Markdown-ish text, as blocks a screen can
  * draw element by element. Paragraphs (a blank line between), lists ("- " or
@@ -117,18 +178,27 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     /* ---- the parts ---- */
     const top = () => h('div', { class: 'binder-top' },
         h('div', { class: 'binder-tabs', role: 'tablist' }, ui.lists.map((l) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(l.id === ui.at), 'data-list': l.id,
-            onclick: () => { ui.at = l.id; ui.view = null; ui.mode = 'list'; ui.record = null; void refresh(); } }, l.title, h('small', {}, String(l.count))))),
+            onclick: () => { ui.at = l.id; ui.view = null; ui.mode = 'list'; ui.record = null; ui.open = null; void refresh(); } }, l.title, h('small', {}, String(l.count))))),
         h('button', { type: 'button', class: 'binder-new-list', onclick: () => { ui.mode = 'new-list'; paint(); } }, `+ ${w('new-list')}`));
 
+    /* The bar: the title, the views, "+ Card"; the rest behind "…". A filter on is
+     * said by a chip that takes it off. */
     function bar(l) {
         const view = ui.view ?? l.view;
+        const flip = (k) => { ui[k] = !ui[k]; ui.open = null; void refresh(); };
+        const item = (on, text, act, fn) => h('button', { type: 'button', role: on === null ? 'menuitem' : 'menuitemcheckbox', 'aria-checked': on === null ? null : String(on), 'data-act': act, onclick: fn },
+            h('span', { class: 'binder-check', 'aria-hidden': 'true' }, on ? '✓' : ''), text);
+        const menu = ui.open === 'tools' ? h('div', { class: 'binder-menu binder-menu-end', role: 'menu' },
+            item(ui.mine, w('mine'), 'mine', () => flip('mine')),
+            item(ui.archived, w('archived'), 'archived', () => flip('archived')),
+            l.access === 'write' && l.grants ? item(null, w('settings'), 'settings', () => { ui.open = null; ui.mode = 'settings'; paint(); }) : null) : null;
+        const chip = (k) => (ui[k] ? h('button', { type: 'button', class: 'binder-chip', 'aria-pressed': 'true', 'data-act': `off-${k}`, onclick: () => flip(k) }, w(k === 'mine' ? 'mine' : 'archived'), h('span', { 'aria-hidden': 'true' }, ' ×')) : null);
         return h('div', { class: 'binder-bar' },
-            h('h2', {}, l.title),
+            h('h2', {}, l.title), chip('mine'), chip('archived'),
             h('div', { class: 'binder-seg', role: 'group' }, ['list', 'columns', 'cards'].map((v) => h('button', { type: 'button', 'aria-pressed': String(v === view), 'data-view': v, onclick: () => { ui.view = v; paint(); } }, w(v)))),
-            h('button', { type: 'button', class: 'binder-chip', 'aria-pressed': String(ui.mine), onclick: () => { ui.mine = !ui.mine; void refresh(); } }, w('mine')),
-            h('button', { type: 'button', class: 'binder-chip', 'aria-pressed': String(ui.archived), onclick: () => { ui.archived = !ui.archived; void refresh(); } }, w('archived')),
-            l.access === 'write' && l.grants ? h('button', { type: 'button', class: 'binder-ghost', 'data-act': 'settings', onclick: () => { ui.mode = 'settings'; paint(); } }, w('settings')) : null,
-            l.access === 'write' && !ui.archived ? h('button', { type: 'button', class: 'binder-primary', 'data-act': 'new-item', onclick: () => { ui.mode = 'new-item'; paint(); } }, `+ ${w('new-item')}`) : null);
+            l.access === 'write' && !ui.archived ? h('button', { type: 'button', class: 'binder-primary', 'data-act': 'new-item', onclick: () => { ui.mode = 'new-item'; paint(); } }, `+ ${w('new-item')}`) : null,
+            h('div', { class: 'binder-pop' }, h('button', { type: 'button', class: 'binder-ghost binder-dots', 'data-act': 'tools', 'aria-haspopup': 'menu', 'aria-expanded': String(ui.open === 'tools'), 'aria-label': w('tools'), title: w('tools'),
+                onclick: () => { ui.open = ui.open === 'tools' ? null : 'tools'; paint(); } }, '…'), menu));
     }
 
     /* A due date as a person reads it: "26 oct.", "4 nov. 2027 09:00". */
@@ -150,34 +220,35 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         return h('button', { type: 'button', class: 'binder-tick', role: 'checkbox', 'aria-checked': String(on), title: g >= 0 ? w('approved') : w('done'), disabled: l.access !== 'write' || !l.grants && g >= 0,
             onclick: (e) => { e.stopPropagation(); void soft(g >= 0 ? ask('approve', { id: r.id, yes: !on }) : ask('move', { id: r.id, state: on ? l.states[0].id : doneOf(l).id })).then(refresh); } }, on ? '✓' : '');
     }
-    const pill = (l, r) => { const st = l.states.find((s) => s.id === r.state); return h('span', { class: 'binder-pill', 'data-state': r.state, 'data-done': st?.done ? '' : null, 'data-gate': st?.gate ? '' : null }, st?.name ?? r.state); };
+    const pill = (l, r) => { if (!stateShown(l, r)) return null; const st = l.states.find((s) => s.id === r.state); return h('span', { class: 'binder-pill', 'data-state': r.state, 'data-done': st?.done ? '' : null, 'data-gate': st?.gate ? '' : null }, st?.name ?? r.state); };
     const meta = (l, r) => h('span', { class: 'binder-meta' },
         r.owners.length ? r.owners.map(nameOf).join(', ') : null,
         r.due ? h('span', { class: late(l, r) ? 'binder-late' : null }, `⏰ ${when(r.due)}`) : null,
         r.attached.length ? h('span', {}, `📎 ${r.attached.length}`) : null,
         r.notes.length ? h('span', {}, `✎ ${r.notes.length}`) : null);
     const sub = (r) => (r.description ? h('span', { class: 'binder-sub' }, firstLine(r.description)) : null);
+    /* The fields set, on one line: "Naissance 12 avril 1931 · Saint-Aubin". */
+    const factLine = (l, r, cls = 'binder-facts') => { const f = facts(l, r, lang); return f.length ? h('span', { class: cls }, f.map((x) => x.text).join(' · ')) : null; };
     const leave = () => { ui.open = null; ui.more = false; ui.draft = {}; };
     const open = (r) => { void soft(ask('get', { id: r.id }).then((d) => { leave(); ui.record = d; ui.mode = 'record'; paint(); window.scrollTo?.(0, 0); })); };
 
     function asList(l, records) {
         return h('div', { class: 'binder-rows' }, records.map((r) => h('div', { class: 'binder-row', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } },
-            tick(l, r), h('div', { class: 'binder-what' }, h('b', {}, r.title), sub(r), meta(l, r)), pill(l, r))));
+            tick(l, r), h('div', { class: 'binder-what' }, h('b', {}, r.title), factLine(l, r), sub(r), meta(l, r)), pill(l, r) ?? h('span'))));
     }
     function asColumns(l, records) {
         return h('div', { class: 'binder-cols' }, l.states.map((s) => {
             const here = records.filter((r) => r.state === s.id);
             return h('section', { class: 'binder-col', 'data-state': s.id }, h('h3', {}, s.name, h('span', {}, String(here.length))),
-                here.map((r) => h('div', { class: 'binder-card', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } }, h('b', {}, r.title), sub(r), meta(l, r))));
+                here.map((r) => h('div', { class: 'binder-card', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } }, h('b', {}, r.title), factLine(l, r), sub(r), meta(l, r))));
         }));
     }
     function asCards(l, records) {
-        const photo = l.fields.find((f) => f.type === 'photo');
         return h('div', { class: 'binder-grid' }, records.map((r) => {
-            const src = photo && r.fields[photo.id] ? picture(r.fields[photo.id]) : null;
+            const src = imageOf(l, r, picture);
             return h('div', { class: 'binder-card binder-face', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } },
                 src ? h('img', { src, alt: r.title, loading: 'lazy' }) : h('div', { class: 'binder-initial', 'aria-hidden': 'true' }, r.title.slice(0, 1).toUpperCase()),
-                h('b', {}, r.title), pill(l, r));
+                h('b', {}, r.title), factLine(l, r, 'binder-facts binder-facts-small'), pill(l, r));
         }));
     }
 
@@ -203,9 +274,11 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 h('button', { type: 'button', class: 'binder-primary', onclick: go }, w('create'))));
     }
 
-    /* A RECORD, WHOLE, read at a glance: its title, its state, what it is (the
-     * description); who and when on one line; what is attached; the notes.
-     * Everything else (fields, history, archive, delete) is folded under "more". */
+    /* A RECORD, WHOLE, read at a glance: its picture, its title, its fields set on
+     * one line, its state when it says something, what it is (the description);
+     * who and when, when set; what is attached; the notes. What is empty is not
+     * shown: one quiet line offers to add it. The rest (fields to change,
+     * history, archive, delete) is folded under "more". */
     function record() {
         const { record: r, list: l, history } = ui.record;
         const can = l.access === 'write';
@@ -231,6 +304,15 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         const approve = g >= 0 && can && l.grants && !r.approved
             ? h('button', { type: 'button', class: 'binder-primary binder-small', 'data-act': 'approve', onclick: () => done(ask('approve', { id: r.id, yes: true })) }, `✓ ${w('approve')}`) : null;
 
+        /* Its picture, put forward. */
+        const cover = coverOf(l, r);
+        const coverSrc = cover ? picture(cover.value) : null;
+        const hero = coverSrc ? h('img', { class: 'binder-hero', src: coverSrc, alt: r.title }) : null;
+        const all = pictures(l, r);
+        /* With several pictures, each says whether it is the one put forward, and can become it. */
+        const star = (key) => (can && all.length > 1 ? h('button', { type: 'button', class: 'binder-text-btn binder-star', 'data-act': 'cover', 'aria-pressed': String(cover?.key === key),
+            onclick: (e) => { e.preventDefault(); done(ask('edit', { id: r.id, cover: cover?.key === key ? '' : key })); } }, `${cover?.key === key ? '★' : '☆'} ${w('cover')}`) : null);
+
         /* What it is. */
         let about;
         if (ui.open === 'description') {
@@ -241,16 +323,15 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 h('button', { type: 'button', class: 'binder-primary binder-small', 'data-act': 'save-description', onclick: () => { delete ui.draft.description; done(ask('edit', { id: r.id, description: text.value })); } }, w('save')),
                 h('button', { type: 'button', class: 'binder-text-btn', onclick: () => { delete ui.draft.description; set(null); } }, w('cancel'))));
         } else {
-            about = h('div', { class: 'binder-desc' }, r.description ? rich(r.description) : null,
-                can ? h('button', { type: 'button', class: 'binder-text-btn', 'data-act': 'edit-description', onclick: () => set('description') }, r.description ? w('edit') : `+ ${w('add-description')}`) : null);
+            about = r.description ? h('div', { class: 'binder-desc' }, rich(r.description),
+                can ? h('button', { type: 'button', class: 'binder-text-btn', 'data-act': 'edit-description', onclick: () => set('description') }, w('edit')) : null) : null;
         }
 
-        /* Who and when, on one line. */
+        /* Who and when, on one line: only what is set. */
         const names = r.owners.map(nameOf).join(', ');
-        const whoLine = h(can ? 'button' : 'div', { type: can ? 'button' : null, class: 'binder-who', 'data-act': 'who', 'aria-expanded': can ? String(ui.open === 'who') : null, onclick: can ? () => set(ui.open === 'who' ? null : 'who') : null },
-            h('span', { class: names ? null : 'binder-dim' }, `👤 ${names || w('nobody')}`),
-            h('span', { class: 'binder-dot', 'aria-hidden': 'true' }, '·'),
-            h('span', { class: r.due ? (late(l, r) ? 'binder-late' : null) : 'binder-dim' }, `⏰ ${r.due ? when(r.due) : w('no-due')}`));
+        const whoParts = [names ? h('span', {}, `👤 ${names}`) : null, r.due ? h('span', { class: late(l, r) ? 'binder-late' : null }, `⏰ ${when(r.due)}`) : null].filter(Boolean);
+        const whoLine = whoParts.length ? h(can ? 'button' : 'div', { type: can ? 'button' : null, class: 'binder-who', 'data-act': 'who', 'aria-expanded': can ? String(ui.open === 'who') : null, onclick: can ? () => set(ui.open === 'who' ? null : 'who') : null },
+            whoParts.flatMap((x, i) => (i ? [h('span', { class: 'binder-dot', 'aria-hidden': 'true' }, '·'), x] : [x]))) : null;
         let whoEdit = null;
         if (ui.open === 'who') {
             const day = h('input', { type: 'date', value: r.due?.slice(0, 10) ?? '', 'aria-label': w('due') });
@@ -265,7 +346,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
 
         /* What is attached: an icon and a name; a tap opens it. */
         const openIt = (a) => { if (a.kind === 'record') open({ id: a.ref }); else if (a.kind === 'link') window.open(a.ref, '_blank', 'noopener'); else openAttached?.(a); };
-        const nameOfIt = (a) => a.title || (a.kind === 'record' ? `#${a.ref}` : a.kind === 'file' ? a.ref.split('/').filter(Boolean).at(-1) ?? a.ref : a.ref);
+        const nameOfIt = (a) => a.title || (a.kind === 'record' ? ui.data?.records?.find((x) => x.id === a.ref)?.title ?? `#${a.ref}` : a.kind === 'file' ? a.ref.split('/').filter(Boolean).at(-1) ?? a.ref : a.ref);
         let attachForm = null;
         if (can && ui.open === 'attach') {
             const kind = h('select', { 'aria-label': w('attach') }, KINDS.map((k) => h('option', { value: k }, w(`kind-${k}`))));
@@ -275,17 +356,32 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 h('button', { type: 'button', class: 'binder-primary binder-small', 'data-act': 'attach', onclick: () => { if (ref.value.trim()) done(ask('attach', { id: r.id, kind: kind.value, ref: ref.value })); } }, w('attach')),
                 h('button', { type: 'button', class: 'binder-text-btn', onclick: () => set(null) }, w('cancel')));
         }
-        const attached = r.attached.length || can ? h('section', { class: 'binder-sec' }, h('h3', {}, w('attached')),
+        const thumb = (a) => { const src = a.kind === 'file' && isPicture(a.ref) ? picture(a.ref) : null; return src ? h('img', { class: 'binder-ic binder-thumb', src, alt: '' }) : h('span', { class: 'binder-ic', 'aria-hidden': 'true' }, ICON[a.kind] ?? '•'); };
+        const attached = r.attached.length || attachForm ? h('section', { class: 'binder-sec' }, h('h3', {}, w('attached')),
             r.attached.length ? h('ul', { class: 'binder-atts' }, r.attached.map((a) => h('li', { class: 'binder-att', 'data-kind': a.kind },
                 h('button', { type: 'button', class: 'binder-link', title: `${w(`kind-${a.kind}`)} · ${a.kind === 'record' ? `#${a.ref}` : a.ref}`, onclick: () => openIt(a) },
-                    h('span', { class: 'binder-ic', 'aria-hidden': 'true' }, ICON[a.kind] ?? '•'), h('span', { class: 'binder-att-name' }, nameOfIt(a))),
+                    thumb(a), h('span', { class: 'binder-att-name' }, nameOfIt(a))),
+                a.kind === 'file' && isPicture(a.ref) ? star(a.id) : null,
                 can ? h('button', { type: 'button', class: 'binder-x', 'aria-label': `${w('delete')} ${nameOfIt(a)}`, onclick: () => void soft(ask('detach', { id: r.id, what: a.id })).then(refresh) }, '×') : null))) : null,
             attachForm ?? (can ? h('button', { type: 'button', class: 'binder-text-btn', 'data-act': 'show-attach', onclick: () => set('attach') }, `+ ${w('attach')}`) : null)) : null;
+
+        /* What is empty, offered in one quiet line: "+ Ajouter : description · échéance · responsable · pièce jointe · champ". */
+        const low = (k) => w(k).toLocaleLowerCase(lang);
+        const offers = can ? [
+            !r.description && ui.open !== 'description' ? ['description', low('description'), () => set('description')] : null,
+            !r.due && ui.open !== 'who' ? ['due', low('due'), () => set('who')] : null,
+            !r.owners.length && people().length && ui.open !== 'who' ? ['owner', low('owner'), () => set('who')] : null,
+            !r.attached.length && ui.open !== 'attach' ? ['attach', low('attachment'), () => set('attach')] : null,
+            l.fields.some((f) => r.fields[f.id] === undefined || r.fields[f.id] === '') ? ['fields', low('fields'), () => { ui.more = true; paint(); requestAnimationFrame(() => root.querySelector?.('.binder-fields input')?.focus()); }] : null,
+        ].filter(Boolean) : [];
+        const addRow = offers.length ? h('div', { class: 'binder-offer' }, h('span', { class: 'binder-dim' }, `+ ${w('add-what')}`),
+            offers.flatMap(([act, text, fn], i) => [i ? h('span', { class: 'binder-dot', 'aria-hidden': 'true' }, '·') : null,
+                h('button', { type: 'button', class: 'binder-text-btn', 'data-add': act, onclick: fn }, text)])) : null;
 
         /* Notes: small dated messages, and a box to add one. */
         const note = h('textarea', { rows: '2', placeholder: w('add-note'), 'aria-label': w('add-note'), maxlength: '2000', text: ui.draft.note ?? '' });
         note.addEventListener('input', () => { ui.draft.note = note.value; });
-        const notes = r.notes.length || can ? h('section', { class: 'binder-sec' }, h('h3', {}, w('notes')),
+        const notes = r.notes.length || can ? h('section', { class: 'binder-sec' }, r.notes.length ? h('h3', {}, w('notes')) : null,
             r.notes.map((n) => h('div', { class: 'binder-note', 'data-kind': n.by.kind },
                 h('div', { class: 'binder-note-by' }, h('b', {}, n.by.name), ` · ${stamp(n.at)}${n.edited ? ` · ${w('edited')}` : ''}`), h('p', {}, n.text))),
             can ? h('div', { class: 'binder-note-add' }, note, h('button', { type: 'button', class: 'binder-ghost binder-small', 'data-act': 'note',
@@ -297,7 +393,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             const input = h('input', { type: f.type === 'date' ? 'date' : f.type === 'number' ? 'number' : 'text', value: String(v), disabled: !can, 'aria-label': f.name, 'data-field': f.id });
             input.addEventListener('change', () => void soft(ask('edit', { id: r.id, fields: { [f.id]: input.value } })).then(refresh));
             const src = f.type === 'photo' && v ? picture(v) : null;
-            return h('label', { class: 'binder-field' }, h('span', {}, f.name), src ? h('img', { src, alt: f.name, class: 'binder-photo' }) : null, input);
+            return h('label', { class: 'binder-field' }, h('span', {}, f.name), src ? h('img', { src, alt: f.name, class: 'binder-photo' }) : null, input, f.type === 'photo' && v ? star(`field:${f.id}`) : null);
         };
         const stateName = (id) => l.states.find((s) => s.id === id)?.name ?? id;
         const sure = h('span', { class: 'binder-sure', hidden: true }, w('delete-sure'),
@@ -308,17 +404,20 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             h('div', { class: 'binder-history' }, h('h3', {}, `${w('history')} · ${history.length}`),
                 history.slice().reverse().map((x) => h('div', { class: 'binder-log' }, h('time', {}, stamp(x.at)), `${x.by.name} · ${x.op}${x.op === 'move' && x.change ? ` → ${stateName(x.change.to)}` : ''}`))),
             can ? h('div', { class: 'binder-actions' },
+                /* The state said nothing, so it is not shown: closing the card is here. */
+                !stateShown(l, r) ? h('button', { type: 'button', class: 'binder-ghost binder-small', 'data-act': 'to-done', onclick: () => done(ask('move', { id: r.id, state: doneOf(l).id })) }, `✓ ${doneOf(l).name}`) : null,
                 h('button', { type: 'button', class: 'binder-ghost binder-small', 'data-act': 'archive', onclick: () => void soft(ask('archive', { id: r.id, restore: !!r.archived })).then(() => { ui.record = null; ui.mode = 'list'; return refresh(); }) }, r.archived ? w('restore') : w('archive')),
                 l.grants ? h('button', { type: 'button', class: 'binder-ghost binder-small binder-warn', 'data-act': 'delete', onclick: () => { sure.hidden = false; } }, w('delete')) : null, sure) : null);
 
         return h('div', { class: 'binder-page binder-record', 'data-record': r.id },
             h('div', { class: 'binder-crumb' }, h('button', { type: 'button', class: 'binder-text-btn', 'data-act': 'back', onclick: () => { leave(); ui.record = null; ui.mode = 'list'; void refresh(); } }, `‹ ${l.title}`),
                 h('span', { class: 'binder-dim' }, `#${r.id}${r.archived ? ` · ${w('archived')}` : ''}`)),
-            h('header', { class: 'binder-head' }, title,
-                h('div', { class: 'binder-status' }, h('div', { class: 'binder-state-wrap' }, pillOf, menu), approve)),
+            hero,
+            h('header', { class: 'binder-head' }, title, factLine(l, r),
+                stateShown(l, r) || approve ? h('div', { class: 'binder-status' }, stateShown(l, r) ? h('div', { class: 'binder-state-wrap binder-pop' }, pillOf, menu) : null, approve) : null),
             about,
-            h('div', { class: 'binder-who-wrap' }, whoLine, whoEdit),
-            attached, notes, more);
+            whoLine || whoEdit ? h('div', { class: 'binder-who-wrap' }, whoLine, whoEdit) : null,
+            attached, addRow, notes, more);
     }
 
     function settings(l) {
@@ -383,9 +482,10 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         box.replaceChildren(...parts);
     }
 
-    /* The state menu closes on a tap elsewhere, or Escape. */
-    const away = (e) => { if (ui.open === 'states' && !e.target?.closest?.('.binder-state-wrap')) { ui.open = null; paint(); } };
-    const escape = (e) => { if (e.key === 'Escape' && ui.open === 'states') { ui.open = null; paint(); } };
+    /* A menu closes on a tap elsewhere, or Escape. */
+    const menus = ['states', 'tools'];
+    const away = (e) => { if (menus.includes(ui.open) && !e.target?.closest?.('.binder-pop')) { ui.open = null; paint(); } };
+    const escape = (e) => { if (e.key === 'Escape' && menus.includes(ui.open)) { ui.open = null; paint(); } };
     document.addEventListener('pointerdown', away);
     document.addEventListener('keydown', escape);
     void refresh();

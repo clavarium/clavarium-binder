@@ -36,6 +36,8 @@ export const STATES_MAX = 12;
 export const FIELDS_MAX = 20;
 export const OWNERS_MAX = 10;
 export const ATTACH_KINDS = ['message', 'file', 'asset', 'branch', 'link', 'record'];
+/* A file attached that is a picture, by its name (the screen has the same rule). */
+export const isPicture = (ref) => /\.(jpe?g|png|webp|gif)$/i.test(String(ref ?? '').split(/[?#]/)[0]);
 
 const NOT_SHOWN = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F​-‏‪-‮⁠-⁤⁦-⁩﻿]/gu;
 export const oneLine = (text, max) => String(text ?? '').replace(/\r/g, '').replace(NOT_SHOWN, '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -259,7 +261,11 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             save(); log(w, 'add', { record: id, list: list.id, change: { title: t, ...(d ? { description: d } : {}), state: st.id } });
             return r;
         },
-        edit(given, { title, description, fields, owners, due } = {}, who) {
+        /* COVER: the one picture a card is shown by, when it has several. It is a
+         * picture attached (its id; given by id, the start of it, or its ref) or a
+         * photo field set ("field:ID"; given by the field's id or name). Empty
+         * clears it. Without one, a card with exactly one picture is shown by it. */
+        edit(given, { title, description, fields, owners, due, cover } = {}, who) {
             const w = whoOf(who);
             const { r, list } = recordOf(given, w, 'write');
             const change = {};
@@ -268,6 +274,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             if (fields !== undefined) change.fields = setFields(list, r, fields);
             if (owners !== undefined) r.owners = change.owners = ownersOf(owners);
             if (due !== undefined) { if (due === null || due === '') { delete r.due; change.due = null; } else r.due = change.due = dueOf(due); }
+            if (cover !== undefined) { const c = coverOf(list, r, cover); if (c) r.cover = change.cover = c; else { delete r.cover; change.cover = null; } }
             r.changed = stamp();
             save(); log(w, 'edit', { record: r.id, list: list.id, change });
             return r;
@@ -335,6 +342,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             const a = r.attached.find((x) => x.id === attachedId || x.id.startsWith(String(attachedId ?? '-')) || x.ref === attachedId);
             if (!a) no('nothing like that is attached');
             r.attached = r.attached.filter((x) => x !== a); r.changed = stamp();
+            if (r.cover === a.id) delete r.cover;
             save(); log(w, 'detach', { record: r.id, list: list.id, change: { kind: a.kind, ref: a.ref } });
             return r;
         },
@@ -372,7 +380,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
         for (const [k, v] of Object.entries(given)) {
             const f = list.fields.find((x) => x.id === k) ?? list.fields.find((x) => x.name.toLowerCase() === String(k).toLowerCase());
             if (!f) no(`the list ${list.title} has no field "${k}"${list.fields.length ? ` (it has: ${list.fields.map((x) => x.name).join(', ')})` : ''}`);
-            if (v === null || v === '') { delete r.fields[f.id]; change[f.id] = null; continue; }
+            if (v === null || v === '') { delete r.fields[f.id]; change[f.id] = null; if (r.cover === `field:${f.id}`) delete r.cover; continue; }
             const value = oneLine(v, FIELD_MAX);
             if (f.type === 'number' && !Number.isFinite(Number(value))) no(`${f.name} is a number`);
             if (f.type === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) no(`${f.name} is a date: 2026-11-04`);
@@ -380,6 +388,16 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             r.fields[f.id] = change[f.id] = f.type === 'number' ? Number(value) : value;
         }
         return change;
+    }
+    function coverOf(list, r, given) {
+        if (given === null || given === '') return '';
+        const g = oneLine(given, REF_MAX);
+        const a = r.attached.find((x) => x.id === g) ?? r.attached.find((x) => x.ref === g) ?? (g.length >= 4 ? r.attached.find((x) => x.id.startsWith(g)) : undefined);
+        if (a) { if (a.kind !== 'file' || !isPicture(a.ref)) no(`the cover is a picture: ${a.ref} is not one`); return a.id; }
+        const name = g.replace(/^field:/, '');
+        const f = list.fields.find((x) => x.id === name) ?? list.fields.find((x) => x.name.toLowerCase() === name.toLowerCase());
+        if (f) { if (f.type !== 'photo') no(`the cover is a picture: ${f.name} is not a photo field`); if (!r.fields[f.id]) no(`${f.name} is empty`); return `field:${f.id}`; }
+        return no('the cover is a picture attached (its id, or what it is) or a photo field');
     }
     function ownersOf(given) {
         const list = (Array.isArray(given) ? given : [given]).map((x) => oneLine(x, 100)).filter(Boolean);
