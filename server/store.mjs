@@ -15,7 +15,8 @@
  * WHO is { id, kind, name }: kind "person" or "agent". A person may do
  * anything. An agent reads or writes a list only where it was given access, and
  * never approves: a record reaches a gate state (or one after it) only once a
- * person approved it.
+ * person approved it. An agent may make a list from a template (a few at
+ * most): it is given that list alone, to change, and a person sees it as any.
  */
 import { readFileSync, writeFileSync, appendFileSync, renameSync, mkdirSync, existsSync, lstatSync } from 'node:fs';
 import { join } from 'node:path';
@@ -23,6 +24,8 @@ import { randomUUID } from 'node:crypto';
 import { seed, TEMPLATES, VIEWS, FIELD_TYPES } from './templates.mjs';
 
 export const TITLE_MAX = 200;
+/* Lists an agent may have made and not archived. */
+export const AGENT_LISTS_MAX = 5;
 export const NOTE_MAX = 2000;
 /* A record's description: a few lines for a person, what it is and why (Markdown-ish: paragraphs, "- " lists, **bold**, links). */
 export const DESCRIPTION_MAX = 4000;
@@ -163,16 +166,19 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             return out;
         },
 
-        /* ---- lists: a person's ---- */
+        /* ---- lists: a person's; an agent makes one too, from a template, given to itself alone ---- */
         createList({ template = 'simple', title, lang = 'en' } = {}, who) {
             const w = whoOf(who);
-            if (!isPerson(w)) no('only a person makes a list');
             if (Object.keys(s.lists).length >= LISTS_MAX) no(`${LISTS_MAX} lists at most`);
+            if (!isPerson(w)) {
+                if (!Object.hasOwn(TEMPLATES, String(template))) no(`a list is made from a template: ${Object.keys(TEMPLATES).join(', ')}`);
+                if (Object.values(s.lists).filter((l) => l.by === w.id && !l.archived).length >= AGENT_LISTS_MAX) no(`${AGENT_LISTS_MAX} lists made by you at most: use one of yours`);
+            }
             const base = seed(template, lang);
             const name = oneLine(title, TITLE_MAX) || base.title;
             let id = key(name) || 'list';
             for (let i = 2; s.lists[id]; i++) id = `${key(name) || 'list'}-${i}`;
-            s.lists[id] = { id, ...base, title: name, access: {}, created: stamp(), by: w.id };
+            s.lists[id] = { id, ...base, title: name, access: isPerson(w) ? {} : { [w.id]: 'write' }, created: stamp(), by: w.id };
             save(); log(w, 'create-list', { list: id, change: { title: name, template } });
             return s.lists[id];
         },

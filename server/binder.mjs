@@ -73,6 +73,7 @@ export const TOOLS = [
     { name: 'note', description: 'Add a short note to a record: a decision, a fact, a result. Talking with the person stays in the chat.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, text: { type: 'string' } }, required: ['id', 'text'] } },
     { name: 'attach', description: 'Attach something to a record: a message of the chat, a file, an asset, a branch, a link, another record.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, kind: { type: 'string', enum: ['message', 'file', 'asset', 'branch', 'link', 'record'] }, ref: S('what it is: a path, a URL, repository:branch, a message id, a record number'), title: { type: 'string' } }, required: ['id', 'kind', 'ref'] } },
     { name: 'detach', description: 'Take back something attached to a record.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, what: S('what get shows of it: its ref or its id') }, required: ['id', 'what'] } },
+    { name: 'new-list', description: 'Make a list from a template (batches, development, customers, people, roadmap, simple) when none you were given fits: it is given to you alone, and the person sees it. Batches: the work you propose; the person ticks what you may start.', inputSchema: { type: 'object', properties: { template: S('batches, development, customers, people, roadmap or simple'), title: S('its name; the template\'s by default') }, required: ['template'] } },
     { name: 'archive', description: 'Archive a record (it leaves the list; found again with archived), or restore it.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, restore: { type: 'boolean' } }, required: ['id'] } },
 ];
 /* A tool's arguments as the keeper reads them. */
@@ -90,6 +91,7 @@ export function asked(name, a = {}) {
         case 'attach': return ['attach', { id: a.id, kind: a.kind, ref: a.ref, title: a.title }];
         case 'detach': return ['detach', { id: a.id, what: a.what }];
         case 'archive': return ['archive', { id: a.id, restore: !!a.restore }];
+        case 'new-list': return ['create-list', { template: a.template, title: a.title }];
         default: return null;
     }
 }

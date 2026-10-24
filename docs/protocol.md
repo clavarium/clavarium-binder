@@ -49,9 +49,12 @@ person, what the record is and why; Markdown-ish (paragraphs, `- ` lists,
 `**bold**`, `[text](https://...)` and bare http(s) links), 4000 characters at
 most, empty to remove it. It is in the history like any other change.
 
-A person's alone (from the screen): `approve`, `delete`, `create-list`,
-`edit-list`, `grant`, `archive-list`, `delete-list`; a note is changed by
-whoever wrote it (`edit-note`).
+A person's alone (from the screen): `approve`, `delete`, `edit-list`,
+`grant`, `archive-list`, `delete-list`; a note is changed by whoever wrote it
+(`edit-note`). `create-list` is a person's, and an agent's from a template
+(`binder new TEMPLATE ["title"]`, MCP `new-list`): the list is given to that
+agent alone, to change, and a person sees it as any; five such lists not
+archived per agent at most.
 
 ## The application's side
 

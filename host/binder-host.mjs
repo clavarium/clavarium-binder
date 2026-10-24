@@ -71,6 +71,7 @@ export function say(op, data, list) {
         case 'attach': return 'Attached.';
         case 'detach': return 'Taken off.';
         case 'archive': return data.archived ? `Archived #${data.id}.` : `Restored #${data.id}.`;
+        case 'create-list': return `Made the list ${data.title} [${data.id}], yours to change: binder add ${data.id} "title".`;
         default: return 'Done.';
     }
 }

@@ -37,6 +37,8 @@ way, universal (nothing in it is specific to Clavarium).
   it, or any state after it, only once a person ticked it. An agent proposes,
   and works on what was approved.
 - **See what it was not given.** Access is given per list: read, or change.
+  It may make a list of its own from a template (`binder new batches`): given
+  to it alone, and seen by a person as any other; a few at most.
 - **Delete.** It archives; a person deletes, and deleted is deleted.
 
 ## Without an application

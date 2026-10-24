@@ -10,7 +10,7 @@ import { ask, asked, TOOLS } from '../server/binder.mjs';
 import { say } from '../host/binder-host.mjs';
 import { blocks, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, KEYS, mount } from '../ui/binder-ui.js';
 import { isPicture as storeIsPicture } from '../server/store.mjs';
-import { DESCRIPTION_MAX } from '../server/store.mjs';
+import { DESCRIPTION_MAX, AGENT_LISTS_MAX } from '../server/store.mjs';
 import { run, read } from '../bin/binder.mjs';
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'binder-'));
@@ -30,7 +30,6 @@ test('an agent sees only the lists it was given, and changes only those it may w
     const s = openStore(tmp());
     const dev = s.createList({ template: 'development' }, ME);
     const crm = s.createList({ template: 'customers' }, ME);
-    assert.throws(() => s.createList({}, BOT), /only a person/);
     assert.deepEqual(s.lists(BOT), []);
     s.grant(dev.id, BOT.id, 'read', ME);
     assert.deepEqual(s.lists(BOT).map((l) => l.id), [dev.id]);
@@ -167,13 +166,40 @@ test('the keeper answers an agent through its folder, as the folder says who it 
         assert.equal(k.store.record('1', ME).record.by, BOT.id);
         const shown = await ask(side, 'show', { list: l.id }, { wait: 3000, every: 10 });
         assert.match(shown.text, /To do:\n {2}#1 Search @agent:site/);
-        const refused = await ask(side, 'create-list', { template: 'simple' }, { wait: 3000, every: 10 });
+        const made = await ask(side, 'create-list', { template: 'batches' }, { wait: 3000, every: 10 });
+        assert.equal(made.ok, true, made.text);
+        assert.match(made.text, /^Made the list Batches \[batches\], yours to change: binder add batches "title"\.$/);
+        const refused = await ask(side, 'create-list', { template: 'nothing' }, { wait: 3000, every: 10 });
         assert.equal(refused.ok, false);
-        assert.match(refused.text, /only a person/);
+        assert.match(refused.text, /made from a template/);
         const cli = await run(['note', '1', 'it', 'works'], { env: { BINDER_DIR: side }, wait: 3000 });
         assert.equal(cli.code, 0, cli.err);
         assert.equal(k.store.record('1', ME).record.notes[0].by.id, BOT.id);
     } finally { clearInterval(timer); }
+});
+
+test('an agent makes a list from a template: given to it alone, to change; a few at most; it still never approves nor changes the list itself', async () => {
+    const s = openStore(tmp());
+    const mine = s.createList({ template: 'batches', title: 'Lots' }, BOT);
+    assert.equal(mine.title, 'Lots');
+    assert.deepEqual(mine.access, { [BOT.id]: 'write' });
+    assert.equal(mine.by, BOT.id);
+    assert.deepEqual(s.lists(BOT).map((l) => [l.id, l.access]), [[mine.id, 'write']]);
+    assert.deepEqual(s.lists(OTHER), [], 'another agent does not see it');
+    assert.equal(s.lists(ME).length, 1, 'a person sees it as any');
+    const r = s.add(mine.id, { title: 'Fix diff line numbers' }, BOT);
+    assert.throws(() => s.move(r.id, 'doing', BOT), /only a person approves/);
+    assert.throws(() => s.editList(mine.id, { title: 'x' }, BOT), /only a person/);
+    assert.throws(() => s.grant(mine.id, OTHER.id, 'write', BOT), /only a person/);
+    assert.throws(() => s.createList({ template: 'nothing' }, BOT), /made from a template/);
+    for (let i = 0; i < AGENT_LISTS_MAX - 1; i++) s.createList({ template: 'simple' }, BOT);
+    assert.throws(() => s.createList({ template: 'simple' }, BOT), new RegExp(`${AGENT_LISTS_MAX} lists made by you at most`));
+    s.createList({ template: 'simple' }, OTHER);
+    assert.equal(read(['new', 'batches', 'Lots', 'of', 'work'])[1].title, 'Lots of work');
+    assert.deepEqual(read(['new', 'batches']), ['create-list', { template: 'batches', title: undefined }]);
+    assert.ok(read(['new']).refused);
+    assert.deepEqual(asked('new-list', { template: 'batches' }), ['create-list', { template: 'batches', title: undefined }]);
+    assert.ok(TOOLS.some((x) => x.name === 'new-list'));
 });
 
 test('an ask too old is not done; nobody keeping says so, and nothing changed', async () => {
