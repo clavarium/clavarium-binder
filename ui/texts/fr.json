@@ -7,5 +7,6 @@
   "show-archived": "Archivées", "gate": "À valider", "done": "Fait", "add-state": "État", "add-field": "Champ",
   "kind-message": "Message", "kind-file": "Fichier", "kind-asset": "Asset", "kind-branch": "Branche", "kind-link": "Lien", "kind-record": "Fiche",
   "what": "Quoi", "name": "Nom", "type": "Type", "saved": "Enregistré", "edited": "modifiée", "by": "par", "mine": "Les miennes", "all": "Toutes",
-  "delete-list": "Supprimer la liste", "delete-list-sure": "Supprimer la liste et ses fiches ?", "archive-list": "Archiver la liste", "no-records": "Rien ici.", "search": "Chercher"
+  "delete-list": "Supprimer la liste", "delete-list-sure": "Supprimer la liste et ses fiches ?", "archive-list": "Archiver la liste", "no-records": "Rien ici.", "search": "Chercher",
+  "description": "Description", "add-description": "Ajouter une description", "edit": "Modifier", "more": "Détails", "approve": "Valider", "no-due": "Sans échéance", "add": "Ajouter", "ok": "OK"
 }

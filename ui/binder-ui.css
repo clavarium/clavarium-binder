@@ -50,6 +50,7 @@
 .binder-row.binder-edit { grid-template-columns: 1fr auto auto auto; cursor: default; }
 .binder-what { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
 .binder-what b { overflow-wrap: anywhere; }
+.binder-sub { color: var(--binder-dim); font-size: .9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .binder-meta { display: flex; gap: .6em; flex-wrap: wrap; font-size: .85em; color: var(--binder-dim); }
 .binder-tick { width: 1.4rem; height: 1.4rem; border: 2px solid var(--binder-dim); border-radius: 5px; background: transparent; display: grid; place-items: center; padding: 0; font-weight: 800; font-size: .85rem; line-height: 1; }
 .binder-tick[aria-checked="true"] { background: var(--binder-ok); border-color: var(--binder-ok); color: var(--binder-bg); }
@@ -69,28 +70,79 @@
 .binder-face img, .binder-initial { width: 5.5rem; height: 5.5rem; border-radius: 50%; object-fit: cover; }
 .binder-initial { display: grid; place-items: center; background: var(--binder-panel); font-size: 2rem; font-weight: 700; color: var(--binder-dim); }
 
-/* A record, whole. */
+/* A record, whole: one calm column, read on a phone first. */
 .binder-page { display: flex; flex-direction: column; gap: var(--binder-gap); min-width: 0; }
-.binder-title { font-size: 1.2rem; font-weight: 700; }
-.binder-approve { display: inline-flex; gap: .5em; align-items: center; }
-.binder-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 20rem); gap: .9rem; align-items: start; }
-.binder-col-main, .binder-col-side { display: flex; flex-direction: column; gap: .9rem; min-width: 0; }
-.binder-box { border: 1px solid var(--binder-line); border-radius: var(--binder-radius); background: var(--binder-panel); padding: .7rem .9rem; display: flex; flex-direction: column; gap: .55rem; min-width: 0; }
-.binder-box h3, .binder-box summary { font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--binder-dim); display: flex; justify-content: space-between; }
-.binder-box summary { cursor: pointer; }
-.binder-att { display: flex; gap: .6rem; align-items: center; }
-.binder-att .binder-link { flex: 1; }
-.binder-ic { width: 1.7rem; height: 1.7rem; border-radius: 6px; background: var(--binder-bg); display: grid; place-items: center; flex: none; }
+.binder-record { gap: 1.5rem; max-width: 44rem; width: 100%; margin: .2rem auto 2rem; }
+.binder-crumb { display: flex; justify-content: space-between; align-items: center; gap: 1rem; font-size: .92em; }
+.binder .binder-crumb .binder-text-btn { color: var(--binder-dim); }
+.binder .binder-text-btn { border: 0; background: transparent; padding: .35em 0; color: var(--binder-action); font-weight: 500; text-align: left; }
+.binder-text-btn:hover { text-decoration: underline; }
+.binder-small { padding: .35em .85em; font-size: .92em; }
+.binder-head { display: flex; flex-direction: column; gap: .6rem; }
+.binder .binder-title { font-size: 1.65rem; font-weight: 700; line-height: 1.25; letter-spacing: -.01em; border: 0; border-radius: 6px; background: transparent; padding: .05em .15em; margin: 0 -.15em;
+  resize: none; overflow: hidden; width: 100%; box-sizing: border-box; field-sizing: content; }
+.binder .binder-title:hover:not([readonly]) { background: var(--binder-panel); }
+.binder .binder-title:focus { outline: none; background: var(--binder-panel); box-shadow: 0 2px 0 var(--binder-action); }
+.binder-status { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+.binder-state-wrap { position: relative; }
+.binder-state { font-size: .9rem; padding: .3em .85em; background: color-mix(in srgb, var(--binder-dim) 12%, transparent); border-color: transparent; color: var(--binder-text); display: inline-flex; gap: .4em; align-items: center; }
+.binder-state[data-gate] { background: color-mix(in srgb, var(--binder-ask) 16%, transparent); border-color: transparent; }
+.binder-state[data-done] { background: color-mix(in srgb, var(--binder-ok) 16%, transparent); border-color: transparent; }
+.binder-state:disabled { opacity: 1; }
+.binder-caret { font-size: .8em; color: var(--binder-dim); }
+.binder-menu { position: absolute; z-index: 5; top: calc(100% + .35rem); left: 0; min-width: 12rem; display: flex; flex-direction: column; padding: .3rem; background: var(--binder-bg);
+  border: 1px solid var(--binder-line); border-radius: 12px; box-shadow: 0 8px 28px rgb(0 0 0 / .18); }
+.binder-menu button { border: 0; background: transparent; text-align: left; padding: .6em .7em; border-radius: 8px; display: flex; gap: .5em; align-items: center; }
+.binder-menu button:hover, .binder-menu button:focus-visible { background: var(--binder-panel); outline: none; }
+.binder-menu button[aria-checked="true"] { font-weight: 600; }
+.binder-check { width: 1em; color: var(--binder-action); }
+.binder-desc { display: flex; flex-direction: column; gap: .3rem; align-items: flex-start; }
+.binder-rich { font-size: 1.05rem; line-height: 1.6; display: flex; flex-direction: column; gap: .6em; overflow-wrap: anywhere; }
+.binder-rich p, .binder-rich ul { margin: 0; }
+.binder-rich ul { padding-left: 1.3em; }
+.binder-rich a { color: var(--binder-action); }
+.binder-desc-form { display: flex; flex-direction: column; gap: .5rem; }
+.binder-desc-form textarea { width: 100%; box-sizing: border-box; line-height: 1.5; resize: vertical; }
+.binder-who-wrap { display: flex; flex-direction: column; gap: .6rem; }
+.binder-who { display: flex; flex-wrap: wrap; gap: .5em; align-items: center; border: 0; background: transparent; padding: .2em 0; text-align: left; color: var(--binder-text); }
+button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text-decoration-color: var(--binder-line); text-underline-offset: 3px; }
+.binder-dot { color: var(--binder-dim); }
+.binder-late { color: var(--binder-danger); }
+.binder-who-edit { display: flex; flex-direction: column; gap: .6rem; padding: .8rem; background: var(--binder-panel); border-radius: 12px; }
+.binder-sec { display: flex; flex-direction: column; gap: .5rem; min-width: 0; }
+.binder-sec h3, .binder-history h3 { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--binder-dim); font-weight: 600; }
+.binder-atts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.binder-att { display: flex; gap: .4rem; align-items: center; min-width: 0; }
+.binder-att .binder-link { flex: 1; flex-direction: row; align-items: center; gap: .7rem; padding: .45rem 0; }
+.binder-att-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.binder-att .binder-link:hover .binder-att-name { text-decoration: underline; }
+.binder-ic { width: 1.9rem; height: 1.9rem; border-radius: 8px; background: var(--binder-panel); display: grid; place-items: center; flex: none; font-size: .95em; }
+.binder-att .binder-x { opacity: .55; }
+.binder-att .binder-x:hover { opacity: 1; }
+.binder-note { align-self: flex-start; max-width: 100%; background: var(--binder-panel); border-radius: 4px 14px 14px 14px; padding: .55rem .85rem; display: flex; flex-direction: column; gap: .15rem; }
 .binder-note p { white-space: pre-wrap; overflow-wrap: anywhere; }
-.binder-note small, .binder-log { color: var(--binder-dim); font-size: .85em; }
+.binder-note-by { font-size: .8em; color: var(--binder-dim); }
+.binder-note-by b { font-weight: 600; color: var(--binder-text); }
+.binder-note-add { display: flex; gap: .5rem; align-items: flex-end; margin-top: .2rem; }
+.binder-note-add textarea { flex: 1; min-width: 0; resize: vertical; border-radius: 12px; }
+.binder-more { border-top: 1px solid var(--binder-line); padding-top: .8rem; display: flex; flex-direction: column; gap: 1rem; }
+.binder-more > summary { cursor: pointer; color: var(--binder-dim); list-style: none; width: fit-content; padding: .2em 0; }
+.binder-more > summary::-webkit-details-marker { display: none; }
+.binder-more[open] > summary { margin-bottom: 1rem; }
+.binder-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: .8rem; margin-bottom: 1rem; }
+.binder-history { display: flex; flex-direction: column; gap: .3rem; margin-bottom: 1rem; }
+.binder-box { border: 1px solid var(--binder-line); border-radius: var(--binder-radius); background: var(--binder-panel); padding: .7rem .9rem; display: flex; flex-direction: column; gap: .55rem; min-width: 0; }
+.binder-box h3 { font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--binder-dim); display: flex; justify-content: space-between; }
+.binder-log { color: var(--binder-dim); font-size: .85em; }
 .binder-log time { font-variant-numeric: tabular-nums; margin-right: .6em; }
+.binder .binder-warn { color: var(--binder-danger); }
 .binder-field { display: flex; flex-direction: column; gap: .25rem; }
 .binder-field > span { font-size: .85em; color: var(--binder-dim); }
 .binder-photo { width: 6rem; height: 6rem; object-fit: cover; border-radius: 8px; }
-.binder-form { display: flex; gap: .5rem; flex-wrap: wrap; align-items: flex-start; }
-.binder-form input, .binder-form textarea { flex: 1; min-width: 10rem; }
-.binder-actions { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
-.binder-sure { display: inline-flex; gap: .5rem; align-items: center; }
+.binder-form { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.binder-form input, .binder-form textarea { flex: 1; min-width: 8rem; }
+.binder-actions { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+.binder-sure { display: inline-flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
 .binder-sure[hidden] { display: none; }
 .binder-templates { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: .5rem; }
 .binder-templates button { border: 1px solid var(--binder-line); background: var(--binder-panel); border-radius: 9px; padding: .8em; text-align: left; font-weight: 600; }
@@ -98,7 +150,8 @@
 .binder-empty { color: var(--binder-dim); padding: 1rem 0; display: flex; flex-direction: column; gap: .7rem; align-items: flex-start; }
 
 @media (max-width: 720px) {
-  .binder-two { grid-template-columns: minmax(0, 1fr); }
+  .binder .binder-title { font-size: 1.4rem; }
+  .binder-record { gap: 1.3rem; }
   .binder-row.binder-edit { grid-template-columns: 1fr auto; }
   .binder-cols { grid-auto-columns: minmax(80%, 1fr); }
 }

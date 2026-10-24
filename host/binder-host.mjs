@@ -27,6 +27,8 @@ export const TOO_LATE_MS = 60_000;
 const day = (iso) => String(iso ?? '').slice(0, 10);
 const owners = (r) => (r.owners.length ? ` @${r.owners.join(' @')}` : '');
 const due = (r) => (r.due ? ` (due ${r.due})` : '');
+/* The first line of a description, as read: without its Markdown marks. */
+export const firstLine = (text) => String(text ?? '').split('\n').map((l) => l.replace(/^\s*[-*]\s+/, '').replace(/\*\*/g, '').trim()).find(Boolean) ?? '';
 
 /* ---- what an agent reads: plain lines ---- */
 export function say(op, data, list) {
@@ -41,7 +43,10 @@ export function say(op, data, list) {
                 const here = records.filter((r) => r.state === st.id);
                 if (!here.length) continue;
                 out.push(`${st.name}${st.gate ? ' (a person approves)' : ''}:`);
-                for (const r of here) out.push(`  #${r.id} ${r.title}${owners(r)}${due(r)}${r.attached.length ? ` [${r.attached.length} attached]` : ''}`);
+                for (const r of here) {
+                    out.push(`  #${r.id} ${r.title}${owners(r)}${due(r)}${r.attached.length ? ` [${r.attached.length} attached]` : ''}`);
+                    if (r.description) out.push(`      ${firstLine(r.description).slice(0, 120)}`);
+                }
             }
             if (l.states.some((x) => x.gate)) out.push('Past a gate, only what a person approved.');
             return out.join('\n');
@@ -50,6 +55,8 @@ export function say(op, data, list) {
             const { record: r, list: l, history } = data;
             const st = l.states.find((x) => x.id === r.state);
             const out = [`#${r.id} ${r.title}`, `  list: ${l.title}; state: ${st?.name ?? r.state}${r.approved ? ' (approved)' : ''}${r.archived ? '; archived' : ''}${owners(r) ? `; owners:${owners(r)}` : ''}${due(r)}`];
+            if (r.description) out.push('Description:', ...r.description.split('\n').map((x) => (x ? `  ${x}` : '')));
+            else out.push('No description yet: give one (what it is and why, 1-3 lines for a person) with binder edit ID --description "...".');
             for (const f of l.fields) if (r.fields[f.id] !== undefined) out.push(`  ${f.name}: ${r.fields[f.id]}`);
             if (r.notes.length) { out.push('Notes:'); for (const n of r.notes) out.push(`  ${day(n.at)} ${n.by.name}: ${n.text.replace(/\n/g, '\n    ')}${n.edited ? ' (edited)' : ''}`); }
             if (r.attached.length) { out.push('Attached:'); for (const a of r.attached) out.push(`  ${a.kind} ${a.kind === 'record' ? `#${a.ref}` : a.ref}${a.title ? ` "${a.title}"` : ''}`); }
@@ -81,8 +88,8 @@ export function keeper(dir, { sides = () => [], now = () => Date.now() } = {}) {
                 case 'show': data = store.list(a.list, who, { state: a.state, mine: a.mine, archived: a.archived, text: a.text }); break;
                 case 'get': data = store.record(a.id, who); break;
                 case 'search': data = store.search(a.text, who); break;
-                case 'add': data = store.add(a.list, { title: a.title, state: a.state, fields: a.fields, owners: me(a.owners), due: a.due, note: a.note }, who); break;
-                case 'edit': data = store.edit(a.id, { title: a.title, fields: a.fields, owners: me(a.owners), due: a.due }, who); break;
+                case 'add': data = store.add(a.list, { title: a.title, description: a.description, state: a.state, fields: a.fields, owners: me(a.owners), due: a.due, note: a.note }, who); break;
+                case 'edit': data = store.edit(a.id, { title: a.title, description: a.description, fields: a.fields, owners: me(a.owners), due: a.due }, who); break;
                 case 'move': { const r = store.move(a.id, a.state, who); data = { ...r, stateName: store.record(r.id, who).list.states.find((x) => x.id === r.state)?.name }; break; }
                 case 'note': data = store.note(a.id, a.text, who); break;
                 case 'attach': data = store.attach(a.id, { kind: a.kind, ref: a.ref, title: a.title }, who); break;

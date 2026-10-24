@@ -6,7 +6,10 @@ import { join } from 'node:path';
 import { openStore, Refused } from '../server/store.mjs';
 import { seed } from '../server/templates.mjs';
 import { keeper } from '../host/binder-host.mjs';
-import { ask } from '../server/binder.mjs';
+import { ask, asked, TOOLS } from '../server/binder.mjs';
+import { say } from '../host/binder-host.mjs';
+import { blocks, inline, firstLine, rich } from '../ui/binder-ui.js';
+import { DESCRIPTION_MAX } from '../server/store.mjs';
 import { run, read } from '../bin/binder.mjs';
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'binder-'));
@@ -188,10 +191,96 @@ test('an ask too old is not done; nobody keeping says so, and nothing changed', 
 
 test('the command line is read as the help says', () => {
     assert.deepEqual(read(['add', 'Batches', 'Dark', 'mode', '--owner', 'me', '--field', 'phone=01 02']),
-        ['add', { list: 'Batches', title: 'Dark mode', state: undefined, due: undefined, owners: ['me'], note: undefined, fields: { phone: '01 02' } }]);
-    assert.deepEqual(read(['edit', '3', '--due', 'none', '--owner', 'none']), ['edit', { id: '3', title: undefined, due: '', owners: [] }]);
+        ['add', { list: 'Batches', title: 'Dark mode', state: undefined, due: undefined, owners: ['me'], note: undefined, description: undefined, fields: { phone: '01 02' } }]);
+    assert.deepEqual(read(['edit', '3', '--due', 'none', '--owner', 'none']), ['edit', { id: '3', title: undefined, description: undefined, due: '', owners: [] }]);
+    assert.equal(read(['add', 'Batches', 'Dark mode', '--description', 'The site in dark.\n- evenings'])[1].description, 'The site in dark.\n- evenings');
+    assert.equal(read(['edit', '3', '--description', ''])[1].description, '', 'an empty description is said, to remove it');
+    assert.ok(read(['edit', '3', '--description']).refused);
     assert.deepEqual(read([]), ['lists', {}]);
     assert.ok(read(['fly']).refused);
     assert.ok(read(['move', '3']).refused);
     assert.ok(Refused);
+});
+
+test('a description: kept on add and edit, in the history, searched, removed when empty, refused when too long', () => {
+    const dir = tmp();
+    const s = openStore(dir);
+    const l = s.createList({ template: 'batches' }, ME);
+    s.grant(l.id, BOT.id, 'write', ME);
+    const r = s.add(l.id, { title: 'Dark mode', description: '  The whole site in dark.\r\n\n\n\n- for **evenings**\u0007  \n' }, BOT);
+    assert.equal(r.description, 'The whole site in dark.\n\n- for **evenings**', 'trimmed, blank lines folded, invisible characters out');
+    assert.equal(s.add(l.id, { title: 'none', description: '   ' }, BOT).description, undefined);
+    assert.deepEqual(s.search('evenings', BOT).map((x) => x.id), [r.id]);
+    assert.deepEqual(s.list(l.id, ME, { text: 'whole site' }).records.map((x) => x.id), [r.id]);
+    s.edit(r.id, { description: 'Only the settings page.' }, BOT);
+    assert.equal(s.record(r.id, ME).record.description, 'Only the settings page.');
+    assert.throws(() => s.edit(r.id, { description: 'x'.repeat(DESCRIPTION_MAX + 1) }, BOT), /4000 characters at most/);
+    assert.throws(() => s.edit(r.id, { description: { text: 'x' } }, BOT), /a description is a text/);
+    assert.equal(s.edit(r.id, { description: 'y'.repeat(DESCRIPTION_MAX) }, BOT).description.length, DESCRIPTION_MAX);
+    s.edit(r.id, { description: '' }, BOT);
+    assert.equal(s.record(r.id, ME).record.description, undefined);
+    const changes = s.record(r.id, ME).history.map((x) => x.change);
+    assert.equal(changes[0].description, 'The whole site in dark.\n\n- for **evenings**');
+    assert.equal(changes[1].description, 'Only the settings page.');
+    assert.equal(changes.at(-1).description, null);
+    assert.equal(s.record(r.id, BOT).record.state, 'proposed', 'a description approves nothing');
+    s.edit(r.id, { description: 'Secret plan' }, ME);
+    s.delete(r.id, ME);
+    assert.equal(readFileSync(join(dir, 'log.jsonl'), 'utf8').includes('Secret plan'), false, 'deleted is deleted, description too');
+});
+
+test('the keeper says a description: its first line in show, whole in get; the MCP tools take it', () => {
+    const s = openStore(tmp());
+    const l = s.createList({ template: 'batches' }, ME);
+    const r = s.add(l.id, { title: 'Dark mode', description: '- **The whole site** in dark.\nFor the evenings.' }, ME);
+    s.add(l.id, { title: 'Bare' }, ME);
+    const shown = say('show', s.list(l.id, ME));
+    assert.match(shown, /#1 Dark mode\n {6}The whole site in dark\.\n {2}#2 Bare/);
+    const got = say('get', s.record(r.id, ME));
+    assert.match(got, /Description:\n {2}- \*\*The whole site\*\* in dark\.\n {2}For the evenings\./);
+    assert.match(say('get', s.record('2', ME)), /No description yet: .*--description/);
+    for (const name of ['add', 'edit']) assert.match(TOOLS.find((t) => t.name === name).inputSchema.properties.description.description, /for a person/);
+    assert.equal(asked('add', { list: 'L', title: 't', description: 'd' })[1].description, 'd');
+    assert.equal(asked('edit', { id: '1', description: '' })[1].description, '');
+});
+
+test('a description is read as a few blocks: paragraphs, lists, bold, http links; nothing else', () => {
+    assert.deepEqual(blocks('One\ntwo\n\n- a\n* **b**\n\nend'), [
+        { type: 'p', lines: [[{ text: 'One' }], [{ text: 'two' }]] },
+        { type: 'list', items: [[{ text: 'a' }], [{ bold: 'b' }]] },
+        { type: 'p', lines: [[{ text: 'end' }]] }]);
+    assert.deepEqual(inline('see https://example.com/a. and [the doc](https://example.com/d)'), [
+        { text: 'see ' }, { link: 'https://example.com/a', text: 'https://example.com/a' }, { text: '.' }, { text: ' and ' }, { link: 'https://example.com/d', text: 'the doc' }]);
+    const hostile = '<img src=x onerror=alert(1)> [x](javascript:alert(1)) javascript:alert(1) **<b>**';
+    const parts = inline(hostile);
+    assert.equal(parts.some((x) => x.link), false, 'no link but http(s)');
+    assert.equal(parts.map((x) => x.text ?? x.bold).join(''), '<img src=x onerror=alert(1)> [x](javascript:alert(1)) javascript:alert(1) <b>');
+    assert.equal(firstLine('\n\n- **First** thing\nsecond'), 'First thing');
+    assert.equal(firstLine(''), '');
+});
+
+test('a description is drawn element by element: hostile text stays text', () => {
+    /* The smallest document the screen needs: elements, text nodes, attributes. */
+    class Node { constructor() { this.childNodes = []; } append(...k) { this.childNodes.push(...k); } }
+    class Text extends Node { constructor(t) { super(); this.data = t; } }
+    class El extends Node {
+        constructor(tag) { super(); this.tag = tag; this.attrs = {}; }
+        setAttribute(k, v) { this.attrs[k] = String(v); }
+        addEventListener() {}
+        set innerHTML(_) { throw new Error('innerHTML used'); }
+    }
+    const was = { document: globalThis.document, Node: globalThis.Node };
+    globalThis.Node = Node;
+    globalThis.document = { createElement: (t) => new El(t), createTextNode: (t) => new Text(t) };
+    try {
+        const out = rich('<script>alert(1)</script> **<img src=x onerror=alert(1)>**\n- [go](https://example.com/?a="b") [no](javascript:alert(1))');
+        const tags = []; const texts = []; const links = [];
+        const walk = (n) => { if (n instanceof Text) texts.push(n.data); else { tags.push(n.tag); if (n.tag === 'a') links.push(n.attrs.href); n.childNodes.forEach(walk); } };
+        walk(out);
+        assert.deepEqual([...new Set(tags)].sort(), ['a', 'div', 'li', 'p', 'strong', 'ul']);
+        assert.deepEqual(links, ['https://example.com/?a="b"']);
+        assert.ok(texts.includes('<script>alert(1)</script> '));
+        assert.ok(texts.includes('<img src=x onerror=alert(1)>'));
+        assert.ok(texts.some((t) => t.includes('[no](javascript:alert(1))')));
+    } finally { globalThis.document = was.document; globalThis.Node = was.Node; }
 });

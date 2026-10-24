@@ -20,10 +20,58 @@ export const KEYS = Object.freeze(['lists', 'new-list', 'new-item', 'no-lists', 
     'state', 'owners', 'due', 'notes', 'add-note', 'attached', 'attach', 'history', 'archive', 'restore', 'delete', 'delete-sure', 'approved', 'settings',
     'states', 'fields', 'access', 'read', 'write', 'none', 'save', 'empty', 'nobody', 'archived', 'show-archived', 'gate', 'done', 'add-state', 'add-field',
     'kind-message', 'kind-file', 'kind-asset', 'kind-branch', 'kind-link', 'kind-record', 'what', 'name', 'type', 'saved', 'edited', 'by', 'mine', 'all',
-    'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'search']);
+    'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'search', 'description', 'add-description', 'edit', 'more', 'approve', 'no-due', 'add', 'ok']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'link', 'record'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', link: '🔗', record: '▣' };
 const TYPES = ['text', 'number', 'date', 'link', 'photo'];
+const DESCRIPTION_MAX = 4000;
+
+/* A DESCRIPTION, READ: a few lines of Markdown-ish text, as blocks a screen can
+ * draw element by element. Paragraphs (a blank line between), lists ("- " or
+ * "* "), **bold**, links ([text](https://...) or a bare http(s) address).
+ * Nothing else is understood: whatever else it holds stays text.
+ *   [{ type: 'p', lines: [parts] }, { type: 'list', items: [parts] }]
+ *   parts: [{ text }, { bold }, { link, text }]
+ */
+const INLINE = /\*\*([^*\n]+?)\*\*|\[([^\]\n]{1,300})\]\((https?:\/\/[^\s()<>]+)\)|(https?:\/\/[^\s<>"]+)/gi;
+export function inline(text) {
+    const out = [];
+    let at = 0;
+    for (const m of String(text ?? '').matchAll(INLINE)) {
+        if (m.index > at) out.push({ text: text.slice(at, m.index) });
+        if (m[1] !== undefined) out.push({ bold: m[1] });
+        else if (m[2] !== undefined) out.push({ link: m[3], text: m[2] });
+        else {
+            const tail = /[.,;:!?)\]'»]+$/.exec(m[4])?.[0] ?? '';
+            const url = m[4].slice(0, m[4].length - tail.length);
+            out.push({ link: url, text: url });
+            if (tail) out.push({ text: tail });
+        }
+        at = m.index + m[0].length;
+    }
+    if (at < String(text ?? '').length) out.push({ text: text.slice(at) });
+    return out;
+}
+export function blocks(text) {
+    const out = [];
+    let para = null; let list = null;
+    for (const raw of String(text ?? '').replace(/\r/g, '').split('\n')) {
+        const line = raw.trim();
+        const item = /^[-*]\s+(.*)$/.exec(line);
+        if (!line) { para = null; list = null; } else if (item) {
+            para = null;
+            if (!list) out.push(list = { type: 'list', items: [] });
+            list.items.push(inline(item[1]));
+        } else {
+            list = null;
+            if (!para) out.push(para = { type: 'p', lines: [] });
+            para.lines.push(inline(line));
+        }
+    }
+    return out;
+}
+/* Its first line, as plain text: what a list shows under a title. */
+export const firstLine = (text) => String(text ?? '').split('\n').map((l) => l.replace(/^\s*[-*]\s+/, '').replace(/\*\*/g, '').trim()).find(Boolean) ?? '';
 
 function h(tag, props = {}, ...kids) {
     const el = document.createElement(tag);
@@ -38,9 +86,19 @@ function h(tag, props = {}, ...kids) {
     return el;
 }
 
+/* A description drawn: text nodes, <strong>, and <a> whose address starts with http(s)://. */
+export function rich(text) {
+    const parts = (ps) => ps.map((x) => (x.bold !== undefined ? h('strong', {}, x.bold)
+        : x.link && /^https?:\/\//i.test(x.link) ? h('a', { href: x.link, target: '_blank', rel: 'noopener noreferrer' }, x.text) : x.text ?? ''));
+    return h('div', { class: 'binder-rich' }, blocks(text).map((b) => (b.type === 'list'
+        ? h('ul', {}, b.items.map((it) => h('li', {}, parts(it))))
+        : h('p', {}, b.lines.flatMap((l, i) => (i ? [h('br'), ...parts(l)] : parts(l)))))));
+}
+
 export function mount(root, { call, words = {}, lang = 'en', people = () => [], picture = () => null, openAttached = null } = {}) {
     const w = (k) => words[k] ?? k;
-    const ui = { lists: [], at: null, data: null, view: null, record: null, mode: 'list', archived: false, mine: false, error: '' };
+    /* open: what of a record is being changed ('states', 'who', 'description', 'attach'); draft: what was typed, kept across a repaint. */
+    const ui = { lists: [], at: null, data: null, view: null, record: null, mode: 'list', archived: false, mine: false, error: '', open: null, more: false, draft: {}, focus: false };
     const box = h('div', { class: 'binder' });
     root.replaceChildren(box);
     let alive = true;
@@ -73,6 +131,16 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             l.access === 'write' && !ui.archived ? h('button', { type: 'button', class: 'binder-primary', 'data-act': 'new-item', onclick: () => { ui.mode = 'new-item'; paint(); } }, `+ ${w('new-item')}`) : null);
     }
 
+    /* A due date as a person reads it: "26 oct.", "4 nov. 2027 09:00". */
+    const when = (due) => {
+        const t = Date.parse(due.length === 10 ? `${due}T00:00:00` : due.replace(' ', 'T'));
+        if (!Number.isFinite(t)) return due;
+        const d = new Date(t);
+        const o = { day: 'numeric', month: 'short', ...(d.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) };
+        try { return `${d.toLocaleDateString(lang, o)}${due.length > 10 ? ` ${due.slice(11)}` : ''}`; } catch { return due; }
+    };
+    const late = (l, r) => { const t = Date.parse(r.due.length === 10 ? `${r.due}T23:59:59` : r.due.replace(' ', 'T')); return t < Date.now() && !l.states.find((s) => s.id === r.state)?.done; };
+    const stamp = (iso) => { try { return new Date(iso).toLocaleString(lang, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch { return String(iso).slice(0, 16).replace('T', ' '); } };
     const gateOf = (l) => l.states.findIndex((s) => s.gate);
     const doneOf = (l) => l.states.find((s) => s.done) ?? l.states.at(-1);
     /* The box of a row: approval where the list has a gate (a person's), else done. */
@@ -85,20 +153,22 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     const pill = (l, r) => { const st = l.states.find((s) => s.id === r.state); return h('span', { class: 'binder-pill', 'data-state': r.state, 'data-done': st?.done ? '' : null, 'data-gate': st?.gate ? '' : null }, st?.name ?? r.state); };
     const meta = (l, r) => h('span', { class: 'binder-meta' },
         r.owners.length ? r.owners.map(nameOf).join(', ') : null,
-        r.due ? h('span', {}, `⏰ ${r.due}`) : null,
+        r.due ? h('span', { class: late(l, r) ? 'binder-late' : null }, `⏰ ${when(r.due)}`) : null,
         r.attached.length ? h('span', {}, `📎 ${r.attached.length}`) : null,
         r.notes.length ? h('span', {}, `✎ ${r.notes.length}`) : null);
-    const open = (r) => { void soft(ask('get', { id: r.id }).then((d) => { ui.record = d; ui.mode = 'record'; paint(); })); };
+    const sub = (r) => (r.description ? h('span', { class: 'binder-sub' }, firstLine(r.description)) : null);
+    const leave = () => { ui.open = null; ui.more = false; ui.draft = {}; };
+    const open = (r) => { void soft(ask('get', { id: r.id }).then((d) => { leave(); ui.record = d; ui.mode = 'record'; paint(); window.scrollTo?.(0, 0); })); };
 
     function asList(l, records) {
         return h('div', { class: 'binder-rows' }, records.map((r) => h('div', { class: 'binder-row', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } },
-            tick(l, r), h('div', { class: 'binder-what' }, h('b', {}, r.title), meta(l, r)), pill(l, r))));
+            tick(l, r), h('div', { class: 'binder-what' }, h('b', {}, r.title), sub(r), meta(l, r)), pill(l, r))));
     }
     function asColumns(l, records) {
         return h('div', { class: 'binder-cols' }, l.states.map((s) => {
             const here = records.filter((r) => r.state === s.id);
             return h('section', { class: 'binder-col', 'data-state': s.id }, h('h3', {}, s.name, h('span', {}, String(here.length))),
-                here.map((r) => h('div', { class: 'binder-card', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } }, h('b', {}, r.title), meta(l, r))));
+                here.map((r) => h('div', { class: 'binder-card', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } }, h('b', {}, r.title), sub(r), meta(l, r))));
         }));
     }
     function asCards(l, records) {
@@ -133,60 +203,122 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 h('button', { type: 'button', class: 'binder-primary', onclick: go }, w('create'))));
     }
 
+    /* A RECORD, WHOLE, read at a glance: its title, its state, what it is (the
+     * description); who and when on one line; what is attached; the notes.
+     * Everything else (fields, history, archive, delete) is folded under "more". */
     function record() {
         const { record: r, list: l, history } = ui.record;
         const can = l.access === 'write';
+        const st = l.states.find((s) => s.id === r.state);
+        const g = gateOf(l);
+        const set = (what) => { ui.open = what; ui.focus = !!what; paint(); };
+        const done = (p) => void soft(p).then(() => { ui.open = null; return refresh(); });
+        const later = (fn) => requestAnimationFrame(() => { if (ui.focus) { ui.focus = false; fn(); } });
+
+        const title = h('textarea', { class: 'binder-title', rows: '1', maxlength: '200', readonly: !can, 'aria-label': w('title'), text: r.title, spellcheck: 'false' });
+        const grow = () => { title.style.height = 'auto'; title.style.height = `${title.scrollHeight}px`; };
+        title.addEventListener('input', grow);
+        title.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); title.blur(); } if (e.key === 'Escape') { title.value = r.title; title.blur(); } });
+        title.addEventListener('change', () => { const t = title.value.replace(/\s+/g, ' ').trim(); if (t && t !== r.title) done(ask('edit', { id: r.id, title: t })); else { title.value = r.title; grow(); } });
+        requestAnimationFrame(grow);
+
+        /* The state: one pill; a person changes it from its menu. Past a gate is approving. */
+        const pillOf = h('button', { type: 'button', class: 'binder-pill binder-state', 'data-state': r.state, 'data-done': st?.done ? '' : null, 'data-gate': st?.gate ? '' : null,
+            'aria-haspopup': 'menu', 'aria-expanded': String(ui.open === 'states'), 'aria-label': `${w('state')}: ${st?.name ?? r.state}`, disabled: !can,
+            onclick: () => set(ui.open === 'states' ? null : 'states') }, st?.name ?? r.state, can ? h('span', { class: 'binder-caret', 'aria-hidden': 'true' }, '▾') : null);
+        const menu = ui.open === 'states' ? h('div', { class: 'binder-menu', role: 'menu' }, l.states.map((s) => h('button', { type: 'button', role: 'menuitemradio', 'aria-checked': String(s.id === r.state), 'data-state': s.id,
+            onclick: () => done(ask('move', { id: r.id, state: s.id })) }, h('span', { class: 'binder-check', 'aria-hidden': 'true' }, s.id === r.state ? '✓' : ''), s.name))) : null;
+        const approve = g >= 0 && can && l.grants && !r.approved
+            ? h('button', { type: 'button', class: 'binder-primary binder-small', 'data-act': 'approve', onclick: () => done(ask('approve', { id: r.id, yes: true })) }, `✓ ${w('approve')}`) : null;
+
+        /* What it is. */
+        let about;
+        if (ui.open === 'description') {
+            const text = h('textarea', { class: 'binder-desc-edit', rows: '5', maxlength: String(DESCRIPTION_MAX), 'aria-label': w('description'), text: ui.draft.description ?? r.description ?? '' });
+            text.addEventListener('input', () => { ui.draft.description = text.value; });
+            later(() => { text.focus(); text.setSelectionRange(text.value.length, text.value.length); });
+            about = h('div', { class: 'binder-desc-form' }, text, h('div', { class: 'binder-actions' },
+                h('button', { type: 'button', class: 'binder-primary binder-small', 'data-act': 'save-description', onclick: () => { delete ui.draft.description; done(ask('edit', { id: r.id, description: text.value })); } }, w('save')),
+                h('button', { type: 'button', class: 'binder-text-btn', onclick: () => { delete ui.draft.description; set(null); } }, w('cancel'))));
+        } else {
+            about = h('div', { class: 'binder-desc' }, r.description ? rich(r.description) : null,
+                can ? h('button', { type: 'button', class: 'binder-text-btn', 'data-act': 'edit-description', onclick: () => set('description') }, r.description ? w('edit') : `+ ${w('add-description')}`) : null);
+        }
+
+        /* Who and when, on one line. */
+        const names = r.owners.map(nameOf).join(', ');
+        const whoLine = h(can ? 'button' : 'div', { type: can ? 'button' : null, class: 'binder-who', 'data-act': 'who', 'aria-expanded': can ? String(ui.open === 'who') : null, onclick: can ? () => set(ui.open === 'who' ? null : 'who') : null },
+            h('span', { class: names ? null : 'binder-dim' }, `👤 ${names || w('nobody')}`),
+            h('span', { class: 'binder-dot', 'aria-hidden': 'true' }, '·'),
+            h('span', { class: r.due ? (late(l, r) ? 'binder-late' : null) : 'binder-dim' }, `⏰ ${r.due ? when(r.due) : w('no-due')}`));
+        let whoEdit = null;
+        if (ui.open === 'who') {
+            const day = h('input', { type: 'date', value: r.due?.slice(0, 10) ?? '', 'aria-label': w('due') });
+            const hour = h('input', { type: 'time', value: r.due?.slice(11) ?? '', 'aria-label': w('due') });
+            whoEdit = h('div', { class: 'binder-who-edit' },
+                people().length ? h('div', { class: 'binder-owners', role: 'group', 'aria-label': w('owners') }, people().map((p) => h('button', { type: 'button', class: 'binder-chip', 'data-owner': p.id,
+                    'aria-pressed': String(r.owners.includes(p.id)),
+                    onclick: () => void soft(ask('edit', { id: r.id, owners: r.owners.includes(p.id) ? r.owners.filter((x) => x !== p.id) : [...r.owners, p.id] })).then(refresh) }, p.name))) : null,
+                h('div', { class: 'binder-form' }, day, hour,
+                    h('button', { type: 'button', class: 'binder-primary binder-small', 'data-act': 'save-due', onclick: () => done(ask('edit', { id: r.id, due: day.value ? (hour.value ? `${day.value} ${hour.value}` : day.value) : '' })) }, w('ok'))));
+        }
+
+        /* What is attached: an icon and a name; a tap opens it. */
+        const openIt = (a) => { if (a.kind === 'record') open({ id: a.ref }); else if (a.kind === 'link') window.open(a.ref, '_blank', 'noopener'); else openAttached?.(a); };
+        const nameOfIt = (a) => a.title || (a.kind === 'record' ? `#${a.ref}` : a.kind === 'file' ? a.ref.split('/').filter(Boolean).at(-1) ?? a.ref : a.ref);
+        let attachForm = null;
+        if (can && ui.open === 'attach') {
+            const kind = h('select', { 'aria-label': w('attach') }, KINDS.map((k) => h('option', { value: k }, w(`kind-${k}`))));
+            const ref = h('input', { type: 'text', placeholder: w('what'), 'aria-label': w('what') });
+            later(() => ref.focus());
+            attachForm = h('div', { class: 'binder-form' }, kind, ref,
+                h('button', { type: 'button', class: 'binder-primary binder-small', 'data-act': 'attach', onclick: () => { if (ref.value.trim()) done(ask('attach', { id: r.id, kind: kind.value, ref: ref.value })); } }, w('attach')),
+                h('button', { type: 'button', class: 'binder-text-btn', onclick: () => set(null) }, w('cancel')));
+        }
+        const attached = r.attached.length || can ? h('section', { class: 'binder-sec' }, h('h3', {}, w('attached')),
+            r.attached.length ? h('ul', { class: 'binder-atts' }, r.attached.map((a) => h('li', { class: 'binder-att', 'data-kind': a.kind },
+                h('button', { type: 'button', class: 'binder-link', title: `${w(`kind-${a.kind}`)} · ${a.kind === 'record' ? `#${a.ref}` : a.ref}`, onclick: () => openIt(a) },
+                    h('span', { class: 'binder-ic', 'aria-hidden': 'true' }, ICON[a.kind] ?? '•'), h('span', { class: 'binder-att-name' }, nameOfIt(a))),
+                can ? h('button', { type: 'button', class: 'binder-x', 'aria-label': `${w('delete')} ${nameOfIt(a)}`, onclick: () => void soft(ask('detach', { id: r.id, what: a.id })).then(refresh) }, '×') : null))) : null,
+            attachForm ?? (can ? h('button', { type: 'button', class: 'binder-text-btn', 'data-act': 'show-attach', onclick: () => set('attach') }, `+ ${w('attach')}`) : null)) : null;
+
+        /* Notes: small dated messages, and a box to add one. */
+        const note = h('textarea', { rows: '2', placeholder: w('add-note'), 'aria-label': w('add-note'), maxlength: '2000', text: ui.draft.note ?? '' });
+        note.addEventListener('input', () => { ui.draft.note = note.value; });
+        const notes = r.notes.length || can ? h('section', { class: 'binder-sec' }, h('h3', {}, w('notes')),
+            r.notes.map((n) => h('div', { class: 'binder-note', 'data-kind': n.by.kind },
+                h('div', { class: 'binder-note-by' }, h('b', {}, n.by.name), ` · ${stamp(n.at)}${n.edited ? ` · ${w('edited')}` : ''}`), h('p', {}, n.text))),
+            can ? h('div', { class: 'binder-note-add' }, note, h('button', { type: 'button', class: 'binder-ghost binder-small', 'data-act': 'note',
+                onclick: () => { if (note.value.trim()) void soft(ask('note', { id: r.id, text: note.value })).then(() => { delete ui.draft.note; return refresh(); }); } }, w('add'))) : null) : null;
+
+        /* The rest, folded. */
         const field = (f) => {
             const v = r.fields[f.id] ?? '';
             const input = h('input', { type: f.type === 'date' ? 'date' : f.type === 'number' ? 'number' : 'text', value: String(v), disabled: !can, 'aria-label': f.name, 'data-field': f.id });
             input.addEventListener('change', () => void soft(ask('edit', { id: r.id, fields: { [f.id]: input.value } })).then(refresh));
             const src = f.type === 'photo' && v ? picture(v) : null;
-            return h('div', { class: 'binder-field' }, h('span', {}, f.name), src ? h('img', { src, alt: f.name, class: 'binder-photo' }) : null, input);
+            return h('label', { class: 'binder-field' }, h('span', {}, f.name), src ? h('img', { src, alt: f.name, class: 'binder-photo' }) : null, input);
         };
-        const title = h('input', { type: 'text', class: 'binder-title', value: r.title, disabled: !can, 'aria-label': w('title') });
-        title.addEventListener('change', () => void soft(ask('edit', { id: r.id, title: title.value })).then(refresh));
-        const due = h('input', { type: 'text', value: r.due ?? '', placeholder: '2026-11-04 09:00', disabled: !can, 'aria-label': w('due') });
-        due.addEventListener('change', () => void soft(ask('edit', { id: r.id, due: due.value.trim() })).then(refresh));
-        const owners = h('div', { class: 'binder-owners', role: 'group', 'aria-label': w('owners') }, people().map((p) => h('button', { type: 'button', class: 'binder-chip', 'data-owner': p.id,
-            'aria-pressed': String(r.owners.includes(p.id)), disabled: !can,
-            onclick: () => void soft(ask('edit', { id: r.id, owners: r.owners.includes(p.id) ? r.owners.filter((x) => x !== p.id) : [...r.owners, p.id] })).then(refresh) }, p.name)));
-        const note = h('textarea', { rows: '2', placeholder: w('add-note'), 'aria-label': w('add-note'), maxlength: '2000' });
-        const kind = h('select', { 'aria-label': w('attach') }, KINDS.map((k) => h('option', { value: k }, w(`kind-${k}`))));
-        const ref = h('input', { type: 'text', placeholder: w('what'), 'aria-label': w('what') });
+        const stateName = (id) => l.states.find((s) => s.id === id)?.name ?? id;
         const sure = h('span', { class: 'binder-sure', hidden: true }, w('delete-sure'),
-            h('button', { type: 'button', class: 'binder-danger', 'data-act': 'delete-yes', onclick: () => void soft(ask('delete', { id: r.id })).then(() => { ui.record = null; ui.mode = 'list'; return refresh(); }) }, w('delete')),
-            h('button', { type: 'button', class: 'binder-ghost', onclick: () => { sure.hidden = true; } }, w('cancel')));
+            h('button', { type: 'button', class: 'binder-danger binder-small', 'data-act': 'delete-yes', onclick: () => void soft(ask('delete', { id: r.id })).then(() => { ui.record = null; ui.mode = 'list'; return refresh(); }) }, w('delete')),
+            h('button', { type: 'button', class: 'binder-text-btn', onclick: () => { sure.hidden = true; } }, w('cancel')));
+        const more = h('details', { class: 'binder-more', open: ui.more, ontoggle: (e) => { ui.more = e.currentTarget.open; } }, h('summary', { 'data-act': 'more' }, `⋯ ${w('more')}`),
+            l.fields.length ? h('div', { class: 'binder-fields' }, l.fields.map(field)) : null,
+            h('div', { class: 'binder-history' }, h('h3', {}, `${w('history')} · ${history.length}`),
+                history.slice().reverse().map((x) => h('div', { class: 'binder-log' }, h('time', {}, stamp(x.at)), `${x.by.name} · ${x.op}${x.op === 'move' && x.change ? ` → ${stateName(x.change.to)}` : ''}`))),
+            can ? h('div', { class: 'binder-actions' },
+                h('button', { type: 'button', class: 'binder-ghost binder-small', 'data-act': 'archive', onclick: () => void soft(ask('archive', { id: r.id, restore: !!r.archived })).then(() => { ui.record = null; ui.mode = 'list'; return refresh(); }) }, r.archived ? w('restore') : w('archive')),
+                l.grants ? h('button', { type: 'button', class: 'binder-ghost binder-small binder-warn', 'data-act': 'delete', onclick: () => { sure.hidden = false; } }, w('delete')) : null, sure) : null);
+
         return h('div', { class: 'binder-page binder-record', 'data-record': r.id },
-            h('div', { class: 'binder-bar' }, h('button', { type: 'button', class: 'binder-ghost', 'data-act': 'back', onclick: () => { ui.record = null; ui.mode = 'list'; void refresh(); } }, `‹ ${l.title}`),
-                h('span', { class: 'binder-dim' }, `#${r.id}`)),
-            title,
-            h('div', { class: 'binder-seg binder-states', role: 'group', 'aria-label': w('state') }, l.states.map((s) => h('button', { type: 'button', 'aria-pressed': String(s.id === r.state), 'data-state': s.id, disabled: !can,
-                onclick: () => void soft(ask('move', { id: r.id, state: s.id })).then(refresh) }, s.name))),
-            gateOf(l) >= 0 ? h('label', { class: 'binder-approve' }, tick(l, r), w('approved')) : null,
-            h('div', { class: 'binder-two' },
-                h('div', { class: 'binder-col-main' },
-                    h('section', { class: 'binder-box' }, h('h3', {}, w('attached'), h('span', {}, String(r.attached.length))),
-                        r.attached.map((a) => h('div', { class: 'binder-att', 'data-kind': a.kind },
-                            h('span', { class: 'binder-ic', 'aria-hidden': 'true' }, ICON[a.kind] ?? '•'),
-                            h('button', { type: 'button', class: 'binder-link', onclick: () => { if (a.kind === 'record') open({ id: a.ref }); else if (a.kind === 'link') window.open(a.ref, '_blank', 'noopener'); else openAttached?.(a); } },
-                                a.title || (a.kind === 'record' ? `#${a.ref}` : a.ref), h('small', {}, w(`kind-${a.kind}`))),
-                            can ? h('button', { type: 'button', class: 'binder-x', 'aria-label': w('delete'), onclick: () => void soft(ask('detach', { id: r.id, what: a.id })).then(refresh) }, '×') : null)),
-                        can ? h('div', { class: 'binder-form' }, kind, ref, h('button', { type: 'button', class: 'binder-ghost', 'data-act': 'attach',
-                            onclick: () => { if (ref.value.trim()) void soft(ask('attach', { id: r.id, kind: kind.value, ref: ref.value })).then(refresh); } }, w('attach'))) : null),
-                    h('section', { class: 'binder-box' }, h('h3', {}, w('notes')),
-                        r.notes.map((n) => h('div', { class: 'binder-note' }, h('p', {}, n.text), h('small', {}, `${n.by.name} · ${n.at.slice(0, 10)}${n.edited ? ` · ${w('edited')}` : ''}`))),
-                        can ? h('div', { class: 'binder-form' }, note, h('button', { type: 'button', class: 'binder-ghost', 'data-act': 'note',
-                            onclick: () => { if (note.value.trim()) void soft(ask('note', { id: r.id, text: note.value })).then(refresh); } }, w('add-note'))) : null)),
-                h('div', { class: 'binder-col-side' },
-                    h('section', { class: 'binder-box' },
-                        h('div', { class: 'binder-field' }, h('span', {}, w('owners')), people().length ? owners : h('span', { class: 'binder-dim' }, r.owners.map(nameOf).join(', ') || w('nobody'))),
-                        h('div', { class: 'binder-field' }, h('span', {}, w('due')), due),
-                        l.fields.map(field)),
-                    h('details', { class: 'binder-box binder-history' }, h('summary', {}, `${w('history')} · ${history.length}`),
-                        history.slice().reverse().map((x) => h('div', { class: 'binder-log' }, h('time', {}, x.at.slice(0, 16).replace('T', ' ')), `${x.by.name} · ${x.op}`))),
-                    can ? h('div', { class: 'binder-actions' },
-                        h('button', { type: 'button', class: 'binder-ghost', 'data-act': 'archive', onclick: () => void soft(ask('archive', { id: r.id, restore: !!r.archived })).then(() => { ui.record = null; ui.mode = 'list'; return refresh(); }) }, r.archived ? w('restore') : w('archive')),
-                        l.grants ? h('button', { type: 'button', class: 'binder-ghost', 'data-act': 'delete', onclick: () => { sure.hidden = false; } }, w('delete')) : null, sure) : null)));
+            h('div', { class: 'binder-crumb' }, h('button', { type: 'button', class: 'binder-text-btn', 'data-act': 'back', onclick: () => { leave(); ui.record = null; ui.mode = 'list'; void refresh(); } }, `‹ ${l.title}`),
+                h('span', { class: 'binder-dim' }, `#${r.id}${r.archived ? ` · ${w('archived')}` : ''}`)),
+            h('header', { class: 'binder-head' }, title,
+                h('div', { class: 'binder-status' }, h('div', { class: 'binder-state-wrap' }, pillOf, menu), approve)),
+            about,
+            h('div', { class: 'binder-who-wrap' }, whoLine, whoEdit),
+            attached, notes, more);
     }
 
     function settings(l) {
@@ -251,6 +383,11 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         box.replaceChildren(...parts);
     }
 
+    /* The state menu closes on a tap elsewhere, or Escape. */
+    const away = (e) => { if (ui.open === 'states' && !e.target?.closest?.('.binder-state-wrap')) { ui.open = null; paint(); } };
+    const escape = (e) => { if (e.key === 'Escape' && ui.open === 'states') { ui.open = null; paint(); } };
+    document.addEventListener('pointerdown', away);
+    document.addEventListener('keydown', escape);
     void refresh();
-    return { refresh, destroy() { alive = false; box.remove(); }, get state() { return { at: ui.at, mode: ui.mode } } };
+    return { refresh, destroy() { alive = false; document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', escape); box.remove(); }, get state() { return { at: ui.at, mode: ui.mode } } };
 }

@@ -24,6 +24,8 @@ import { seed, TEMPLATES, VIEWS, FIELD_TYPES } from './templates.mjs';
 
 export const TITLE_MAX = 200;
 export const NOTE_MAX = 2000;
+/* A record's description: a few lines for a person, what it is and why (Markdown-ish: paragraphs, "- " lists, **bold**, links). */
+export const DESCRIPTION_MAX = 4000;
 export const FIELD_MAX = 1000;
 export const REF_MAX = 1000;
 export const LISTS_MAX = 200;
@@ -109,6 +111,9 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
         ...(isPerson(who) ? { grants: l.access ?? {} } : {}), ...(l.archived ? { archived: true } : {}),
         count: Object.values(s.records).filter((r) => r.list === l.id && !r.archived).length });
 
+    /* Whether a record's title, description or notes hold `q` (lower case). */
+    const said = (r, q) => r.title.toLowerCase().includes(q) || (r.description ?? '').toLowerCase().includes(q) || r.notes.some((n) => n.text.toLowerCase().includes(q));
+
     const api = {
         dir,
         onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
@@ -122,7 +127,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             const q = oneLine(text, 100).toLowerCase();
             const records = Object.values(s.records).filter((r) => r.list === list.id && !!r.archived === !!archived
                 && (!st || r.state === st.id) && (!mine || r.owners.includes(w.id))
-                && (!q || r.title.toLowerCase().includes(q) || r.notes.some((n) => n.text.toLowerCase().includes(q))));
+                && (!q || said(r, q)));
             const order = new Map(list.states.map((x, i) => [x.id, i]));
             records.sort((a, b) => (order.get(a.state) - order.get(b.state)) || (a.n - b.n));
             return { list: shownList(list, w), records };
@@ -138,7 +143,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             const q = oneLine(text, 100).toLowerCase();
             if (!q) no('say what to look for');
             return Object.values(s.records).filter((r) => { const l = s.lists[r.list]; return l && !l.archived && access(l, w)
-                && (r.title.toLowerCase().includes(q) || r.notes.some((n) => n.text.toLowerCase().includes(q)) || Object.values(r.fields).some((v) => String(v).toLowerCase().includes(q))); })
+                && (said(r, q) || Object.values(r.fields).some((v) => String(v).toLowerCase().includes(q))); })
                 .slice(0, 50);
         },
         /* Records with a due time come, and not said yet: [{ record, list }]. Each is said once per due time. */
@@ -235,7 +240,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
         },
 
         /* ---- records ---- */
-        add(given, { title, state, fields, owners, due, note } = {}, who) {
+        add(given, { title, description, state, fields, owners, due, note } = {}, who) {
             const w = whoOf(who);
             const list = listOf(given, w, 'write');
             const t = oneLine(title, TITLE_MAX); if (!t) no('a record needs a title');
@@ -244,20 +249,22 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             const approved = isPerson(w) && past(list, st.id);
             if (!approved && past(list, st.id)) no(`only a person approves: add it as ${list.states[0].name}`);
             const id = String(s.next++);
-            const r = { id, n: Number(id), list: list.id, title: t, state: st.id, fields: {}, owners: [], notes: [], attached: [], created: stamp(), by: w.id, changed: stamp(), ...(approved ? { approved: true } : {}) };
+            const d = descriptionOf(description);
+            const r = { id, n: Number(id), list: list.id, title: t, ...(d ? { description: d } : {}), state: st.id, fields: {}, owners: [], notes: [], attached: [], created: stamp(), by: w.id, changed: stamp(), ...(approved ? { approved: true } : {}) };
             s.records[id] = r;
             if (fields) setFields(list, r, fields);
             if (owners) r.owners = ownersOf(owners);
             if (due) r.due = dueOf(due);
             if (note) r.notes.push({ id: randomUUID(), at: stamp(), by: w, text: noteOf(note) });
-            save(); log(w, 'add', { record: id, list: list.id, change: { title: t, state: st.id } });
+            save(); log(w, 'add', { record: id, list: list.id, change: { title: t, ...(d ? { description: d } : {}), state: st.id } });
             return r;
         },
-        edit(given, { title, fields, owners, due } = {}, who) {
+        edit(given, { title, description, fields, owners, due } = {}, who) {
             const w = whoOf(who);
             const { r, list } = recordOf(given, w, 'write');
             const change = {};
             if (title !== undefined) { const t = oneLine(title, TITLE_MAX); if (!t) no('a record needs a title'); r.title = change.title = t; }
+            if (description !== undefined) { const d = descriptionOf(description); if (d) r.description = change.description = d; else { delete r.description; change.description = null; } }
             if (fields !== undefined) change.fields = setFields(list, r, fields);
             if (owners !== undefined) r.owners = change.owners = ownersOf(owners);
             if (due !== undefined) { if (due === null || due === '') { delete r.due; change.due = null; } else r.due = change.due = dueOf(due); }
@@ -382,6 +389,13 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
     function dueOf(given) {
         const d = oneLine(given, 20);
         if (!DUE.test(d) || dueAt(d) === null) no('a due date is 2026-11-04, or 2026-11-04 09:00');
+        return d;
+    }
+    function descriptionOf(text) {
+        if (text === undefined || text === null) return '';
+        if (typeof text !== 'string') no('a description is a text');
+        const d = block(text, Infinity).replace(/\n{3,}/g, '\n\n');
+        if (d.length > DESCRIPTION_MAX) no(`a description is ${DESCRIPTION_MAX} characters at most (this one is ${d.length})`);
         return d;
     }
     function noteOf(text) { const t = block(text, NOTE_MAX); if (!t) no('a note needs a text'); return t; }

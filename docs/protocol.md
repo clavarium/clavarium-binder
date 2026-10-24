@@ -44,6 +44,11 @@ binder, 64 not understood.
 | `binder detach ID WHAT` | `detach` | change |
 | `binder archive ID`, `binder restore ID` | `archive` | change |
 
+`add` and `edit` take a `description` (`--description`): a few lines for a
+person, what the record is and why; Markdown-ish (paragraphs, `- ` lists,
+`**bold**`, `[text](https://...)` and bare http(s) links), 4000 characters at
+most, empty to remove it. It is in the history like any other change.
+
 A person's alone (from the screen): `approve`, `delete`, `create-list`,
 `edit-list`, `grant`, `archive-list`, `delete-list`; a note is changed by
 whoever wrote it (`edit-note`).

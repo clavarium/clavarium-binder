@@ -61,13 +61,14 @@ export async function ask(dir, op, args = {}, { wait = WAIT_MS, every = 150 } = 
 
 /* ---- MCP ---- */
 const S = (description) => ({ type: 'string', description });
+const DESCRIBE = S('for a person, short and clear: what it is and why, 1 to 3 lines (Markdown-ish: "- " lists, **bold**, links); empty removes it');
 export const TOOLS = [
     { name: 'lists', description: 'The lists you were given, with how many records each holds and whether you may change them.', inputSchema: { type: 'object', properties: {} } },
     { name: 'show', description: 'The records of a list, by state. Filter by state, or only yours.', inputSchema: { type: 'object', properties: { list: S('its name or id'), state: S('a state of the list'), mine: { type: 'boolean' }, archived: { type: 'boolean' } }, required: ['list'] } },
     { name: 'get', description: 'One record whole: its fields, notes, what is attached, its history.', inputSchema: { type: 'object', properties: { id: S('the record number, as #12 or 12') }, required: ['id'] } },
     { name: 'search', description: 'Records whose title, notes or fields hold a text, in every list you can see.', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
-    { name: 'add', description: 'Add a record to a list (in its first state unless you say). You cannot add it approved: a person ticks it.', inputSchema: { type: 'object', properties: { list: S('its name or id'), title: { type: 'string' }, state: { type: 'string' }, due: S('2026-11-04 or 2026-11-04 09:00'), owner: S('"me", or an id'), note: { type: 'string' }, fields: { type: 'object', description: '{ field name: value }' } }, required: ['list', 'title'] } },
-    { name: 'edit', description: 'Change a record: title, fields, owners, due date (empty to remove it).', inputSchema: { type: 'object', properties: { id: { type: 'string' }, title: { type: 'string' }, due: { type: 'string' }, owner: S('"me", or an id; empty for nobody'), fields: { type: 'object' } }, required: ['id'] } },
+    { name: 'add', description: 'Add a record to a list (in its first state unless you say), with a short title and a description a person understands at a glance. You cannot add it approved: a person ticks it.', inputSchema: { type: 'object', properties: { list: S('its name or id'), title: { type: 'string' }, description: DESCRIBE, state: { type: 'string' }, due: S('2026-11-04 or 2026-11-04 09:00'), owner: S('"me", or an id'), note: { type: 'string' }, fields: { type: 'object', description: '{ field name: value }' } }, required: ['list', 'title'] } },
+    { name: 'edit', description: 'Change a record: title, description, fields, owners, due date (empty to remove it).', inputSchema: { type: 'object', properties: { id: { type: 'string' }, title: { type: 'string' }, description: DESCRIBE, due: { type: 'string' }, owner: S('"me", or an id; empty for nobody'), fields: { type: 'object' } }, required: ['id'] } },
     { name: 'move', description: 'Put a record in another state of its list. Past a gate (an approval), only once a person approved it.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, state: { type: 'string' } }, required: ['id', 'state'] } },
     { name: 'note', description: 'Add a short note to a record: a decision, a fact, a result. Talking with the person stays in the chat.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, text: { type: 'string' } }, required: ['id', 'text'] } },
     { name: 'attach', description: 'Attach something to a record: a message of the chat, a file, an asset, a branch, a link, another record.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, kind: { type: 'string', enum: ['message', 'file', 'asset', 'branch', 'link', 'record'] }, ref: S('what it is: a path, a URL, repository:branch, a message id, a record number'), title: { type: 'string' } }, required: ['id', 'kind', 'ref'] } },
@@ -82,8 +83,8 @@ export function asked(name, a = {}) {
         case 'show': return ['show', { list: a.list, state: a.state, mine: !!a.mine, archived: !!a.archived }];
         case 'get': return ['get', { id: a.id }];
         case 'search': return ['search', { text: a.text }];
-        case 'add': return ['add', { list: a.list, title: a.title, state: a.state, due: a.due, owners, note: a.note, fields: a.fields }];
-        case 'edit': return ['edit', { id: a.id, title: a.title, due: a.due, owners, fields: a.fields }];
+        case 'add': return ['add', { list: a.list, title: a.title, description: a.description, state: a.state, due: a.due, owners, note: a.note, fields: a.fields }];
+        case 'edit': return ['edit', { id: a.id, title: a.title, description: a.description, due: a.due, owners, fields: a.fields }];
         case 'move': return ['move', { id: a.id, state: a.state }];
         case 'note': return ['note', { id: a.id, text: a.text }];
         case 'attach': return ['attach', { id: a.id, kind: a.kind, ref: a.ref, title: a.title }];

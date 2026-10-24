@@ -5,16 +5,21 @@ Lists of records, kept together by people and AI agents, each with its id.
 A binder holds lists: batches of work, development tasks, customers, people,
 a roadmap, anything followed over time. A list starts from a template (its
 states, its fields, the view it opens in) and everything is changed afterwards.
-A record has a title, a state, its fields, short notes, as many things attached
+A record has a title, a description, a state, its fields, short notes, as many things attached
 as wanted (messages of a chat, files, assets, branches, links, other records),
 owners, a due date, and its history.
 
     binder                         your lists
     binder show Batches            the records of a list, by state
-    binder add Batches "Dark mode"
+    binder add Batches "Dark mode" --description "The whole site in dark, for evening reading."
     binder note 12 "the login page only"
     binder attach 12 branch site:dark-mode
     binder move 12 Doing           past a gate, only once a person approved it
+
+The description is for a person, read at a glance: short and clear, what it is
+and why, in 1 to 3 lines (paragraphs, `- ` lists, `**bold**` and links are
+shown as such; 4000 characters at most). An agent writes one for each record it
+adds.
 
 An MCP server gives the same verbs to an AI agent. A person sees the binder on
 its screen (`ui/`), drawn by Binder in the page of the application that runs it.

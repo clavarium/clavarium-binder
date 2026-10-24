@@ -7,5 +7,6 @@
   "show-archived": "Archived", "gate": "Needs approval", "done": "Done", "add-state": "State", "add-field": "Field",
   "kind-message": "Message", "kind-file": "File", "kind-asset": "Asset", "kind-branch": "Branch", "kind-link": "Link", "kind-record": "Item",
   "what": "What", "name": "Name", "type": "Type", "saved": "Saved", "edited": "edited", "by": "by", "mine": "Mine", "all": "All",
-  "delete-list": "Delete the list", "delete-list-sure": "Delete the list and its items?", "archive-list": "Archive the list", "no-records": "Nothing here.", "search": "Search"
+  "delete-list": "Delete the list", "delete-list-sure": "Delete the list and its items?", "archive-list": "Archive the list", "no-records": "Nothing here.", "search": "Search",
+  "description": "Description", "add-description": "Add a description", "edit": "Edit", "more": "Details", "approve": "Approve", "no-due": "No due date", "add": "Add", "ok": "OK"
 }
