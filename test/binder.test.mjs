@@ -8,7 +8,7 @@ import { seed } from '../server/templates.mjs';
 import { keeper } from '../host/binder-host.mjs';
 import { ask, asked, TOOLS } from '../server/binder.mjs';
 import { say } from '../host/binder-host.mjs';
-import { blocks, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, KEYS } from '../ui/binder-ui.js';
+import { blocks, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, KEYS, mount } from '../ui/binder-ui.js';
 import { isPicture as storeIsPicture } from '../server/store.mjs';
 import { DESCRIPTION_MAX } from '../server/store.mjs';
 import { run, read } from '../bin/binder.mjs';
@@ -366,4 +366,38 @@ test('the cover: set by a person or an agent, a picture only, gone with its pict
     assert.equal(read(['edit', '7', '--cover', 'none'])[1].cover, '');
     assert.equal(asked('edit', { id: '1', cover: 'a.jpg' })[1].cover, 'a.jpg');
     assert.ok(TOOLS.find((t) => t.name === 'edit').inputSchema.properties.cover);
+});
+
+test('the screen opens one record from elsewhere on the page (a list beside a chat): its list, then it; a record it cannot see, not', async () => {
+    /* A document just big enough for the screen to be drawn: elements, text, events kept and ignored. */
+    class Node { constructor() { this.childNodes = []; } append(...k) { for (const c of k) { c.parent = this; this.childNodes.push(c); } }
+        replaceChildren(...k) { this.childNodes = []; this.append(...k); } remove() { if (this.parent) this.parent.childNodes = this.parent.childNodes.filter((c) => c !== this); }
+        get textContent() { return this.childNodes.map((c) => c.textContent).join(''); } set textContent(t) { this.childNodes = [new Text(String(t))]; } }
+    class Text extends Node { constructor(t) { super(); this.data = t; } get textContent() { return this.data; } }
+    class El extends Node { constructor(tag) { super(); this.tag = tag; this.attrs = {}; } setAttribute(k, v) { this.attrs[k] = String(v); } addEventListener() {} focus() {} setSelectionRange() {} querySelector() { return null; } }
+    const names = ['document', 'Node', 'window', 'requestAnimationFrame'];
+    const was = Object.fromEntries(names.map((n) => [n, globalThis[n]]));
+    Object.assign(globalThis, { Node, window: {}, requestAnimationFrame: () => 0,
+        document: { createElement: (t) => new El(t), createTextNode: (t) => new Text(t), addEventListener() {}, removeEventListener() {} } });
+    try {
+        const k = keeper(tmp());
+        const batches = k.act('create-list', { template: 'batches' }, ME).data;
+        k.act('create-list', { template: 'customers' }, ME);
+        const hidden = k.act('create-list', { template: 'simple', title: 'Kept apart' }, ME).data;
+        const one = k.act('add', { list: batches.id, title: 'Fix diff line numbers' }, ME).data;
+        const apart = k.act('add', { list: hidden.id, title: 'Not shown here' }, ME).data;
+        const root = new El('div');
+        /* The page shows two lists of three, the first one at first. */
+        const b = mount(root, { call: async (op, args) => { const r = k.act(op, args, ME); if (op === 'lists' && r.ok) r.data = r.data.filter((l) => l.id !== hidden.id); return r; } });
+        await new Promise((r) => setTimeout(r, 20));
+        assert.equal(b.state.mode, 'list');
+        assert.equal(await b.open(one.id), true);
+        assert.deepEqual(b.state, { at: batches.id, mode: 'record' });
+        assert.match(root.textContent, /Fix diff line numbers/);
+        assert.equal(await b.open(apart.id), false, 'a list the page does not show is not opened');
+        assert.equal(await b.open('999'), false);
+        assert.deepEqual(b.state, { at: batches.id, mode: 'record' }, 'what was shown stays');
+        assert.doesNotMatch(root.textContent, /no such|not found/i, 'and nothing is said of it');
+        b.destroy();
+    } finally { for (const n of names) globalThis[n] = was[n]; }
 });

@@ -11,6 +11,7 @@
  *       openAttached: (a) => void,             a thing attached opened by the page (a message, a file...)
  *   });
  *   b.refresh();   something changed: read again
+ *   b.open(id);    a record shown whole, in its list (resolves false when it is not in a list shown)
  *   b.destroy();
  *
  * Built element by element: nothing a record holds is ever read as HTML.
@@ -491,5 +492,20 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     document.addEventListener('pointerdown', away);
     document.addEventListener('keydown', escape);
     void refresh();
-    return { refresh, destroy() { alive = false; document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', escape); box.remove(); }, get state() { return { at: ui.at, mode: ui.mode } } };
+    /* One record opened, from elsewhere on the page (a list beside a chat): its list, then it. */
+    async function openRecord(id) {
+        if (!alive) return false;
+        try {
+            /* Asked quietly: a record not found says nothing on the screen. */
+            const got = await call('get', { id: String(id ?? '') });
+            if (!got?.ok) return false;
+            const d = got.data;
+            if (!ui.lists.some((l) => l.id === d.list.id)) await load();
+            if (!ui.lists.some((l) => l.id === d.list.id)) return false;
+            if (ui.at !== d.list.id) { ui.at = d.list.id; ui.view = null; ui.data = await ask('show', { list: ui.at, archived: ui.archived, mine: ui.mine }); }
+            leave(); ui.record = d; ui.mode = 'record'; paint();
+            return true;
+        } catch { return false; }
+    }
+    return { refresh, open: openRecord, destroy() { alive = false; document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', escape); box.remove(); }, get state() { return { at: ui.at, mode: ui.mode } } };
 }

@@ -64,6 +64,10 @@ whoever wrote it (`edit-note`).
 
 And the screen: `mount(element, { call, words, lang, people, picture, openAttached })`
 from `clavarium-binder/ui`, with `ui/binder-ui.css` and `ui/texts/*.json`.
+It gives back `refresh()`, `destroy()`, and `open(id)`: one record shown
+whole, in its list, from elsewhere on the page (a list beside a chat);
+it resolves `false`, saying nothing on the screen, for a record not in a
+list shown.
 
 What a card shows: what is set, nothing about what is empty. The fields set
 make one line under its title; its state is said unless the card is in the
