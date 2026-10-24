@@ -15,8 +15,12 @@
  * WHO is { id, kind, name }: kind "person" or "agent". A person may do
  * anything. An agent reads or writes a list only where it was given access, and
  * never approves: a record reaches a gate state (or one after it) only once a
- * person approved it. An agent may make a list from a template (a few at
- * most): it is given that list alone, to change, and a person sees it as any.
+ * person approved it. An agent may make a list from a template (as many as a
+ * person set, 5 unless they said): it is given that list alone, to change, and
+ * a person sees it as any.
+ *
+ * SETTINGS: the store's own, a person's alone to change, in the history too.
+ *   agentLists   lists an agent may have made and not archived (0 to 50; 0: none)
  */
 import { readFileSync, writeFileSync, appendFileSync, renameSync, mkdirSync, existsSync, lstatSync } from 'node:fs';
 import { join } from 'node:path';
@@ -24,8 +28,11 @@ import { randomUUID } from 'node:crypto';
 import { seed, TEMPLATES, VIEWS, FIELD_TYPES } from './templates.mjs';
 
 export const TITLE_MAX = 200;
-/* Lists an agent may have made and not archived. */
-export const AGENT_LISTS_MAX = 5;
+/* Lists an agent may have made and not archived: 5 until a person sets it (settings.agentLists), 0 to 50. */
+export const AGENT_LISTS_DEFAULT = 5;
+export const AGENT_LISTS_TOP = 50;
+/* The default, by its former name. */
+export const AGENT_LISTS_MAX = AGENT_LISTS_DEFAULT;
 export const NOTE_MAX = 2000;
 /* A record's description: a few lines for a person, what it is and why (Markdown-ish: paragraphs, "- " lists, **bold**, links). */
 export const DESCRIPTION_MAX = 4000;
@@ -117,6 +124,9 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
         count: Object.values(s.records).filter((r) => r.list === l.id && !r.archived).length });
 
     /* Whether a record's title, description or notes hold `q` (lower case). */
+    /* The store's settings, as they are now (a store from before them has the defaults). */
+    const settingsNow = () => ({ agentLists: Number.isInteger(s.settings?.agentLists) ? s.settings.agentLists : AGENT_LISTS_DEFAULT });
+
     const said = (r, q) => r.title.toLowerCase().includes(q) || (r.description ?? '').toLowerCase().includes(q) || r.notes.some((n) => n.text.toLowerCase().includes(q));
 
     const api = {
@@ -172,7 +182,9 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             if (Object.keys(s.lists).length >= LISTS_MAX) no(`${LISTS_MAX} lists at most`);
             if (!isPerson(w)) {
                 if (!Object.hasOwn(TEMPLATES, String(template))) no(`a list is made from a template: ${Object.keys(TEMPLATES).join(', ')}`);
-                if (Object.values(s.lists).filter((l) => l.by === w.id && !l.archived).length >= AGENT_LISTS_MAX) no(`${AGENT_LISTS_MAX} lists made by you at most: use one of yours`);
+                const most = settingsNow().agentLists;
+                if (most === 0) no('a person set 0 lists an agent may make: use one you were given');
+                if (Object.values(s.lists).filter((l) => l.by === w.id && !l.archived).length >= most) no(`${most} lists made by you at most, as a person set: use one of yours`);
             }
             const base = seed(template, lang);
             const name = oneLine(title, TITLE_MAX) || base.title;
@@ -245,6 +257,23 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             delete s.lists[list.id];
             save(); log(w, 'delete-list', { list: list.id });
             return true;
+        },
+
+        /* ---- the store's settings: anyone reads them, a person changes them ---- */
+        settings(who) { whoOf(who); return settingsNow(); },
+        editSettings({ agentLists } = {}, who) {
+            const w = whoOf(who);
+            if (!isPerson(w)) no('only a person changes the settings');
+            const change = {};
+            if (agentLists !== undefined) {
+                const n = typeof agentLists === 'string' && agentLists.trim() !== '' ? Number(agentLists) : agentLists;
+                if (!Number.isInteger(n) || n < 0 || n > AGENT_LISTS_TOP) no(`lists an agent may make: a whole number from 0 to ${AGENT_LISTS_TOP}`);
+                change.agentLists = n;
+            }
+            if (!Object.keys(change).length) return settingsNow();
+            s.settings = { ...s.settings, ...change };
+            save(); log(w, 'edit-settings', { change });
+            return settingsNow();
         },
 
         /* ---- records ---- */

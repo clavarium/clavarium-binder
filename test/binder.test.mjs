@@ -10,7 +10,7 @@ import { ask, asked, TOOLS } from '../server/binder.mjs';
 import { say } from '../host/binder-host.mjs';
 import { blocks, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, KEYS, mount } from '../ui/binder-ui.js';
 import { isPicture as storeIsPicture } from '../server/store.mjs';
-import { DESCRIPTION_MAX, AGENT_LISTS_MAX } from '../server/store.mjs';
+import { DESCRIPTION_MAX, AGENT_LISTS_MAX, AGENT_LISTS_DEFAULT } from '../server/store.mjs';
 import { run, read } from '../bin/binder.mjs';
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'binder-'));
@@ -200,6 +200,38 @@ test('an agent makes a list from a template: given to it alone, to change; a few
     assert.ok(read(['new']).refused);
     assert.deepEqual(asked('new-list', { template: 'batches' }), ['create-list', { template: 'batches', title: undefined }]);
     assert.ok(TOOLS.some((x) => x.name === 'new-list'));
+});
+
+test('lists an agent may make: set by a person alone (0 to 50, 5 by default), kept, in the history, applied; 0 makes none', () => {
+    const dir = tmp();
+    const s = openStore(dir);
+    assert.deepEqual(s.settings(BOT), { agentLists: AGENT_LISTS_DEFAULT });
+    assert.equal(AGENT_LISTS_DEFAULT, 5);
+    assert.throws(() => s.editSettings({ agentLists: 9 }, BOT), /only a person changes the settings/);
+    for (const bad of [-1, 51, 2.5, 'two', null, '']) assert.throws(() => s.editSettings({ agentLists: bad }, ME), /from 0 to 50/, String(bad));
+    assert.equal(s.settings(ME).agentLists, 5, 'nothing refused was kept');
+    assert.deepEqual(s.editSettings({ agentLists: 2 }, ME), { agentLists: 2 });
+    assert.equal(openStore(dir).settings(ME).agentLists, 2, 'kept in the store');
+    const line = readFileSync(join(dir, 'log.jsonl'), 'utf8').trim().split('\n').map((x) => JSON.parse(x)).find((x) => x.op === 'edit-settings');
+    assert.deepEqual([line.by.id, line.change], [ME.id, { agentLists: 2 }], 'in the history');
+    s.createList({ template: 'simple' }, BOT);
+    const second = s.createList({ template: 'simple' }, BOT);
+    assert.throws(() => s.createList({ template: 'simple' }, BOT), (e) => e instanceof Refused && /^2 lists made by you at most/.test(e.message), 'the number said');
+    s.archiveList(second.id, true, ME);
+    s.createList({ template: 'simple' }, BOT);
+    s.createList({ template: 'simple' }, ME);
+    s.editSettings({ agentLists: '0' }, ME);
+    assert.throws(() => s.createList({ template: 'simple' }, OTHER), /set 0 lists an agent may make/);
+    s.createList({ template: 'simple' }, ME);
+    s.editSettings({ agentLists: 50 }, ME);
+    s.createList({ template: 'simple' }, OTHER);
+    /* Through the keeper: a person from the page, an agent from its folder. */
+    const k = keeper(tmp());
+    assert.deepEqual(k.act('edit-settings', { agentLists: 1 }, ME), { ok: true, text: 'Lists an agent may make: 1.', data: { agentLists: 1 } });
+    assert.equal(k.act('edit-settings', { agentLists: 7 }, BOT).ok, false);
+    assert.equal(k.act('settings', {}, BOT).data.agentLists, 1);
+    k.act('create-list', { template: 'simple' }, BOT);
+    assert.match(k.act('create-list', { template: 'simple' }, BOT).text, /1 lists made by you at most/);
 });
 
 test('an ask too old is not done; nobody keeping says so, and nothing changed', async () => {

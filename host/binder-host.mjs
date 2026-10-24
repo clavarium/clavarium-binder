@@ -71,6 +71,7 @@ export function say(op, data, list) {
         case 'attach': return 'Attached.';
         case 'detach': return 'Taken off.';
         case 'archive': return data.archived ? `Archived #${data.id}.` : `Restored #${data.id}.`;
+        case 'settings': case 'edit-settings': return `Lists an agent may make: ${data.agentLists}.`;
         case 'create-list': return `Made the list ${data.title} [${data.id}], yours to change: binder add ${data.id} "title".`;
         default: return 'Done.';
     }
@@ -105,6 +106,8 @@ export function keeper(dir, { sides = () => [], now = () => Date.now() } = {}) {
                 case 'grant': data = store.grant(a.list, a.to, a.access ?? null, who); break;
                 case 'archive-list': data = store.archiveList(a.list, a.archived !== false, who); break;
                 case 'delete-list': data = store.deleteList(a.list, who); break;
+                case 'settings': data = store.settings(who); break;
+                case 'edit-settings': data = store.editSettings({ agentLists: a.agentLists }, who); break;
                 case 'templates': data = Object.fromEntries(Object.entries(TEMPLATES).map(([k, t]) => [k, t.name])); break;
                 default: return { ok: false, text: `there is no ${oneLine(op, 40)}` };
             }

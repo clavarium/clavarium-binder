@@ -53,8 +53,24 @@ A person's alone (from the screen): `approve`, `delete`, `edit-list`,
 `grant`, `archive-list`, `delete-list`; a note is changed by whoever wrote it
 (`edit-note`). `create-list` is a person's, and an agent's from a template
 (`binder new TEMPLATE ["title"]`, MCP `new-list`): the list is given to that
-agent alone, to change, and a person sees it as any; five such lists not
-archived per agent at most.
+agent alone, to change, and a person sees it as any; per agent, as many such
+lists not archived as the store's setting `agentLists` says.
+
+## The store's settings
+
+A person's alone to change; anyone reads them. Each change is a line of the
+log, op `edit-settings`, with what changed (`change`), and no list or record.
+
+| Setting | What it is | Range | By default |
+|---|---|---|---|
+| `agentLists` | lists an agent may have made and not archived | 0 to 50 (0: an agent makes none) | 5 |
+
+| Op (keeper) | Args | Gives |
+|---|---|---|
+| `settings` | none | `{agentLists}` |
+| `edit-settings` | `{agentLists}` | `{agentLists}`; an agent is refused |
+
+An agent at the limit is refused, and told the number.
 
 ## The application's side
 

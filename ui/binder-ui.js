@@ -22,7 +22,7 @@ export const KEYS = Object.freeze(['lists', 'new-list', 'new-item', 'no-lists', 
     'states', 'fields', 'access', 'read', 'write', 'none', 'save', 'empty', 'archived', 'show-archived', 'gate', 'done', 'add-state', 'add-field',
     'kind-message', 'kind-file', 'kind-asset', 'kind-branch', 'kind-link', 'kind-record', 'what', 'name', 'type', 'saved', 'edited', 'by', 'mine', 'all',
     'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'search', 'description', 'edit', 'more', 'approve', 'add', 'ok',
-    'add-what', 'owner', 'attachment', 'tools', 'cover',
+    'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'link', 'record'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', link: '🔗', record: '▣' };
@@ -162,7 +162,7 @@ export function rich(text) {
 export function mount(root, { call, words = {}, lang = 'en', people = () => [], picture = () => null, openAttached = null } = {}) {
     const w = (k) => words[k] ?? k;
     /* open: what of a record is being changed ('states', 'who', 'description', 'attach'); draft: what was typed, kept across a repaint. */
-    const ui = { lists: [], at: null, data: null, view: null, record: null, mode: 'list', archived: false, mine: false, error: '', open: null, more: false, draft: {}, focus: false };
+    const ui = { lists: [], at: null, data: null, view: null, record: null, mode: 'list', archived: false, mine: false, error: '', open: null, more: false, draft: {}, focus: false, settings: null };
     const box = h('div', { class: 'binder' });
     root.replaceChildren(box);
     let alive = true;
@@ -194,7 +194,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         const menu = ui.open === 'tools' ? h('div', { class: 'binder-menu binder-menu-end', role: 'menu' },
             item(ui.mine, w('mine'), 'mine', () => flip('mine')),
             item(ui.archived, w('archived'), 'archived', () => flip('archived')),
-            l.access === 'write' && l.grants ? item(null, w('settings'), 'settings', () => { ui.open = null; ui.mode = 'settings'; paint(); }) : null) : null;
+            l.access === 'write' && l.grants ? item(null, w('settings'), 'settings', () => { ui.open = null; ui.mode = 'settings'; paint(); void readSettings(); }) : null) : null;
         const chip = (k) => (ui[k] ? h('button', { type: 'button', class: 'binder-chip', 'aria-pressed': 'true', 'data-act': `off-${k}`, onclick: () => flip(k) }, w(k === 'mine' ? 'mine' : 'archived'), h('span', { 'aria-hidden': 'true' }, ' ×')) : null);
         return h('div', { class: 'binder-bar' },
             h('h2', {}, l.title), chip('mine'), chip('archived'),
@@ -423,6 +423,11 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             attached, addRow, notes, more);
     }
 
+    /* The store's settings, read when its page opens; asked quietly (a keeper without them shows none). */
+    async function readSettings() {
+        try { const r = await call('settings', {}); ui.settings = r?.ok ? r.data : null; } catch { ui.settings = null; }
+        if (ui.mode === 'settings') paint();
+    }
     function settings(l) {
         const title = h('input', { type: 'text', value: l.title, 'aria-label': w('title') });
         const states = l.states.map((s) => ({ ...s }));
@@ -449,12 +454,18 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         const sure = h('span', { class: 'binder-sure', hidden: true }, w('delete-list-sure'),
             h('button', { type: 'button', class: 'binder-danger', onclick: () => void soft(ask('delete-list', { list: l.id })).then(() => { ui.mode = 'list'; ui.at = null; return refresh(); }) }, w('delete')),
             h('button', { type: 'button', class: 'binder-ghost', onclick: () => { sure.hidden = true; } }, w('cancel')));
+        function agentLists() {
+            const n = h('input', { type: 'number', min: '0', max: '50', step: '1', inputmode: 'numeric', value: String(ui.settings.agentLists), 'aria-label': w('agent-lists'), 'data-setting': 'agentLists' });
+            n.addEventListener('change', () => void soft(ask('edit-settings', { agentLists: n.value })).then((got) => { if (got) ui.settings = got; paint(); }));
+            return n;
+        }
         return h('div', { class: 'binder-page binder-settings' },
             h('div', { class: 'binder-bar' }, h('button', { type: 'button', class: 'binder-ghost', onclick: () => { ui.mode = 'list'; paint(); } }, `‹ ${l.title}`)),
             h('section', { class: 'binder-box' }, h('h3', {}, w('title')), title),
             h('section', { class: 'binder-box' }, h('h3', {}, w('states')), stateRows),
             h('section', { class: 'binder-box' }, h('h3', {}, w('fields')), fieldRows),
             grants.length ? h('section', { class: 'binder-box' }, h('h3', {}, w('access')), grants) : null,
+            ui.settings ? h('section', { class: 'binder-box' }, h('h3', {}, w('agent-lists')), agentLists()) : null,
             h('div', { class: 'binder-actions' },
                 h('button', { type: 'button', class: 'binder-ghost', onclick: () => void soft(ask('archive-list', { list: l.id })).then(() => { ui.mode = 'list'; ui.at = null; return refresh(); }) }, w('archive-list')),
                 h('button', { type: 'button', class: 'binder-ghost', onclick: () => { sure.hidden = false; } }, w('delete-list')), sure,
