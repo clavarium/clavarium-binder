@@ -1,0 +1,104 @@
+/* How a binder looks. Every colour is a variable: a page sets them, or keeps these. */
+.binder {
+  --binder-bg: #ffffff; --binder-text: #16181d; --binder-dim: #5a5f69; --binder-line: #d3d7de; --binder-panel: #f5f6f8;
+  --binder-action: #0b53c0; --binder-on-action: #ffffff; --binder-ok: #1d7a3a; --binder-ask: #8a5d00; --binder-danger: #b3261e;
+  --binder-gap: .7rem; --binder-radius: 10px;
+  display: flex; flex-direction: column; gap: var(--binder-gap); color: var(--binder-text); background: var(--binder-bg); line-height: 1.4; min-height: 0; min-width: 0;
+}
+@media (prefers-color-scheme: dark) {
+  .binder:not([data-theme="light"]) { --binder-bg: #0f1115; --binder-text: #e6e8ec; --binder-dim: #a3a9b4; --binder-line: #38404c; --binder-panel: #1a1e25;
+    --binder-action: #8ab4ff; --binder-on-action: #0f1115; --binder-ok: #6fdc8c; --binder-ask: #e0b45a; --binder-danger: #ff8a80; }
+}
+.binder[data-theme="dark"] { --binder-bg: #0f1115; --binder-text: #e6e8ec; --binder-dim: #a3a9b4; --binder-line: #38404c; --binder-panel: #1a1e25;
+  --binder-action: #8ab4ff; --binder-on-action: #0f1115; --binder-ok: #6fdc8c; --binder-ask: #e0b45a; --binder-danger: #ff8a80; }
+.binder h2, .binder h3, .binder p { margin: 0; }
+.binder h2 { font-size: 1.25rem; }
+.binder button, .binder input, .binder select, .binder textarea { font: inherit; color: inherit; }
+.binder button { cursor: pointer; }
+.binder input, .binder select, .binder textarea { background: var(--binder-bg); border: 1px solid var(--binder-line); border-radius: 7px; padding: .45em .6em; min-width: 0; }
+.binder button:disabled { cursor: default; opacity: .6; }
+.binder-dim { color: var(--binder-dim); }
+.binder-error { border-left: 3px solid var(--binder-danger); padding: .5em .8em; background: color-mix(in srgb, var(--binder-danger) 10%, transparent); border-radius: 4px; }
+
+/* The lists, as tabs. */
+.binder-top { display: flex; gap: .5rem; align-items: center; min-width: 0; }
+.binder-tabs { display: flex; gap: .3rem; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: thin; }
+.binder-tabs button, .binder-new-list { border: 1px solid var(--binder-line); background: transparent; border-radius: 999px; padding: .35em .9em; white-space: nowrap; color: var(--binder-dim); }
+.binder-tabs button small { margin-left: .45em; opacity: .8; }
+.binder-tabs button[aria-selected="true"] { color: var(--binder-text); border-color: var(--binder-action); background: color-mix(in srgb, var(--binder-action) 14%, transparent); font-weight: 600; }
+
+.binder-bar { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.binder-bar h2 { flex: 1; min-width: 8em; }
+.binder-seg { display: inline-flex; border: 1px solid var(--binder-line); border-radius: 8px; overflow: hidden; flex-wrap: wrap; }
+.binder-seg button { border: 0; background: transparent; padding: .4em .8em; color: var(--binder-dim); }
+.binder-seg button[aria-pressed="true"] { background: color-mix(in srgb, var(--binder-action) 18%, transparent); color: var(--binder-text); box-shadow: inset 0 0 0 1px var(--binder-action); }
+.binder-chip { border: 1px solid var(--binder-line); background: transparent; border-radius: 999px; padding: .3em .8em; color: var(--binder-dim); }
+.binder-chip[aria-pressed="true"] { border-color: var(--binder-action); color: var(--binder-text); background: color-mix(in srgb, var(--binder-action) 14%, transparent); }
+.binder-owners { display: flex; gap: .35rem; flex-wrap: wrap; }
+.binder-primary { background: var(--binder-action); color: var(--binder-on-action) !important; border: 1px solid var(--binder-action); border-radius: 8px; padding: .45em 1em; font-weight: 600; }
+.binder-ghost { background: var(--binder-panel); border: 1px solid var(--binder-line); border-radius: 8px; padding: .45em .9em; }
+.binder-danger { background: var(--binder-danger); color: var(--binder-bg) !important; border: 0; border-radius: 8px; padding: .45em .9em; font-weight: 600; }
+.binder-x { border: 0; background: transparent; color: var(--binder-dim); font-size: 1.2em; padding: 0 .4em; }
+.binder-link { border: 0; background: transparent; padding: 0; text-align: left; display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.binder-link small { color: var(--binder-dim); }
+
+/* A list as rows: a box, the title, a state. */
+.binder-rows { display: flex; flex-direction: column; border: 1px solid var(--binder-line); border-radius: var(--binder-radius); overflow: hidden; }
+.binder-row { display: grid; grid-template-columns: auto 1fr auto; gap: .8rem; align-items: center; padding: .7rem .9rem; background: var(--binder-panel); cursor: pointer; }
+.binder-row + .binder-row { border-top: 1px solid var(--binder-line); }
+.binder-row:focus-visible, .binder-card:focus-visible { outline: 2px solid var(--binder-action); outline-offset: -2px; }
+.binder-row.binder-edit { grid-template-columns: 1fr auto auto auto; cursor: default; }
+.binder-what { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+.binder-what b { overflow-wrap: anywhere; }
+.binder-meta { display: flex; gap: .6em; flex-wrap: wrap; font-size: .85em; color: var(--binder-dim); }
+.binder-tick { width: 1.4rem; height: 1.4rem; border: 2px solid var(--binder-dim); border-radius: 5px; background: transparent; display: grid; place-items: center; padding: 0; font-weight: 800; font-size: .85rem; line-height: 1; }
+.binder-tick[aria-checked="true"] { background: var(--binder-ok); border-color: var(--binder-ok); color: var(--binder-bg); }
+.binder-pill { font-size: .8em; border: 1px solid var(--binder-line); border-radius: 999px; padding: .1em .7em; color: var(--binder-dim); white-space: nowrap; }
+.binder-pill[data-done] { color: var(--binder-ok); border-color: var(--binder-ok); }
+.binder-pill[data-gate] { color: var(--binder-ask); border-color: var(--binder-ask); }
+
+/* As columns, one per state. */
+.binder-cols { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(14rem, 1fr); gap: .8rem; overflow-x: auto; min-height: 0; padding-bottom: .3rem; }
+.binder-col { background: var(--binder-panel); border: 1px solid var(--binder-line); border-radius: var(--binder-radius); padding: .6rem; display: flex; flex-direction: column; gap: .5rem; }
+.binder-col h3 { font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--binder-dim); display: flex; justify-content: space-between; }
+.binder-card { background: var(--binder-bg); border: 1px solid var(--binder-line); border-radius: 9px; padding: .6rem .7rem; display: flex; flex-direction: column; gap: .3rem; cursor: pointer; }
+
+/* As cards, with a face. */
+.binder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: .8rem; }
+.binder-face { align-items: center; text-align: center; }
+.binder-face img, .binder-initial { width: 5.5rem; height: 5.5rem; border-radius: 50%; object-fit: cover; }
+.binder-initial { display: grid; place-items: center; background: var(--binder-panel); font-size: 2rem; font-weight: 700; color: var(--binder-dim); }
+
+/* A record, whole. */
+.binder-page { display: flex; flex-direction: column; gap: var(--binder-gap); min-width: 0; }
+.binder-title { font-size: 1.2rem; font-weight: 700; }
+.binder-approve { display: inline-flex; gap: .5em; align-items: center; }
+.binder-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 20rem); gap: .9rem; align-items: start; }
+.binder-col-main, .binder-col-side { display: flex; flex-direction: column; gap: .9rem; min-width: 0; }
+.binder-box { border: 1px solid var(--binder-line); border-radius: var(--binder-radius); background: var(--binder-panel); padding: .7rem .9rem; display: flex; flex-direction: column; gap: .55rem; min-width: 0; }
+.binder-box h3, .binder-box summary { font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--binder-dim); display: flex; justify-content: space-between; }
+.binder-box summary { cursor: pointer; }
+.binder-att { display: flex; gap: .6rem; align-items: center; }
+.binder-att .binder-link { flex: 1; }
+.binder-ic { width: 1.7rem; height: 1.7rem; border-radius: 6px; background: var(--binder-bg); display: grid; place-items: center; flex: none; }
+.binder-note p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.binder-note small, .binder-log { color: var(--binder-dim); font-size: .85em; }
+.binder-log time { font-variant-numeric: tabular-nums; margin-right: .6em; }
+.binder-field { display: flex; flex-direction: column; gap: .25rem; }
+.binder-field > span { font-size: .85em; color: var(--binder-dim); }
+.binder-photo { width: 6rem; height: 6rem; object-fit: cover; border-radius: 8px; }
+.binder-form { display: flex; gap: .5rem; flex-wrap: wrap; align-items: flex-start; }
+.binder-form input, .binder-form textarea { flex: 1; min-width: 10rem; }
+.binder-actions { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.binder-sure { display: inline-flex; gap: .5rem; align-items: center; }
+.binder-sure[hidden] { display: none; }
+.binder-templates { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: .5rem; }
+.binder-templates button { border: 1px solid var(--binder-line); background: var(--binder-panel); border-radius: 9px; padding: .8em; text-align: left; font-weight: 600; }
+.binder-templates button[aria-pressed="true"] { border-color: var(--binder-action); box-shadow: inset 0 0 0 1px var(--binder-action); }
+.binder-empty { color: var(--binder-dim); padding: 1rem 0; display: flex; flex-direction: column; gap: .7rem; align-items: flex-start; }
+
+@media (max-width: 720px) {
+  .binder-two { grid-template-columns: minmax(0, 1fr); }
+  .binder-row.binder-edit { grid-template-columns: 1fr auto; }
+  .binder-cols { grid-auto-columns: minmax(80%, 1fr); }
+}

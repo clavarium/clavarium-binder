@@ -1,0 +1,11 @@
+{
+  "lists": "Lists", "new-list": "List", "new-item": "Item", "no-lists": "No list yet.", "template": "Start from", "create": "Create", "cancel": "Cancel",
+  "title": "Title", "list": "List", "columns": "Columns", "cards": "Cards", "back": "Back", "state": "State", "owners": "Owners", "due": "Due",
+  "notes": "Notes", "add-note": "Add a note", "attached": "Attached", "attach": "Attach", "history": "History", "archive": "Archive", "restore": "Restore",
+  "delete": "Delete", "delete-sure": "Delete for good?", "approved": "Approved", "settings": "Settings", "states": "States", "fields": "Fields",
+  "access": "Access", "read": "Read", "write": "Change", "none": "None", "save": "Save", "empty": "Empty", "nobody": "Nobody", "archived": "Archived",
+  "show-archived": "Archived", "gate": "Needs approval", "done": "Done", "add-state": "State", "add-field": "Field",
+  "kind-message": "Message", "kind-file": "File", "kind-asset": "Asset", "kind-branch": "Branch", "kind-link": "Link", "kind-record": "Item",
+  "what": "What", "name": "Name", "type": "Type", "saved": "Saved", "edited": "edited", "by": "by", "mine": "Mine", "all": "All",
+  "delete-list": "Delete the list", "delete-list-sure": "Delete the list and its items?", "archive-list": "Archive the list", "no-records": "Nothing here.", "search": "Search"
+}

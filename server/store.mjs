@@ -1,0 +1,392 @@
+/* THE STORE: the binder itself, as its keeper holds it. Lists of records,
+ * kept by people and by agents, each with an id.
+ *
+ * ONE WRITER. Only the keeper writes the store (binder serve, or the
+ * application that runs Binder): an agent asks, through its own folder
+ * (server/binder.mjs), and never touches what is kept. What an agent can
+ * write, it could rewrite; so it writes nothing here.
+ *
+ *   state.json   what every list and record is NOW, rewritten whole (by a rename) after each change
+ *   log.jsonl    every change, one per line: who, what, when -- the history
+ *
+ * A record deleted is deleted: its lines in the log are emptied down to who and
+ * when, and one line says it was deleted, and by whom.
+ *
+ * WHO is { id, kind, name }: kind "person" or "agent". A person may do
+ * anything. An agent reads or writes a list only where it was given access, and
+ * never approves: a record reaches a gate state (or one after it) only once a
+ * person approved it.
+ */
+import { readFileSync, writeFileSync, appendFileSync, renameSync, mkdirSync, existsSync, lstatSync } from 'node:fs';
+import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { seed, TEMPLATES, VIEWS, FIELD_TYPES } from './templates.mjs';
+
+export const TITLE_MAX = 200;
+export const NOTE_MAX = 2000;
+export const FIELD_MAX = 1000;
+export const REF_MAX = 1000;
+export const LISTS_MAX = 200;
+export const RECORDS_MAX = 5000;
+export const NOTES_MAX = 500;
+export const ATTACHED_MAX = 200;
+export const STATES_MAX = 12;
+export const FIELDS_MAX = 20;
+export const OWNERS_MAX = 10;
+export const ATTACH_KINDS = ['message', 'file', 'asset', 'branch', 'link', 'record'];
+
+const NOT_SHOWN = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F​-‏‪-‮⁠-⁤⁦-⁩﻿]/gu;
+export const oneLine = (text, max) => String(text ?? '').replace(/\r/g, '').replace(NOT_SHOWN, '').replace(/\s+/g, ' ').trim().slice(0, max);
+export const block = (text, max) => String(text ?? '').replace(/\r/g, '').replace(NOT_SHOWN, '').replace(/[ \t]+\n/g, '\n').trim().slice(0, max);
+const key = (text) => oneLine(text, 40).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+export class Refused extends Error {}
+const no = (why) => { throw new Refused(why); };
+
+/* A due date: "2026-11-04" or "2026-11-04 09:00", kept as written (the keeper's clock reads it). */
+const DUE = /^\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?$/;
+export const dueAt = (due) => { const t = Date.parse(due.length === 10 ? `${due}T09:00:00` : due.replace(' ', 'T')); return Number.isFinite(t) ? t : null; };
+
+const isPerson = (who) => who?.kind === 'person';
+const whoOf = (who) => {
+    if (!who || typeof who !== 'object') no('nobody said who they are');
+    const w = { id: oneLine(who.id, 100), kind: who.kind === 'person' ? 'person' : 'agent', name: oneLine(who.name, 80) || oneLine(who.id, 80) };
+    if (!w.id) no('nobody said who they are');
+    return w;
+};
+
+const empty = () => ({ v: 1, next: 1, lists: {}, records: {} });
+
+export function openStore(dir, { now = () => Date.now() } = {}) {
+    mkdirSync(dir, { recursive: true });
+    const STATE = join(dir, 'state.json');
+    const LOG = join(dir, 'log.jsonl');
+    const read = () => {
+        try { if (lstatSync(STATE).isSymbolicLink()) return empty(); } catch { return empty(); }
+        try { const s = JSON.parse(readFileSync(STATE, 'utf8')); return s && s.v === 1 ? s : empty(); } catch { return empty(); }
+    };
+    let s = read();
+    const save = () => { const tmp = `${STATE}.${process.pid}.tmp`; writeFileSync(tmp, JSON.stringify(s)); renameSync(tmp, STATE); };
+    const stamp = () => new Date(now()).toISOString();
+    const listeners = new Set();
+    const log = (by, op, what) => {
+        const line = { at: stamp(), by, op, ...what };
+        appendFileSync(LOG, `${JSON.stringify(line)}\n`);
+        for (const fn of listeners) { try { fn(line); } catch { /* a listener's fault is its own */ } }
+        return line;
+    };
+    const logLines = () => { try { return readFileSync(LOG, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean); } catch { return []; } };
+
+    /* ---- reading, as `who` may ---- */
+    const access = (list, who) => (isPerson(who) ? 'write' : list.access?.[who.id] ?? null);
+    const listOf = (given, who, need = 'read') => {
+        const g = oneLine(given, 100);
+        const list = s.lists[g] ?? Object.values(s.lists).find((l) => l.title.toLowerCase() === g.toLowerCase() && !l.archived);
+        if (!list || !access(list, who)) no(`no list ${g || '(none given)'} that you can see`);
+        if (need === 'write' && access(list, who) !== 'write') no(`you can read the list ${list.title}, not change it`);
+        return list;
+    };
+    const recordOf = (given, who, need = 'read') => {
+        const id = String(given ?? '').replace(/^#/, '').trim();
+        const r = s.records[id];
+        if (!r) no(`no record #${id || '?'}`);
+        const list = s.lists[r.list];
+        if (!list || !access(list, who)) no(`no record #${id}`);
+        if (need === 'write' && access(list, who) !== 'write') no(`you can read the list ${list.title}, not change it`);
+        return { r, list };
+    };
+    const stateOf = (list, given) => {
+        const g = oneLine(given, 60);
+        const st = list.states.find((x) => x.id === g) ?? list.states.find((x) => x.name.toLowerCase() === g.toLowerCase());
+        if (!st) no(`the list ${list.title} has no state "${g}" (it has: ${list.states.map((x) => x.name).join(', ')})`);
+        return st;
+    };
+    const gateIndex = (list) => list.states.findIndex((x) => x.gate);
+    const past = (list, stateId) => { const g = gateIndex(list); return g >= 0 && list.states.findIndex((x) => x.id === stateId) >= g; };
+
+    /* What a list looks like to `who`. */
+    const shownList = (l, who) => ({ id: l.id, title: l.title, template: l.template, view: l.view, states: l.states, fields: l.fields, access: access(l, who),
+        ...(isPerson(who) ? { grants: l.access ?? {} } : {}), ...(l.archived ? { archived: true } : {}),
+        count: Object.values(s.records).filter((r) => r.list === l.id && !r.archived).length });
+
+    const api = {
+        dir,
+        onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+        reload() { s = read(); },
+        /* Every list `who` can see. */
+        lists(who) { const w = whoOf(who); return Object.values(s.lists).filter((l) => access(l, w)).map((l) => shownList(l, w)); },
+        list(given, who, { state, mine, archived = false, text } = {}) {
+            const w = whoOf(who);
+            const list = listOf(given, w);
+            const st = state ? stateOf(list, state) : null;
+            const q = oneLine(text, 100).toLowerCase();
+            const records = Object.values(s.records).filter((r) => r.list === list.id && !!r.archived === !!archived
+                && (!st || r.state === st.id) && (!mine || r.owners.includes(w.id))
+                && (!q || r.title.toLowerCase().includes(q) || r.notes.some((n) => n.text.toLowerCase().includes(q))));
+            const order = new Map(list.states.map((x, i) => [x.id, i]));
+            records.sort((a, b) => (order.get(a.state) - order.get(b.state)) || (a.n - b.n));
+            return { list: shownList(list, w), records };
+        },
+        record(given, who) {
+            const w = whoOf(who);
+            const { r, list } = recordOf(given, w);
+            const history = logLines().filter((x) => x.record === r.id).map(({ at, by, op, change }) => ({ at, by, op, ...(change ? { change } : {}) }));
+            return { record: r, list: shownList(list, w), history };
+        },
+        search(text, who) {
+            const w = whoOf(who);
+            const q = oneLine(text, 100).toLowerCase();
+            if (!q) no('say what to look for');
+            return Object.values(s.records).filter((r) => { const l = s.lists[r.list]; return l && !l.archived && access(l, w)
+                && (r.title.toLowerCase().includes(q) || r.notes.some((n) => n.text.toLowerCase().includes(q)) || Object.values(r.fields).some((v) => String(v).toLowerCase().includes(q))); })
+                .slice(0, 50);
+        },
+        /* Records with a due time come, and not said yet: [{ record, list }]. Each is said once per due time. */
+        due() {
+            const t = now();
+            const out = [];
+            for (const r of Object.values(s.records)) {
+                if (!r.due || r.archived || r.told === r.due) continue;
+                const at = dueAt(r.due);
+                const list = s.lists[r.list];
+                if (at === null || at > t || !list || list.archived || list.states.find((x) => x.id === r.state)?.done) continue;
+                r.told = r.due; out.push({ record: r, list });
+            }
+            if (out.length) save();
+            return out;
+        },
+
+        /* ---- lists: a person's ---- */
+        createList({ template = 'simple', title, lang = 'en' } = {}, who) {
+            const w = whoOf(who);
+            if (!isPerson(w)) no('only a person makes a list');
+            if (Object.keys(s.lists).length >= LISTS_MAX) no(`${LISTS_MAX} lists at most`);
+            const base = seed(template, lang);
+            const name = oneLine(title, TITLE_MAX) || base.title;
+            let id = key(name) || 'list';
+            for (let i = 2; s.lists[id]; i++) id = `${key(name) || 'list'}-${i}`;
+            s.lists[id] = { id, ...base, title: name, access: {}, created: stamp(), by: w.id };
+            save(); log(w, 'create-list', { list: id, change: { title: name, template } });
+            return s.lists[id];
+        },
+        editList(given, { title, view, states, fields } = {}, who) {
+            const w = whoOf(who);
+            if (!isPerson(w)) no('only a person changes a list');
+            const list = listOf(given, w, 'write');
+            const change = {};
+            if (title !== undefined) { const t = oneLine(title, TITLE_MAX); if (!t) no('a list needs a title'); list.title = change.title = t; }
+            if (view !== undefined) { if (!VIEWS.includes(view)) no(`a view is one of: ${VIEWS.join(', ')}`); list.view = change.view = view; }
+            if (states !== undefined) {
+                if (!Array.isArray(states) || states.length < 1 || states.length > STATES_MAX) no(`a list has 1 to ${STATES_MAX} states`);
+                const next = []; const seen = new Set();
+                for (const st of states) {
+                    const name = oneLine(st?.name, 60); if (!name) no('a state needs a name');
+                    let id = oneLine(st?.id, 40) || key(name) || 'state';
+                    for (let i = 2; seen.has(id); i++) id = `${key(name)}-${i}`;
+                    seen.add(id); next.push({ id, name, ...(st.gate ? { gate: true } : {}), ...(st.done ? { done: true } : {}) });
+                }
+                if (next.filter((x) => x.gate).length > 1) no('one gate at most');
+                /* A record in a state that goes moves to the first state. */
+                for (const r of Object.values(s.records)) if (r.list === list.id && !seen.has(r.state)) r.state = next[0].id;
+                list.states = change.states = next;
+            }
+            if (fields !== undefined) {
+                if (!Array.isArray(fields) || fields.length > FIELDS_MAX) no(`${FIELDS_MAX} fields at most`);
+                const seen = new Set();
+                list.fields = change.fields = fields.map((f) => {
+                    const name = oneLine(f?.name, 60); if (!name) no('a field needs a name');
+                    if (!FIELD_TYPES.includes(f.type)) no(`a field is one of: ${FIELD_TYPES.join(', ')}`);
+                    let id = oneLine(f?.id, 40) || key(name) || 'field';
+                    for (let i = 2; seen.has(id); i++) id = `${key(name)}-${i}`;
+                    seen.add(id); return { id, name, type: f.type };
+                });
+            }
+            save(); log(w, 'edit-list', { list: list.id, change });
+            return list;
+        },
+        /* access: "read", "write", or null to take it back. */
+        grant(given, whoId, level, who) {
+            const w = whoOf(who);
+            if (!isPerson(w)) no('only a person gives access');
+            const list = listOf(given, w);
+            const id = oneLine(whoId, 100); if (!id) no('say to whom');
+            if (level !== null && level !== 'read' && level !== 'write') no('access is read, write, or none');
+            list.access ??= {};
+            if (level === null) delete list.access[id]; else list.access[id] = level;
+            save(); log(w, 'grant', { list: list.id, change: { to: id, access: level } });
+            return list;
+        },
+        archiveList(given, archived, who) {
+            const w = whoOf(who);
+            if (!isPerson(w)) no('only a person archives a list');
+            const list = listOf(given, w);
+            if (archived) list.archived = true; else delete list.archived;
+            save(); log(w, archived ? 'archive-list' : 'restore-list', { list: list.id });
+            return list;
+        },
+        deleteList(given, who) {
+            const w = whoOf(who);
+            if (!isPerson(w)) no('only a person deletes a list');
+            const list = listOf(given, w);
+            for (const r of Object.values(s.records)) if (r.list === list.id) forget(r.id);
+            delete s.lists[list.id];
+            save(); log(w, 'delete-list', { list: list.id });
+            return true;
+        },
+
+        /* ---- records ---- */
+        add(given, { title, state, fields, owners, due, note } = {}, who) {
+            const w = whoOf(who);
+            const list = listOf(given, w, 'write');
+            const t = oneLine(title, TITLE_MAX); if (!t) no('a record needs a title');
+            if (Object.values(s.records).filter((r) => r.list === list.id).length >= RECORDS_MAX) no(`${RECORDS_MAX} records in a list at most`);
+            const st = state ? stateOf(list, state) : list.states[0];
+            const approved = isPerson(w) && past(list, st.id);
+            if (!approved && past(list, st.id)) no(`only a person approves: add it as ${list.states[0].name}`);
+            const id = String(s.next++);
+            const r = { id, n: Number(id), list: list.id, title: t, state: st.id, fields: {}, owners: [], notes: [], attached: [], created: stamp(), by: w.id, changed: stamp(), ...(approved ? { approved: true } : {}) };
+            s.records[id] = r;
+            if (fields) setFields(list, r, fields);
+            if (owners) r.owners = ownersOf(owners);
+            if (due) r.due = dueOf(due);
+            if (note) r.notes.push({ id: randomUUID(), at: stamp(), by: w, text: noteOf(note) });
+            save(); log(w, 'add', { record: id, list: list.id, change: { title: t, state: st.id } });
+            return r;
+        },
+        edit(given, { title, fields, owners, due } = {}, who) {
+            const w = whoOf(who);
+            const { r, list } = recordOf(given, w, 'write');
+            const change = {};
+            if (title !== undefined) { const t = oneLine(title, TITLE_MAX); if (!t) no('a record needs a title'); r.title = change.title = t; }
+            if (fields !== undefined) change.fields = setFields(list, r, fields);
+            if (owners !== undefined) r.owners = change.owners = ownersOf(owners);
+            if (due !== undefined) { if (due === null || due === '') { delete r.due; change.due = null; } else r.due = change.due = dueOf(due); }
+            r.changed = stamp();
+            save(); log(w, 'edit', { record: r.id, list: list.id, change });
+            return r;
+        },
+        move(given, state, who) {
+            const w = whoOf(who);
+            const { r, list } = recordOf(given, w, 'write');
+            const st = stateOf(list, state);
+            if (past(list, st.id)) {
+                if (isPerson(w)) r.approved = true;
+                else if (!r.approved) no(`only a person approves: it stays ${list.states.find((x) => x.id === r.state)?.name}, until they tick it`);
+            } else if (isPerson(w) && gateIndex(list) >= 0) delete r.approved;
+            const from = r.state; r.state = st.id; r.changed = stamp();
+            save(); log(w, 'move', { record: r.id, list: list.id, change: { from, to: st.id } });
+            return r;
+        },
+        /* A person's tick: approved goes to the gate state; taken back goes to the first state. */
+        approve(given, yes, who) {
+            const w = whoOf(who);
+            if (!isPerson(w)) no('only a person approves');
+            const { list } = recordOf(given, w, 'write');
+            const g = gateIndex(list);
+            const target = g >= 0 ? list.states[g] : list.states.find((x) => x.done) ?? list.states.at(-1);
+            return api.move(given, yes ? target.id : list.states[0].id, w);
+        },
+        note(given, text, who) {
+            const w = whoOf(who);
+            const { r, list } = recordOf(given, w, 'write');
+            if (r.notes.length >= NOTES_MAX) no(`${NOTES_MAX} notes on a record at most`);
+            const n = { id: randomUUID(), at: stamp(), by: w, text: noteOf(text) };
+            r.notes.push(n); r.changed = stamp();
+            save(); log(w, 'note', { record: r.id, list: list.id, change: { note: n.id } });
+            return n;
+        },
+        /* A note is changed by whoever wrote it; the record's history says it was. */
+        editNote(given, noteId, text, who) {
+            const w = whoOf(who);
+            const { r, list } = recordOf(given, w, 'write');
+            const n = r.notes.find((x) => x.id === noteId || x.id.startsWith(String(noteId ?? '-')));
+            if (!n) no('no such note');
+            if (n.by.id !== w.id) no('a note is changed by whoever wrote it');
+            if (text === null || text === '') r.notes = r.notes.filter((x) => x !== n);
+            else { n.text = noteOf(text); n.edited = stamp(); }
+            r.changed = stamp();
+            save(); log(w, text ? 'edit-note' : 'remove-note', { record: r.id, list: list.id, change: { note: n.id } });
+            return r;
+        },
+        attach(given, { kind, ref, title } = {}, who) {
+            const w = whoOf(who);
+            const { r, list } = recordOf(given, w, 'write');
+            if (!ATTACH_KINDS.includes(kind)) no(`attach one of: ${ATTACH_KINDS.join(', ')}`);
+            const what = oneLine(ref, REF_MAX); if (!what) no('say what to attach');
+            if (kind === 'record') { const other = recordOf(what, w); if (other.r.id === r.id) no('a record is not attached to itself'); }
+            if (kind === 'link' && !/^https?:\/\//i.test(what)) no('a link starts with http:// or https://');
+            if (r.attached.length >= ATTACHED_MAX) no(`${ATTACHED_MAX} things attached at most`);
+            if (r.attached.some((a) => a.kind === kind && a.ref === what)) no('that is attached already');
+            const a = { id: randomUUID(), kind, ref: kind === 'record' ? what.replace(/^#/, '') : what, title: oneLine(title, TITLE_MAX), at: stamp(), by: w.id };
+            r.attached.push(a); r.changed = stamp();
+            save(); log(w, 'attach', { record: r.id, list: list.id, change: { kind, ref: a.ref } });
+            return a;
+        },
+        detach(given, attachedId, who) {
+            const w = whoOf(who);
+            const { r, list } = recordOf(given, w, 'write');
+            const a = r.attached.find((x) => x.id === attachedId || x.id.startsWith(String(attachedId ?? '-')) || x.ref === attachedId);
+            if (!a) no('nothing like that is attached');
+            r.attached = r.attached.filter((x) => x !== a); r.changed = stamp();
+            save(); log(w, 'detach', { record: r.id, list: list.id, change: { kind: a.kind, ref: a.ref } });
+            return r;
+        },
+        archive(given, archived, who) {
+            const w = whoOf(who);
+            const { r, list } = recordOf(given, w, 'write');
+            if (archived) r.archived = true; else delete r.archived;
+            r.changed = stamp();
+            save(); log(w, archived ? 'archive' : 'restore', { record: r.id, list: list.id });
+            return r;
+        },
+        /* Deleted is deleted: what the log said of it is emptied too. A person's. */
+        delete(given, who) {
+            const w = whoOf(who);
+            if (!isPerson(w)) no('only a person deletes; archive it instead');
+            const { r, list } = recordOf(given, w, 'write');
+            forget(r.id);
+            save(); log(w, 'delete', { record: r.id, list: list.id });
+            return true;
+        },
+    };
+
+    function forget(id) {
+        delete s.records[id];
+        for (const r of Object.values(s.records)) r.attached = r.attached.filter((a) => !(a.kind === 'record' && a.ref === id));
+        if (!existsSync(LOG)) return;
+        const kept = logLines().map((x) => (x.record === id ? { at: x.at, by: x.by, op: x.op, record: id, list: x.list } : x));
+        const tmp = `${LOG}.${process.pid}.tmp`;
+        writeFileSync(tmp, kept.map((x) => `${JSON.stringify(x)}\n`).join(''));
+        renameSync(tmp, LOG);
+    }
+    function setFields(list, r, given) {
+        if (!given || typeof given !== 'object' || Array.isArray(given)) no('fields are given as { name: value }');
+        const change = {};
+        for (const [k, v] of Object.entries(given)) {
+            const f = list.fields.find((x) => x.id === k) ?? list.fields.find((x) => x.name.toLowerCase() === String(k).toLowerCase());
+            if (!f) no(`the list ${list.title} has no field "${k}"${list.fields.length ? ` (it has: ${list.fields.map((x) => x.name).join(', ')})` : ''}`);
+            if (v === null || v === '') { delete r.fields[f.id]; change[f.id] = null; continue; }
+            const value = oneLine(v, FIELD_MAX);
+            if (f.type === 'number' && !Number.isFinite(Number(value))) no(`${f.name} is a number`);
+            if (f.type === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) no(`${f.name} is a date: 2026-11-04`);
+            if (f.type === 'link' && !/^https?:\/\//i.test(value)) no(`${f.name} is a link: https://...`);
+            r.fields[f.id] = change[f.id] = f.type === 'number' ? Number(value) : value;
+        }
+        return change;
+    }
+    function ownersOf(given) {
+        const list = (Array.isArray(given) ? given : [given]).map((x) => oneLine(x, 100)).filter(Boolean);
+        if (list.length > OWNERS_MAX) no(`${OWNERS_MAX} owners at most`);
+        return [...new Set(list)];
+    }
+    function dueOf(given) {
+        const d = oneLine(given, 20);
+        if (!DUE.test(d) || dueAt(d) === null) no('a due date is 2026-11-04, or 2026-11-04 09:00');
+        return d;
+    }
+    function noteOf(text) { const t = block(text, NOTE_MAX); if (!t) no('a note needs a text'); return t; }
+
+    return api;
+}
+
+export { TEMPLATES };
