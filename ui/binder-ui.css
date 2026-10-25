@@ -37,7 +37,8 @@
 .binder-owners { display: flex; gap: .35rem; flex-wrap: wrap; }
 .binder-pop { position: relative; }
 .binder-dots { font-weight: 700; letter-spacing: .05em; padding: .4em .75em; line-height: 1.15; }
-.binder-menu-end { left: auto; right: 0; }
+/* Opened from the end of a row: it opens leftwards (the rule after .binder-menu once put it back at left: 0, past the screen). */
+.binder-menu.binder-menu-end { left: auto; right: 0; }
 .binder-primary { background: var(--binder-action); color: var(--binder-on-action) !important; border: 1px solid var(--binder-action); border-radius: 8px; padding: .45em 1em; font-weight: 600; }
 .binder-ghost { background: var(--binder-panel); border: 1px solid var(--binder-line); border-radius: 8px; padding: .45em .9em; }
 .binder-danger { background: var(--binder-danger); color: var(--binder-bg) !important; border: 0; border-radius: 8px; padding: .45em .9em; font-weight: 600; }
@@ -67,7 +68,7 @@
 .binder-pill[data-gate] { color: var(--binder-ask); border-color: var(--binder-ask); }
 
 /* As columns, one per state. */
-.binder-cols { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(14rem, 1fr); gap: .8rem; overflow-x: auto; min-height: 0; padding-bottom: .3rem; }
+.binder-cols { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(11.5rem, 1fr); gap: .8rem; overflow-x: auto; min-height: 0; padding-bottom: .3rem; }
 .binder-col { background: var(--binder-panel); border: 1px solid var(--binder-line); border-radius: var(--binder-radius); padding: .6rem; display: flex; flex-direction: column; gap: .5rem; }
 .binder-col h3 { font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--binder-dim); display: flex; justify-content: space-between; }
 .binder-card { background: var(--binder-bg); border: 1px solid var(--binder-line); border-radius: 9px; padding: .6rem .7rem; display: flex; flex-direction: column; gap: .3rem; cursor: pointer; }
@@ -106,7 +107,7 @@
 .binder-state[data-done] { background: color-mix(in srgb, var(--binder-ok) 16%, transparent); border-color: transparent; }
 .binder-state:disabled { opacity: 1; }
 .binder-caret { font-size: .8em; color: var(--binder-dim); }
-.binder-menu { position: absolute; z-index: 5; top: calc(100% + .35rem); left: 0; min-width: 12rem; display: flex; flex-direction: column; padding: .3rem; background: var(--binder-bg);
+.binder-menu { position: absolute; z-index: 5; top: calc(100% + .35rem); left: 0; min-width: 12rem; max-width: calc(100vw - 2rem); display: flex; flex-direction: column; padding: .3rem; background: var(--binder-bg);
   border: 1px solid var(--binder-line); border-radius: 12px; box-shadow: 0 8px 28px rgb(0 0 0 / .18); }
 .binder-menu button { border: 0; background: transparent; text-align: left; padding: .6em .7em; border-radius: 8px; display: flex; gap: .5em; align-items: center; }
 .binder-menu button:hover, .binder-menu button:focus-visible { background: var(--binder-panel); outline: none; }
