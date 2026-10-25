@@ -261,8 +261,9 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
         },
         archiveList(given, archived, who) {
             const w = whoOf(who);
-            if (!isPerson(w)) no('only a person archives a list');
-            const list = listOf(given, w);
+            const list = listOf(given, w, 'write');
+            /* A person archives any list; an agent only one it made itself (reversible, unlike delete). */
+            if (!isPerson(w) && list.by !== w.id) no('only a person archives a list you did not make');
             if (archived) list.archived = true; else delete list.archived;
             save(); log(w, archived ? 'archive-list' : 'restore-list', { list: list.id });
             return list;

@@ -73,6 +73,7 @@ export function say(op, data, list) {
         case 'archive': return data.archived ? `Archived #${data.id}.` : `Restored #${data.id}.`;
         case 'settings': case 'edit-settings': return `Lists an agent may make: ${data.agentLists}.`;
         case 'create-list': return `Made the list ${data.title} [${data.id}], yours to change: binder add ${data.id} "title".`;
+        case 'archive-list': return data.archived ? `Archived the list ${data.title} [${data.id}]. A person can restore or delete it.` : `Restored the list ${data.title} [${data.id}].`;
         default: return 'Done.';
     }
 }

@@ -61,6 +61,8 @@
   "delete-list-sure": "Delete the binder and its cards?",
   "archive-list": "Archive the binder",
   "no-records": "Nothing here.",
+  "none-archived": "No archived cards here. Remove the \"Archived\" filter to see the rest.",
+  "none-mine": "None of yours here. Remove the \"Mine\" filter to see the rest.",
   "search": "Search",
   "description": "Description",
   "edit": "Edit",

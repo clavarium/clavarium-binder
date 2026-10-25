@@ -61,6 +61,8 @@
   "delete-list-sure": "Supprimer le classeur et ses fiches ?",
   "archive-list": "Archiver le classeur",
   "no-records": "Rien ici.",
+  "none-archived": "Aucune fiche archivée ici. Retire le filtre « Archivées » pour voir le reste.",
+  "none-mine": "Aucune des tiennes ici. Retire le filtre « Les miennes » pour voir le reste.",
   "search": "Chercher",
   "description": "Description",
   "edit": "Modifier",

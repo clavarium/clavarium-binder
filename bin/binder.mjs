@@ -36,7 +36,7 @@ You never approve: a person ticks what may go on. Talking with them stays in the
 The folder used is --dir FOLDER, else $BINDER_DIR, else the nearest ${FOLDER} folder from here up.
 binder ${VERSION}`;
 
-const VERBS = ['lists', 'show', 'get', 'search', 'add', 'edit', 'move', 'note', 'attach', 'detach', 'archive', 'restore', 'new'];
+const VERBS = ['lists', 'show', 'get', 'search', 'add', 'edit', 'move', 'note', 'attach', 'detach', 'archive', 'restore', 'new', 'archive-list', 'restore-list'];
 
 /* A command line, read: [op, args] or a refusal. */
 export function read(argv) {
@@ -67,6 +67,7 @@ export function read(argv) {
         case 'attach': return rest.length >= 3 ? ['attach', { id: rest[0], kind: rest[1], ref: rest[2], title: rest.slice(3).join(' ') }] : { refused: 'binder attach ID KIND REF ["title"]' };
         case 'detach': return rest.length === 2 ? ['detach', { id: rest[0], what: rest[1] }] : { refused: 'binder detach ID WHAT' };
         case 'new': return rest[0] ? ['create-list', { template: rest[0], title: rest.slice(1).join(' ') || undefined }] : { refused: 'binder new TEMPLATE ["title"]' };
+        case 'archive-list': case 'restore-list': return rest[0] ? ['archive-list', { list: rest[0], archived: verb === 'archive-list' }] : { refused: `binder ${verb} LIST` };
         case 'archive': case 'restore': return rest[0] ? ['archive', { id: rest[0], restore: verb === 'restore' }] : { refused: `binder ${verb} ID` };
         default: return { refused: 'not understood' };
     }

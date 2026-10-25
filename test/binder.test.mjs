@@ -614,3 +614,20 @@ test('the screen says where it is (a card, a binder, its settings) when a person
         c.destroy();
     } finally { for (const n of names) globalThis[n] = was[n]; }
 });
+
+test('an agent archives and restores a list it made, but not one it did not; a person archives any; archived lists do not count', () => {
+    const s = openStore(tmp());
+    const mine = s.createList({ template: 'simple', title: 'Mine' }, BOT);
+    const theirs = s.createList({ template: 'simple', title: 'Theirs' }, ME);
+    s.archiveList(mine.id, true, BOT);
+    assert.equal(s.lists(ME).find((l) => l.id === mine.id)?.archived, true);
+    s.archiveList(mine.id, false, BOT);
+    assert.equal(s.lists(ME).find((l) => l.id === mine.id)?.archived, undefined);
+    /* not its own, and no access: refused */
+    assert.throws(() => s.archiveList(theirs.id, true, BOT), /no list|a person/);
+    /* a person archives any it can see */
+    s.archiveList(mine.id, true, ME);
+    assert.equal(s.lists(ME).find((l) => l.id === mine.id)?.archived, true);
+    /* mine is archived, so it does not count: the agent can still make active lists up to its cap */
+    assert.doesNotThrow(() => { for (let i = 0; i < 4; i++) s.createList({ template: 'simple', title: `L${i}` }, BOT); });
+});

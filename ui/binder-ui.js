@@ -28,7 +28,7 @@ export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'n
     'state', 'owners', 'due', 'notes', 'add-note', 'attached', 'attach', 'history', 'archive', 'restore', 'delete', 'delete-sure', 'approved', 'settings',
     'states', 'fields', 'access', 'read', 'write', 'none', 'save', 'empty', 'archived', 'show-archived', 'gate', 'done', 'add-state', 'add-field',
     'kind-message', 'kind-file', 'kind-asset', 'kind-branch', 'kind-link', 'kind-record', 'what', 'name', 'type', 'saved', 'edited', 'by', 'mine', 'all',
-    'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'search', 'description', 'edit', 'more', 'approve', 'add', 'ok',
+    'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'none-archived', 'none-mine', 'search', 'description', 'edit', 'more', 'approve', 'add', 'ok',
     'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'remind-before', 'no-remind', 'days',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'link', 'record'];
@@ -552,7 +552,9 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 const view = ui.view ?? l.view;
                 parts.push(bar(l));
                 if (ui.mode === 'new-item') parts.push(newItem(l));
-                parts.push(records.length === 0 ? h('p', { class: 'binder-empty' }, w('no-records'))
+                /* Empty: say why when a filter hides everything, not a bare "nothing here". */
+                const emptyWhy = ui.archived ? w('none-archived') : ui.mine ? w('none-mine') : w('no-records');
+                parts.push(records.length === 0 ? h('p', { class: 'binder-empty' }, emptyWhy)
                     : view === 'columns' ? asColumns(l, records) : view === 'cards' ? asCards(l, records) : asList(l, records));
             }
         }
