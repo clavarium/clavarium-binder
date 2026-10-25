@@ -9,15 +9,22 @@
  *       people: () => [{ id, name, kind }],   who may own a record, or be given a list
  *       picture: (value) => url|null,          a photo field's value, as a picture to show
  *       openAttached: (a) => void,             a thing attached opened by the page (a message, a file...)
+ *       place: { list, card },                 where it opens (an address kept by the page, after a reload)
+ *       onPlace: (place) => void,              where it is now, each time a person goes elsewhere in it
+ *       onBack: (place) => boolean,            its "‹" pressed: true when the page takes it (its own Back), else it goes up itself
  *   });
  *   b.refresh();   something changed: read again
- *   b.open(id);    a record shown whole, in its list (resolves false when it is not in a list shown)
+ *   b.open(id, { from });   a record shown whole, in its list (resolves false when it is not in a list shown);
+ *                           `from`: what its "‹" names (where the person came from, on the page)
+ *   b.go(place);   shown there, said to no one (the page's Back): { list, card } (no card: the list)
+ *   b.back();      one level up (a card, a binder's settings: its list); false when at the top
+ *   b.place;       { list, card, page: 'list' | 'card' | 'settings', from }
  *   b.destroy();
  *
  * Built element by element: nothing a record holds is ever read as HTML.
  */
 
-export const KEYS = Object.freeze(['lists', 'new-list', 'new-item', 'no-lists', 'template', 'create', 'cancel', 'title', 'list', 'columns', 'cards', 'back',
+export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'no-lists', 'template', 'create', 'cancel', 'title', 'list', 'columns', 'cards', 'back',
     'state', 'owners', 'due', 'notes', 'add-note', 'attached', 'attach', 'history', 'archive', 'restore', 'delete', 'delete-sure', 'approved', 'settings',
     'states', 'fields', 'access', 'read', 'write', 'none', 'save', 'empty', 'archived', 'show-archived', 'gate', 'done', 'add-state', 'add-field',
     'kind-message', 'kind-file', 'kind-asset', 'kind-branch', 'kind-link', 'kind-record', 'what', 'name', 'type', 'saved', 'edited', 'by', 'mine', 'all',
@@ -175,12 +182,12 @@ export function rich(text, tick = null) {
         : h('p', {}, b.lines.flatMap((l, i) => (i ? [h('br'), ...parts(l)] : parts(l)))))));
 }
 
-export function mount(root, { call, words = {}, lang = 'en', people = () => [], picture = () => null, openAttached = null } = {}) {
+export function mount(root, { call, words = {}, lang = 'en', people = () => [], picture = () => null, openAttached = null, place: start = null, onPlace = null, onBack = null } = {}) {
     const w = (k) => words[k] ?? k;
     /* A state's name as shown: a template's own name in the page's words (a list made in another language keeps its data). */
     const sn = (st) => (st ? words[`state:${st.name}`] ?? st.name : '');
     /* open: what of a record is being changed ('states', 'who', 'description', 'attach'); draft: what was typed, kept across a repaint. */
-    const ui = { lists: [], at: null, data: null, view: null, record: null, mode: 'list', archived: false, mine: false, error: '', open: null, more: false, draft: {}, focus: false, settings: null };
+    const ui = { lists: [], at: start?.list ?? null, data: null, view: null, record: null, mode: 'list', archived: false, mine: false, error: '', open: null, more: false, draft: {}, focus: false, settings: null, from: null };
     const box = h('div', { class: 'binder' });
     root.replaceChildren(box);
     let alive = true;
@@ -197,9 +204,15 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     async function refresh() { if (!alive) return; await soft(load()); paint(); }
 
     /* ---- the parts ---- */
-    const top = () => h('div', { class: 'binder-top' },
-        h('div', { class: 'binder-tabs', role: 'tablist' }, ui.lists.map((l) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(l.id === ui.at), 'data-list': l.id,
-            onclick: () => { ui.at = l.id; ui.view = null; ui.mode = 'list'; ui.record = null; ui.open = null; void refresh(); } }, l.title, h('small', {}, String(l.count))))),
+    /* THE BINDERS, as binders: tabs with a binder's mark, the one shown joined to it below;
+     * on a narrow screen, one picker ("Binder: Batches ▾"). One binder alone: its title says it. */
+    const pick = (id) => { ui.at = id; ui.view = null; ui.mode = 'list'; ui.record = null; ui.open = null; ui.from = null; void refresh(); };
+    const mark = () => h('span', { class: 'binder-mark', 'aria-hidden': 'true' });
+    const top = () => h('div', { class: 'binder-top', 'data-one': ui.lists.length === 1 ? '' : null },
+        h('div', { class: 'binder-tabs', role: 'tablist', 'aria-label': w('lists') }, ui.lists.map((l) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(l.id === ui.at), 'data-list': l.id,
+            onclick: () => pick(l.id) }, mark(), h('span', { class: 'binder-tab-name' }, l.title), h('small', {}, String(l.count))))),
+        h('label', { class: 'binder-picker' }, mark(), h('span', { class: 'binder-picker-word' }, w('binder')),
+            h('select', { 'aria-label': w('binder'), onchange: (e) => pick(e.target.value) }, ui.lists.map((l) => h('option', { value: l.id, selected: l.id === ui.at }, `${l.title} (${l.count})`)))),
         h('button', { type: 'button', class: 'binder-new-list', onclick: () => { ui.mode = 'new-list'; paint(); } }, `+ ${w('new-list')}`));
 
     /* The bar: the title, the views, "+ Card"; the rest behind "…". A filter on is
@@ -251,7 +264,9 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     /* The fields set, on one line: "Naissance 12 avril 1931 · Saint-Aubin". */
     const factLine = (l, r, cls = 'binder-facts') => { const f = facts(l, r, lang); return f.length ? h('span', { class: cls }, f.map((x) => x.text).join(' · ')) : null; };
     const leave = () => { ui.open = null; ui.more = false; ui.draft = {}; };
-    const open = (r) => { void soft(ask('get', { id: r.id }).then((d) => { leave(); ui.record = d; ui.mode = 'record'; paint(); window.scrollTo?.(0, 0); })); };
+    const open = (r) => { void soft(ask('get', { id: r.id }).then((d) => { leave(); ui.from = null; ui.record = d; ui.mode = 'record'; paint(); })); };
+    /* Its "‹": the page's own Back when it takes it, else one level up. */
+    const up = () => { if (!onBack?.(here())) back(); };
 
     function asList(l, records) {
         return h('div', { class: 'binder-rows' }, records.map((r) => h('div', { class: 'binder-row', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } },
@@ -440,8 +455,9 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 l.grants ? h('button', { type: 'button', class: 'binder-ghost binder-small binder-warn', 'data-act': 'delete', onclick: () => { sure.hidden = false; } }, w('delete')) : null, sure) : null);
 
         return h('div', { class: 'binder-page binder-record', 'data-record': r.id },
-            h('div', { class: 'binder-crumb' }, h('button', { type: 'button', class: 'binder-text-btn', 'data-act': 'back', onclick: () => { leave(); ui.record = null; ui.mode = 'list'; void refresh(); } }, `‹ ${l.title}`),
-                h('span', { class: 'binder-dim' }, `#${r.id}${r.archived ? ` · ${w('archived')}` : ''}`)),
+            /* Where it is, kept in sight: the way back (to its binder, or where the person came from), its binder, its number. */
+            h('div', { class: 'binder-crumb' }, backButton(ui.from ?? l.title),
+                h('span', { class: 'binder-dim binder-where' }, `${ui.from ? `${l.title} · ` : ''}#${r.id}${r.archived ? ` · ${w('archived')}` : ''}`)),
             hero,
             h('header', { class: 'binder-head' }, title, factLine(l, r),
                 stateShown(l, r) || approve ? h('div', { class: 'binder-status' }, stateShown(l, r) ? h('div', { class: 'binder-state-wrap binder-pop' }, pillOf, menu) : null, approve) : null),
@@ -449,6 +465,10 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             whoLine || whoEdit ? h('div', { class: 'binder-who-wrap' }, whoLine, whoEdit) : null,
             attached, addRow, notes, more);
     }
+
+    /* The way back, a fingertip high: "‹ Batches". */
+    const backButton = (text) => h('button', { type: 'button', class: 'binder-back', 'data-act': 'back', 'aria-label': `${w('back')}: ${text}`, onclick: up },
+        h('span', { class: 'binder-back-arrow', 'aria-hidden': 'true' }, '‹'), h('span', { class: 'binder-back-text' }, text));
 
     /* The store's settings, read when its page opens; asked quietly (a keeper without them shows none). */
     async function readSettings() {
@@ -487,7 +507,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             return n;
         }
         return h('div', { class: 'binder-page binder-settings' },
-            h('div', { class: 'binder-bar' }, h('button', { type: 'button', class: 'binder-ghost', onclick: () => { ui.mode = 'list'; paint(); } }, `‹ ${l.title}`)),
+            h('div', { class: 'binder-crumb' }, backButton(l.title)),
             h('section', { class: 'binder-box' }, h('h3', {}, w('title')), title),
             h('section', { class: 'binder-box' }, h('h3', {}, w('states')), stateRows),
             h('section', { class: 'binder-box' }, h('h3', {}, w('fields')), fieldRows),
@@ -520,7 +540,35 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                     : view === 'columns' ? asColumns(l, records) : view === 'cards' ? asCards(l, records) : asList(l, records));
             }
         }
+        const s = scroller(); const was = s ? s.scrollTop : 0;
         box.replaceChildren(...parts);
+        tell(s, was);
+    }
+
+    /* WHERE IT IS, said to the page when a person went elsewhere (a card, a binder, its
+     * settings), and only then: the page keeps it (its Back, its address). Going to a card
+     * puts it in sight from its top; back on the list, the list is where it was. */
+    const here = () => ({ list: ui.at, card: ui.mode === 'record' && ui.record ? ui.record.record.id : null, page: ui.mode === 'record' && ui.record ? 'card' : ui.mode === 'settings' ? 'settings' : 'list', from: ui.mode === 'record' ? ui.from : null });
+    const keyOf = (p) => `${p.list}|${p.page}|${p.card ?? ''}`;
+    let told = null;
+    function tell(s, scrolled) {
+        const p = here(); const key = keyOf(p);
+        const was = told; told = key;
+        const from = was?.split('|')[1];
+        if (s && from === 'list' && p.page !== 'list') {
+            listTop = scrolled;
+            /* Its top in sight: the box that scrolls, moved by what is above the view. */
+            const above = box.getBoundingClientRect().top - (s === document.scrollingElement ? 0 : s.getBoundingClientRect().top);
+            if (above < 0) s.scrollTop += above;
+        } else if (s && from && from !== 'list' && p.page === 'list' && listTop !== null) { s.scrollTop = listTop; listTop = null; }
+        if (key !== was && was !== null && !quiet) onPlace?.(p);
+    }
+    let listTop = null; let quiet = false;
+    /* What scrolls it: the nearest box that scrolls, else the page. */
+    function scroller() {
+        if (typeof getComputedStyle !== 'function' || !box.isConnected) return null;
+        for (let e = box.parentElement; e; e = e.parentElement) { const o = getComputedStyle(e).overflowY; if (o === 'auto' || o === 'scroll') return e; }
+        return document.scrollingElement ?? null;
     }
 
     /* A menu closes on a tap elsewhere, or Escape. */
@@ -529,9 +577,14 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     const escape = (e) => { if (e.key === 'Escape' && menus.includes(ui.open)) { ui.open = null; paint(); } };
     document.addEventListener('pointerdown', away);
     document.addEventListener('keydown', escape);
-    void refresh();
+    /* Where it opens: the page's place (a reload), else its first binder. Said to the page once drawn. */
+    void (async () => {
+        await refresh();
+        if (start?.card && alive) { quiet = true; try { await openRecord(start.card); } finally { quiet = false; } }
+        if (alive) onPlace?.(here());
+    })();
     /* One record opened, from elsewhere on the page (a list beside a chat): its list, then it. */
-    async function openRecord(id) {
+    async function openRecord(id, { from = null } = {}) {
         if (!alive) return false;
         try {
             /* Asked quietly: a record not found says nothing on the screen. */
@@ -541,9 +594,27 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             if (!ui.lists.some((l) => l.id === d.list.id)) await load();
             if (!ui.lists.some((l) => l.id === d.list.id)) return false;
             if (ui.at !== d.list.id) { ui.at = d.list.id; ui.view = null; ui.data = await ask('show', { list: ui.at, archived: ui.archived, mine: ui.mine }); }
-            leave(); ui.record = d; ui.mode = 'record'; paint();
+            leave(); ui.from = from ?? null; ui.record = d; ui.mode = 'record'; paint();
             return true;
         } catch { return false; }
     }
-    return { refresh, open: openRecord, destroy() { alive = false; document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', escape); box.remove(); }, get state() { return { at: ui.at, mode: ui.mode } } };
+    /* One level up: a card or a binder's settings, its list. */
+    function back() {
+        if (ui.mode !== 'record' && ui.mode !== 'settings') return false;
+        leave(); ui.from = null; ui.record = null; ui.mode = 'list'; void refresh();
+        return true;
+    }
+    /* Shown where the page says (its Back), said to no one: the page knows. */
+    async function go(p = {}) {
+        if (!alive) return false;
+        quiet = true;
+        try {
+            if (p.card) return await openRecord(p.card);
+            if (p.list && ui.lists.some((l) => l.id === p.list) && p.list !== ui.at) { ui.at = p.list; ui.view = null; }
+            if (ui.mode !== 'list' || ui.record) { leave(); ui.from = null; ui.record = null; ui.mode = 'list'; }
+            await refresh();
+            return true;
+        } finally { quiet = false; }
+    }
+    return { refresh, open: openRecord, go, back, get place() { return here(); }, destroy() { alive = false; document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', escape); box.remove(); }, get state() { return { at: ui.at, mode: ui.mode } } };
 }

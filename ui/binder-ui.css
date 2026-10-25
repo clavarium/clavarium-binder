@@ -20,12 +20,29 @@
 .binder-dim { color: var(--binder-dim); }
 .binder-error { border-left: 3px solid var(--binder-danger); padding: .5em .8em; background: color-mix(in srgb, var(--binder-danger) 10%, transparent); border-radius: 4px; }
 
-/* The lists, as tabs. */
-.binder-top { display: flex; gap: .5rem; align-items: center; min-width: 0; }
-.binder-tabs { display: flex; gap: .3rem; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: thin; }
-.binder-tabs button, .binder-new-list { border: 1px solid var(--binder-line); background: transparent; border-radius: 999px; padding: .35em .9em; white-space: nowrap; color: var(--binder-dim); }
-.binder-tabs button small { margin-left: .45em; opacity: .8; }
-.binder-tabs button[aria-selected="true"] { color: var(--binder-text); border-color: var(--binder-action); background: color-mix(in srgb, var(--binder-action) 14%, transparent); font-weight: 600; }
+/* The binders, as binders: folder tabs, the one shown joined to what is below it; narrow, a picker. */
+.binder { container-type: inline-size; }
+.binder-top { display: flex; gap: .5rem; align-items: flex-end; min-width: 0; box-shadow: inset 0 -1px 0 var(--binder-line); }
+.binder-top[data-one] .binder-tabs, .binder-top[data-one] .binder-picker { display: none; }
+.binder-top[data-one] { box-shadow: none; }
+.binder-tabs { display: flex; gap: .25rem; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: thin; padding-top: .2rem; }
+.binder-tabs button { display: inline-flex; align-items: center; gap: .5em; border: 1px solid var(--binder-line); border-bottom-color: transparent; border-radius: 10px 10px 0 0;
+  background: var(--binder-panel); padding: .5em 1em .55em; white-space: nowrap; color: var(--binder-dim); min-height: 2.5rem; box-shadow: inset 0 -1px 0 var(--binder-line); }
+.binder-tabs button:hover { color: var(--binder-text); }
+.binder-tabs button small { opacity: .8; font-size: .82em; font-variant-numeric: tabular-nums; }
+.binder-tabs button[aria-selected="true"] { color: var(--binder-text); background: var(--binder-bg); border-color: var(--binder-line); border-bottom-color: var(--binder-bg); box-shadow: inset 0 3px 0 var(--binder-action); font-weight: 600; }
+/* A binder's mark: a cover and its spine. */
+.binder-mark { display: inline-block; flex: none; width: .8em; height: 1em; border: 2px solid currentColor; border-left-width: 4px; border-radius: 2px 3px 3px 2px; opacity: .75; box-sizing: border-box; }
+.binder-tabs button[aria-selected="true"] .binder-mark { color: var(--binder-action); opacity: 1; }
+.binder-picker { display: none; align-items: center; gap: .5rem; flex: 1; min-width: 0; padding-bottom: .5rem; }
+.binder-picker .binder-mark { color: var(--binder-action); opacity: 1; }
+.binder-picker-word { color: var(--binder-dim); flex: none; }
+.binder .binder-picker select { flex: 1; min-width: 0; min-height: 2.6rem; font-weight: 600; border-radius: 10px; background: var(--binder-panel); }
+.binder-new-list { border: 1px solid var(--binder-line); background: transparent; border-radius: 999px; padding: .35em .9em; white-space: nowrap; color: var(--binder-dim); margin-bottom: .4rem; }
+@container (max-width: 560px) {
+  .binder-tabs { display: none; }
+  .binder-picker { display: flex; }
+}
 
 .binder-bar { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 .binder-bar h2 { flex: 1; min-width: 8em; }
@@ -89,7 +106,17 @@
 .binder-page { display: flex; flex-direction: column; gap: var(--binder-gap); min-width: 0; }
 .binder-record { gap: 1.5rem; max-width: 44rem; width: 100%; margin: .2rem auto 2rem; }
 .binder-crumb { display: flex; justify-content: space-between; align-items: center; gap: 1rem; font-size: .92em; }
-.binder .binder-crumb .binder-text-btn { color: var(--binder-dim); }
+/* On a card, kept in sight: the way back and where it is. */
+.binder-record > .binder-crumb, .binder-settings > .binder-crumb { position: sticky; top: 0; z-index: 4; background: var(--binder-bg); padding: .35rem 0; margin: -.35rem 0; }
+.binder-where { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* The way back: a button, a fingertip high on a touch screen. */
+.binder .binder-back { display: inline-flex; align-items: center; gap: .35em; min-height: 2.4rem; max-width: 70%; padding: .3em 1em .3em .7em; border: 1px solid var(--binder-line); border-radius: 999px;
+  background: var(--binder-panel); color: var(--binder-text); font-weight: 600; flex: none; }
+.binder-back:hover { border-color: var(--binder-action); }
+.binder-back:focus-visible { outline: 2px solid var(--binder-action); outline-offset: 2px; }
+.binder-back-arrow { font-size: 1.35em; line-height: 1; margin-top: -.1em; color: var(--binder-action); }
+.binder-back-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+@media (pointer: coarse) { .binder .binder-back { min-height: 2.9rem; padding-inline: .9em 1.15em; } }
 .binder .binder-text-btn { border: 0; background: transparent; padding: .35em 0; color: var(--binder-action); font-weight: 500; text-align: left; }
 .binder-text-btn:hover { text-decoration: underline; }
 .binder-small { padding: .35em .85em; font-size: .92em; }

@@ -492,3 +492,66 @@ test('the screen opens one record from elsewhere on the page (a list beside a ch
         b.destroy();
     } finally { for (const n of names) globalThis[n] = was[n]; }
 });
+
+test('the screen says where it is (a card, a binder, its settings) when a person goes there; the page takes its "‹" and walks it back with go(), said to no one', async () => {
+    class Node { constructor() { this.childNodes = []; } append(...k) { for (const c of k) { c.parent = this; this.childNodes.push(c); } }
+        replaceChildren(...k) { this.childNodes = []; this.append(...k); } remove() { if (this.parent) this.parent.childNodes = this.parent.childNodes.filter((c) => c !== this); }
+        get textContent() { return this.childNodes.map((c) => c.textContent).join(''); } set textContent(t) { this.childNodes = [new Text(String(t))]; } }
+    class Text extends Node { constructor(t) { super(); this.data = t; } get textContent() { return this.data; } }
+    class El extends Node { constructor(tag) { super(); this.tag = tag; this.attrs = {}; this.on = {}; } setAttribute(k, v) { this.attrs[k] = String(v); } addEventListener(k, f) { this.on[k] = f; } focus() {} setSelectionRange() {} querySelector() { return null; } }
+    const find = (n, f) => { if (n instanceof El && f(n)) return n; for (const c of n.childNodes ?? []) { const x = find(c, f); if (x) return x; } return null; };
+    const names = ['document', 'Node', 'window', 'requestAnimationFrame'];
+    const was = Object.fromEntries(names.map((n) => [n, globalThis[n]]));
+    Object.assign(globalThis, { Node, window: {}, requestAnimationFrame: () => 0,
+        document: { createElement: (t) => new El(t), createTextNode: (t) => new Text(t), addEventListener() {}, removeEventListener() {} } });
+    const settle = () => new Promise((r) => setTimeout(r, 20));
+    try {
+        const k = keeper(tmp());
+        const batches = k.act('create-list', { template: 'batches' }, ME).data;
+        const clients = k.act('create-list', { template: 'customers', title: 'Clients' }, ME).data;
+        const one = k.act('add', { list: batches.id, title: 'Fix diff line numbers' }, ME).data;
+        const alice = k.act('add', { list: clients.id, title: 'Alice' }, ME).data;
+        const root = new El('div');
+        const said = []; let taken = true;
+        const b = mount(root, { call: async (op, args) => k.act(op, args, ME), onPlace: (p) => said.push(p), onBack: () => taken });
+        await settle();
+        assert.deepEqual(said, [{ list: batches.id, card: null, page: 'list', from: null }], 'where it opened, once drawn');
+        /* A person taps a row: a card, said. */
+        find(root, (e) => e.attrs['data-record'] === one.id && e.on.click).on.click();
+        await settle();
+        assert.deepEqual(said.at(-1), { list: batches.id, card: one.id, page: 'card', from: null });
+        assert.equal(find(root, (e) => e.attrs['data-act'] === 'back').textContent, '‹Batches', 'its way back names its binder');
+        /* Its "‹", taken by the page: nothing moves until the page says where. */
+        find(root, (e) => e.attrs['data-act'] === 'back').on.click();
+        await settle();
+        assert.equal(b.place.page, 'card');
+        const n = said.length;
+        assert.equal(await b.go({ list: batches.id }), true);
+        assert.equal(b.place.page, 'list');
+        assert.equal(said.length, n, 'go() is said to no one');
+        /* Another binder, a person's tap: said. Its card opened by the page, from elsewhere: its "‹" names that. */
+        find(root, (e) => e.attrs['data-list'] === clients.id).on.click();
+        await settle();
+        assert.deepEqual(said.at(-1), { list: clients.id, card: null, page: 'list', from: null });
+        assert.equal(await b.open(one.id, { from: 'Chat' }), true);
+        assert.deepEqual(said.at(-1), { list: batches.id, card: one.id, page: 'card', from: 'Chat' });
+        assert.equal(find(root, (e) => e.attrs['data-act'] === 'back').textContent, '‹Chat');
+        /* Not taken by the page: one level up, said. */
+        taken = false;
+        find(root, (e) => e.attrs['data-act'] === 'back').on.click();
+        await settle();
+        assert.deepEqual(said.at(-1), { list: batches.id, card: null, page: 'list', from: null });
+        assert.equal(b.back(), false, 'at the top');
+        /* The page's place after a reload: there at once, said once. */
+        b.destroy();
+        const again = []; const root2 = new El('div');
+        const c = mount(root2, { call: async (op, args) => k.act(op, args, ME), place: { list: clients.id, card: alice.id }, onPlace: (p) => again.push(p) });
+        await settle();
+        assert.deepEqual(again, [{ list: clients.id, card: alice.id, page: 'card', from: null }]);
+        assert.match(root2.textContent, /Alice/);
+        assert.equal(c.back(), true);
+        await settle();
+        assert.deepEqual(again.at(-1), { list: clients.id, card: null, page: 'list', from: null });
+        c.destroy();
+    } finally { for (const n of names) globalThis[n] = was[n]; }
+});

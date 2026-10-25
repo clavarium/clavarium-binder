@@ -34,7 +34,22 @@ import { mount } from '/ui/binder-ui.js';
 const words = await (await fetch('/ui/texts/${lang}.json')).json();
 const people = await (await fetch('/api/people')).json();
 const call = async (op, args) => (await fetch('/api', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ op, args }) })).json();
-const b = mount(document.getElementById('binder'), { call, words, lang: '${lang}', people: () => people });
+/* Where it is, in the address (#list=...&card=...): a card is one step, Back closes it, a reload keeps it. */
+const at = (p) => '#' + new URLSearchParams({ list: p.list ?? '', ...(p.card ? { card: p.card } : {}) });
+const asked = () => { const q = new URLSearchParams(location.hash.slice(1)); return { list: q.get('list'), card: q.get('card') }; };
+let after = null;
+/* Arriving on a card: its binder under it, one Back away. */
+const first = asked();
+if (first.card) history.replaceState(null, '', at({ list: first.list }));
+const b = mount(document.getElementById('binder'), { call, words, lang: '${lang}', people: () => people, place: first,
+    onPlace: (p) => {
+        const deep = history.state?.deep === true;
+        if (p.page !== 'list' && !deep) history.pushState({ deep: true }, '', at(p));
+        else if (p.page === 'list' && deep) { after = at(p); history.back(); }
+        else history.replaceState(history.state, '', at(p));
+    },
+    onBack: () => { if (history.state?.deep !== true) return false; history.back(); return true; } });
+addEventListener('popstate', () => { if (after !== null) { history.replaceState(history.state, '', after); after = null; return; } void b.go(asked()); });
 new EventSource('/api/changes').onmessage = () => b.refresh();
 </script></html>`;
 

@@ -89,12 +89,21 @@ state not done. Each is given once per due time: the store keeps it
 changed gives it again when the new time comes. Call it every minute or so,
 and tell its `owners` as the application does.
 
-And the screen: `mount(element, { call, words, lang, people, picture, openAttached })`
+And the screen: `mount(element, { call, words, lang, people, picture, openAttached, place, onPlace, onBack })`
 from `clavarium-binder/ui`, with `ui/binder-ui.css` and `ui/texts/*.json`.
-It gives back `refresh()`, `destroy()`, and `open(id)`: one record shown
+It gives back `refresh()`, `destroy()`, and `open(id, { from })`: one record shown
 whole, in its list, from elsewhere on the page (a list beside a chat);
 it resolves `false`, saying nothing on the screen, for a record not in a
-list shown.
+list shown; `from` is what its way back names (where the person came from).
+
+Where it is belongs to the page (its Back, its address): `onPlace(place)` is
+called each time a person goes elsewhere in it, with
+`{ list, card, page: 'list' | 'card' | 'settings', from }`; `place: { list, card }`
+opens it there (a reload); `go(place)` shows a place without saying it (the
+page's Back); `back()` goes one level up (a card, a binder's settings: its
+list); `onBack(place)`, called when its "‹" is pressed, returns `true` when the
+page takes it (and then calls `go`). `binder serve` keeps it in its address
+(`#list=...&card=...`), a card one step of the browser's Back.
 
 What a card shows: what is set, nothing about what is empty. The fields set
 make one line under its title; its state is said unless the card is in the
