@@ -226,3 +226,9 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-shot-open img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .binder-shot figcaption { display: flex; align-items: center; gap: .3rem; min-width: 0; font-size: .82em; color: var(--binder-dim); }
 .binder-shot figcaption .binder-att-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+
+/* Drag a card between columns. */
+.binder-drag-clone { position: fixed; z-index: 1000; pointer-events: none; opacity: .92; box-shadow: 0 10px 30px rgb(0 0 0 / .3); transform: rotate(1.5deg); }
+.binder-card.binder-drag-src { opacity: .35; }
+.binder-col[data-over] { outline: 2px dashed var(--binder-action); outline-offset: -2px; background: color-mix(in srgb, var(--binder-action) 10%, var(--binder-panel)); }
+.binder-cols .binder-card { touch-action: pan-y; }

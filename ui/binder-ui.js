@@ -275,12 +275,71 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         return h('div', { class: 'binder-rows' }, records.map((r) => h('div', { class: 'binder-row', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } },
             tick(l, r), h('div', { class: 'binder-what' }, h('b', {}, r.title), factLine(l, r), sub(r), meta(l, r)), pill(l, r) ?? h('span'))));
     }
+    /* Drag a card from one column to another to change its state. Works with a finger (press and hold)
+       and with a mouse; a plain tap/click still opens the card. The server still guards a gate. */
+    function columnsDnd(colsEl, l) {
+        if (l.access !== 'write') return colsEl;
+        let d = null; let swallow = false;
+        const clear = () => {
+            if (!d) return;
+            clearTimeout(d.hold); d.clone?.remove();
+            d.card?.classList.remove('binder-drag-src');
+            for (const c of colsEl.querySelectorAll('.binder-col[data-over]')) c.removeAttribute('data-over');
+            try { colsEl.releasePointerCapture(d.id); } catch { /* gone */ }
+            d = null;
+        };
+        const start = (e) => {
+            const r = d.card.getBoundingClientRect();
+            d.offX = e.clientX - r.left; d.offY = e.clientY - r.top; d.moved = true;
+            try { colsEl.setPointerCapture(d.id); } catch { /* ok */ }
+            const clone = d.card.cloneNode(true); clone.className = 'binder-card binder-drag-clone'; clone.style.width = `${r.width}px`;
+            document.body.append(clone); d.clone = clone; d.card.classList.add('binder-drag-src');
+        };
+        const over = (e) => {
+            d.clone.style.left = `${e.clientX - d.offX}px`; d.clone.style.top = `${e.clientY - d.offY}px`;
+            d.clone.style.visibility = 'hidden';
+            const under = document.elementFromPoint?.(e.clientX, e.clientY);
+            d.clone.style.visibility = '';
+            const col = under instanceof Element ? under.closest('.binder-col') : null;
+            for (const c of colsEl.querySelectorAll('.binder-col[data-over]')) if (c !== col) c.removeAttribute('data-over');
+            if (col && col.dataset.state !== d.from) col.setAttribute('data-over', '');
+        };
+        colsEl.addEventListener('click', (e) => { if (swallow) { e.stopPropagation(); e.preventDefault(); swallow = false; } }, true);
+        colsEl.addEventListener('pointerdown', (e) => {
+            const card = e.target instanceof Element ? e.target.closest('.binder-card') : null;
+            if (!card || e.target.closest('button, a, input, select, label, .binder-pill, .binder-state')) return;
+            const col = card.closest('.binder-col');
+            d = { card, record: card.dataset.record, from: col?.dataset.state, x: e.clientX, y: e.clientY, id: e.pointerId, moved: false, ready: e.pointerType === 'mouse', clone: null, hold: null };
+            if (e.pointerType !== 'mouse') d.hold = setTimeout(() => { if (d) d.ready = true; }, 180);
+        });
+        colsEl.addEventListener('pointermove', (e) => {
+            if (!d || e.pointerId !== d.id) return;
+            const far = Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10;
+            if (!d.moved) {
+                if (!d.ready) { if (far) clear(); return; } // a finger that moved first is a scroll
+                if (!far && e.pointerType === 'mouse') return;
+                start(e);
+            }
+            e.preventDefault(); over(e);
+        });
+        const up = (e) => {
+            if (!d || e.pointerId !== d.id) return;
+            if (d.moved) {
+                const target = colsEl.querySelector('.binder-col[data-over]');
+                const state = target?.dataset.state; const record = d.record; swallow = true; clear();
+                if (state && record) void soft(ask('move', { id: record, state })).then(refresh);
+            } else clear();
+        };
+        colsEl.addEventListener('pointerup', up);
+        colsEl.addEventListener('pointercancel', () => { if (d?.moved) swallow = true; clear(); });
+        return colsEl;
+    }
     function asColumns(l, records) {
-        return h('div', { class: 'binder-cols' }, l.states.map((s) => {
+        return columnsDnd(h('div', { class: 'binder-cols' }, l.states.map((s) => {
             const here = records.filter((r) => r.state === s.id);
             return h('section', { class: 'binder-col', 'data-state': s.id }, h('h3', {}, sn(s), h('span', {}, String(here.length))),
                 here.map((r) => h('div', { class: 'binder-card', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } }, h('b', {}, r.title), factLine(l, r), sub(r), meta(l, r))));
-        }));
+        })), l);
     }
     /* A card without a picture: a band of a soft colour of its own (from its title), not a large letter alone. */
     const band = (t) => {
