@@ -78,8 +78,16 @@ An agent at the limit is refused, and told the number.
     const k = keeper(storeDir, { sides: () => [{ dir, who }] });
     setInterval(() => k.pump(), 1000);      // answer the agents
     k.act(op, args, person);                // a person's change: { ok, text, data }
-    k.due();                                // records whose due time came: tell their owners
+    k.due();                                // records whose due time came: tell their owners (below)
     k.store.onChange((line) => ...);        // every change, as the log says it
+
+What is due: `k.due()` gives `[{ record, list }]`, each record whose due time
+came -- a date alone at 09:00, a date and time at that time, by the keeper's
+clock (`now`) in its local time -- not archived, in a list not archived, in a
+state not done. Each is given once per due time: the store keeps it
+(`told`, in state.json), so a restart does not give it again; a due date
+changed gives it again when the new time comes. Call it every minute or so,
+and tell its `owners` as the application does.
 
 And the screen: `mount(element, { call, words, lang, people, picture, openAttached })`
 from `clavarium-binder/ui`, with `ui/binder-ui.css` and `ui/texts/*.json`.

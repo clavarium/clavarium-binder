@@ -152,6 +152,31 @@ test('due records are said once per due time, not when done', () => {
     assert.ok(done);
 });
 
+test('what is due: a date alone at 09:00 by the keeper\'s clock; not archived; kept across a restart', () => {
+    const dir = tmp();
+    let t = Date.parse('2026-11-04T08:59:00');
+    const s = openStore(dir, { now: () => t });
+    const l = s.createList({ template: 'simple' }, ME);
+    const r = s.add(l.id, { title: 'Renew', due: '2026-11-04', owners: [BOT.id] }, ME);
+    const gone = s.add(l.id, { title: 'Put away', due: '2026-11-04' }, ME);
+    s.archive(gone.id, true, ME);
+    assert.equal(s.due().length, 0, 'not before 09:00');
+    t = Date.parse('2026-11-04T09:00:00');
+    const told = s.due();
+    assert.deepEqual(told.map((x) => [x.record.id, x.list.title]), [[r.id, l.title]]);
+    const again = openStore(dir, { now: () => t });
+    assert.equal(again.due().length, 0, 'a restart does not say it again');
+    again.edit(r.id, { due: '2026-11-06 14:30' }, ME);
+    t = Date.parse('2026-11-06T14:29:00');
+    assert.equal(again.due().length, 0);
+    t = Date.parse('2026-11-06T14:30:00');
+    assert.deepEqual(again.due().map((x) => x.record.id), [r.id], 'moved later: said again');
+    const other = again.createList({ template: 'simple' }, ME);
+    again.add(other.id, { title: 'In a list put away', due: '2026-11-01' }, ME);
+    again.archiveList(other.id, true, ME);
+    assert.equal(again.due().length, 0);
+});
+
 test('the keeper answers an agent through its folder, as the folder says who it is', async () => {
     const store = tmp(); const side = tmp();
     const k = keeper(store, { sides: () => [{ dir: side, who: BOT }] });
