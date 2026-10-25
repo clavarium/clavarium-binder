@@ -402,12 +402,19 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 h('button', { type: 'button', class: 'binder-text-btn', onclick: () => set(null) }, w('cancel')));
         }
         const thumb = (a) => { const src = a.kind === 'file' && isPicture(a.ref) ? picture(a.ref) : null; return src ? h('img', { class: 'binder-ic binder-thumb', src, alt: '' }) : h('span', { class: 'binder-ic', 'aria-hidden': 'true' }, ICON[a.kind] ?? '•'); };
+        const del = (a) => (can ? h('button', { type: 'button', class: 'binder-x', 'aria-label': `${w('delete')} ${nameOfIt(a)}`, onclick: () => void soft(ask('detach', { id: r.id, what: a.id })).then(refresh) }, '×') : null);
+        /* Pictures attached are SEEN, not opened one by one: a gallery of previews. The rest stay a list. */
+        const shots = r.attached.filter((a) => a.kind === 'file' && isPicture(a.ref) && picture(a.ref));
+        const rest = r.attached.filter((a) => !shots.includes(a));
+        const gallery = shots.length ? h('div', { class: 'binder-shots' }, shots.map((a) => h('figure', { class: 'binder-shot' },
+            h('button', { type: 'button', class: 'binder-shot-open', title: a.ref, onclick: () => openIt(a) }, h('img', { src: picture(a.ref), alt: nameOfIt(a), loading: 'lazy' })),
+            h('figcaption', {}, star(a.id), h('span', { class: 'binder-att-name' }, nameOfIt(a)), del(a))))) : null;
         const attached = r.attached.length || attachForm ? h('section', { class: 'binder-sec' }, h('h3', {}, w('attached')),
-            r.attached.length ? h('ul', { class: 'binder-atts' }, r.attached.map((a) => h('li', { class: 'binder-att', 'data-kind': a.kind },
+            gallery,
+            rest.length ? h('ul', { class: 'binder-atts' }, rest.map((a) => h('li', { class: 'binder-att', 'data-kind': a.kind },
                 h('button', { type: 'button', class: 'binder-link', title: `${w(`kind-${a.kind}`)} · ${a.kind === 'record' ? `#${a.ref}` : a.ref}`, onclick: () => openIt(a) },
                     thumb(a), h('span', { class: 'binder-att-name' }, nameOfIt(a))),
-                a.kind === 'file' && isPicture(a.ref) ? star(a.id) : null,
-                can ? h('button', { type: 'button', class: 'binder-x', 'aria-label': `${w('delete')} ${nameOfIt(a)}`, onclick: () => void soft(ask('detach', { id: r.id, what: a.id })).then(refresh) }, '×') : null))) : null,
+                del(a)))) : null,
             attachForm ?? (can ? h('button', { type: 'button', class: 'binder-text-btn', 'data-act': 'show-attach', onclick: () => set('attach') }, `+ ${w('attach')}`) : null)) : null;
 
         /* What is empty, offered in one quiet line: "+ Ajouter : description · échéance · responsable · pièce jointe · champ". */
