@@ -78,8 +78,12 @@
 .binder-face { align-items: center; text-align: center; }
 .binder-face { padding: .6rem .6rem .8rem; }
 .binder-face img { width: 100%; aspect-ratio: 4 / 3; border-radius: 6px; object-fit: cover; background: var(--binder-panel); }
-.binder-initial { width: 5.5rem; height: 5.5rem; border-radius: 50%; margin: .4rem 0; }
-.binder-initial { display: grid; place-items: center; background: var(--binder-panel); font-size: 2rem; font-weight: 700; color: var(--binder-dim); }
+/* No picture: a band of the card's own soft colour, its initial small on it; then its title and a line of what it is. */
+.binder-band { align-self: stretch; height: 4.2rem; border-radius: 6px; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--binder-tint, var(--binder-dim)) 30%, var(--binder-panel)), color-mix(in srgb, var(--binder-tint, var(--binder-dim)) 12%, var(--binder-panel))); }
+.binder-initial { width: 2.4rem; height: 2.4rem; border-radius: 50%; display: grid; place-items: center; font-size: 1.1rem; font-weight: 700;
+  color: var(--binder-bg); background: color-mix(in srgb, var(--binder-tint, var(--binder-dim)) 85%, var(--binder-text)); }
+.binder-face .binder-sub { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: .85em; color: var(--binder-dim); }
 
 /* A record, whole: one calm column, read on a phone first. */
 .binder-page { display: flex; flex-direction: column; gap: var(--binder-gap); min-width: 0; }

@@ -177,6 +177,8 @@ export function rich(text, tick = null) {
 
 export function mount(root, { call, words = {}, lang = 'en', people = () => [], picture = () => null, openAttached = null } = {}) {
     const w = (k) => words[k] ?? k;
+    /* A state's name as shown: a template's own name in the page's words (a list made in another language keeps its data). */
+    const sn = (st) => (st ? words[`state:${st.name}`] ?? st.name : '');
     /* open: what of a record is being changed ('states', 'who', 'description', 'attach'); draft: what was typed, kept across a repaint. */
     const ui = { lists: [], at: null, data: null, view: null, record: null, mode: 'list', archived: false, mine: false, error: '', open: null, more: false, draft: {}, focus: false, settings: null };
     const box = h('div', { class: 'binder' });
@@ -239,7 +241,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         return h('button', { type: 'button', class: 'binder-tick', role: 'checkbox', 'aria-checked': String(on), title: g >= 0 ? w('approved') : w('done'), disabled: l.access !== 'write' || !l.grants && g >= 0,
             onclick: (e) => { e.stopPropagation(); void soft(g >= 0 ? ask('approve', { id: r.id, yes: !on }) : ask('move', { id: r.id, state: on ? l.states[0].id : doneOf(l).id })).then(refresh); } }, on ? '✓' : '');
     }
-    const pill = (l, r) => { if (!stateShown(l, r)) return null; const st = l.states.find((s) => s.id === r.state); return h('span', { class: 'binder-pill', 'data-state': r.state, 'data-done': st?.done ? '' : null, 'data-gate': st?.gate ? '' : null }, st?.name ?? r.state); };
+    const pill = (l, r) => { if (!stateShown(l, r)) return null; const st = l.states.find((s) => s.id === r.state); return h('span', { class: 'binder-pill', 'data-state': r.state, 'data-done': st?.done ? '' : null, 'data-gate': st?.gate ? '' : null }, st ? sn(st) : r.state); };
     const meta = (l, r) => h('span', { class: 'binder-meta' },
         r.owners.length ? r.owners.map(nameOf).join(', ') : null,
         r.due ? h('span', { class: late(l, r) ? 'binder-late' : null }, `⏰ ${when(r.due)}`) : null,
@@ -258,16 +260,25 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     function asColumns(l, records) {
         return h('div', { class: 'binder-cols' }, l.states.map((s) => {
             const here = records.filter((r) => r.state === s.id);
-            return h('section', { class: 'binder-col', 'data-state': s.id }, h('h3', {}, s.name, h('span', {}, String(here.length))),
+            return h('section', { class: 'binder-col', 'data-state': s.id }, h('h3', {}, sn(s), h('span', {}, String(here.length))),
                 here.map((r) => h('div', { class: 'binder-card', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } }, h('b', {}, r.title), factLine(l, r), sub(r), meta(l, r))));
         }));
     }
+    /* A card without a picture: a band of a soft colour of its own (from its title), not a large letter alone. */
+    const band = (t) => {
+        let x = 2166136261; for (const c of String(t)) x = Math.imul(x ^ c.codePointAt(0), 16777619) >>> 0;
+        const hue = [212, 262, 330, 18, 42, 152, 186, 292][x % 8];
+        const el = h('div', { class: 'binder-band', 'aria-hidden': 'true' }, h('span', { class: 'binder-initial' }, String(t).slice(0, 1).toUpperCase()));
+        el.style?.setProperty('--binder-tint', `hsl(${hue} 46% 52%)`); /* set through the style object: allowed where inline styles are not */
+        return el;
+    };
     function asCards(l, records) {
         return h('div', { class: 'binder-grid' }, records.map((r) => {
             const src = imageOf(l, r, picture);
             return h('div', { class: 'binder-card binder-face', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } },
-                src ? h('img', { src, alt: r.title, loading: 'lazy' }) : h('div', { class: 'binder-initial', 'aria-hidden': 'true' }, r.title.slice(0, 1).toUpperCase()),
-                h('b', {}, r.title), factLine(l, r, 'binder-facts binder-facts-small'), pill(l, r));
+                src ? h('img', { src, alt: r.title, loading: 'lazy' })
+                    : band(r.title),
+                h('b', {}, r.title), src ? null : sub(r), factLine(l, r, 'binder-facts binder-facts-small'), pill(l, r));
         }));
     }
 
@@ -316,10 +327,10 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
 
         /* The state: one pill; a person changes it from its menu. Past a gate is approving. */
         const pillOf = h('button', { type: 'button', class: 'binder-pill binder-state', 'data-state': r.state, 'data-done': st?.done ? '' : null, 'data-gate': st?.gate ? '' : null,
-            'aria-haspopup': 'menu', 'aria-expanded': String(ui.open === 'states'), 'aria-label': `${w('state')}: ${st?.name ?? r.state}`, disabled: !can,
-            onclick: () => set(ui.open === 'states' ? null : 'states') }, st?.name ?? r.state, can ? h('span', { class: 'binder-caret', 'aria-hidden': 'true' }, '▾') : null);
+            'aria-haspopup': 'menu', 'aria-expanded': String(ui.open === 'states'), 'aria-label': `${w('state')}: ${st ? sn(st) : r.state}`, disabled: !can,
+            onclick: () => set(ui.open === 'states' ? null : 'states') }, st ? sn(st) : r.state, can ? h('span', { class: 'binder-caret', 'aria-hidden': 'true' }, '▾') : null);
         const menu = ui.open === 'states' ? h('div', { class: 'binder-menu', role: 'menu' }, l.states.map((s) => h('button', { type: 'button', role: 'menuitemradio', 'aria-checked': String(s.id === r.state), 'data-state': s.id,
-            onclick: () => done(ask('move', { id: r.id, state: s.id })) }, h('span', { class: 'binder-check', 'aria-hidden': 'true' }, s.id === r.state ? '✓' : ''), s.name))) : null;
+            onclick: () => done(ask('move', { id: r.id, state: s.id })) }, h('span', { class: 'binder-check', 'aria-hidden': 'true' }, s.id === r.state ? '✓' : ''), sn(s)))) : null;
         const approve = g >= 0 && can && l.grants && !r.approved
             ? h('button', { type: 'button', class: 'binder-primary binder-small', 'data-act': 'approve', onclick: () => done(ask('approve', { id: r.id, yes: true })) }, `✓ ${w('approve')}`) : null;
 
@@ -414,7 +425,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             const src = f.type === 'photo' && v ? picture(v) : null;
             return h('label', { class: 'binder-field' }, h('span', {}, f.name), src ? h('img', { src, alt: f.name, class: 'binder-photo' }) : null, input, f.type === 'photo' && v ? star(`field:${f.id}`) : null);
         };
-        const stateName = (id) => l.states.find((s) => s.id === id)?.name ?? id;
+        const stateName = (id) => { const st = l.states.find((s) => s.id === id); return st ? sn(st) : id; };
         const sure = h('span', { class: 'binder-sure', hidden: true }, w('delete-sure'),
             h('button', { type: 'button', class: 'binder-danger binder-small', 'data-act': 'delete-yes', onclick: () => void soft(ask('delete', { id: r.id })).then(() => { ui.record = null; ui.mode = 'list'; return refresh(); }) }, w('delete')),
             h('button', { type: 'button', class: 'binder-text-btn', onclick: () => { sure.hidden = true; } }, w('cancel')));

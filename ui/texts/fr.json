@@ -80,5 +80,20 @@
   "op-detach": "Détaché",
   "op-archive": "Archivée",
   "op-restore": "Restaurée",
-  "op-delete": "Supprimée"
+  "op-delete": "Supprimée",
+  "state:Proposed": "Proposé",
+  "state:Approved": "Validé",
+  "state:Doing": "En cours",
+  "state:For you": "Pour toi",
+  "state:Done": "Fait",
+  "state:To do": "À faire",
+  "state:Lead": "Prospect",
+  "state:Active": "Actif",
+  "state:Paused": "En pause",
+  "state:Former": "Ancien",
+  "state:Open": "Ouvert",
+  "state:Closed": "Clos",
+  "state:Idea": "Idée",
+  "state:Planned": "Prévu",
+  "state:Shipped": "Livré"
 }
