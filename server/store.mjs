@@ -161,18 +161,36 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
                 && (said(r, q) || Object.values(r.fields).some((v) => String(v).toLowerCase().includes(q))); })
                 .slice(0, 50);
         },
-        /* Records with a due time come, and not said yet: [{ record, list }]. Each is said once per due time. */
+        /* Records whose moment came, and not said yet. Two kinds, each said once:
+         *   { kind: 'due-soon', when, days, record, card, list }  the lead reminder, remindBefore days ahead
+         *   { kind: 'due',      when,       record, card, list }  at the due time
+         * A changed due (or remindBefore) re-arms the one it changed: the key it is
+         * remembered by moves, so its moment is said afresh. */
         due() {
             const t = now();
             const out = [];
+            let dirty = false;
             for (const r of Object.values(s.records)) {
-                if (!r.due || r.archived || r.told === r.due) continue;
+                if (!r.due || r.archived) continue;
                 const at = dueAt(r.due);
                 const list = s.lists[r.list];
-                if (at === null || at > t || !list || list.archived || list.states.find((x) => x.id === r.state)?.done) continue;
-                r.told = r.due; out.push({ record: r, list });
+                if (at === null || !list || list.archived || list.states.find((x) => x.id === r.state)?.done) continue;
+                /* Lead: remindBefore days before the due time, and only while the due is still ahead. */
+                if (r.remindBefore) {
+                    const key = `${r.due}~${r.remindBefore}`;
+                    const lead = at - r.remindBefore * 86_400_000;
+                    if (r.toldBefore !== key && lead <= t && t < at) {
+                        r.toldBefore = key; dirty = true;
+                        out.push({ kind: 'due-soon', when: lead, days: r.remindBefore, record: r, card: r, list });
+                    }
+                }
+                /* At the due time. */
+                if (r.told !== r.due && at <= t) {
+                    r.told = r.due; dirty = true;
+                    out.push({ kind: 'due', when: at, record: r, card: r, list });
+                }
             }
-            if (out.length) save();
+            if (dirty) save();
             return out;
         },
 
@@ -277,7 +295,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
         },
 
         /* ---- records ---- */
-        add(given, { title, description, state, fields, owners, due, note } = {}, who) {
+        add(given, { title, description, state, fields, owners, due, remindBefore, note } = {}, who) {
             const w = whoOf(who);
             const list = listOf(given, w, 'write');
             const t = oneLine(title, TITLE_MAX); if (!t) no('a record needs a title');
@@ -292,6 +310,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             if (fields) setFields(list, r, fields);
             if (owners) r.owners = ownersOf(owners);
             if (due) r.due = dueOf(due);
+            if (remindBefore !== undefined && remindBefore !== null && remindBefore !== '') { const b = remindBeforeOf(remindBefore); if (b) r.remindBefore = b; }
             if (note) r.notes.push({ id: randomUUID(), at: stamp(), by: w, text: noteOf(note) });
             save(); log(w, 'add', { record: id, list: list.id, change: { title: t, ...(d ? { description: d } : {}), state: st.id } });
             return r;
@@ -301,7 +320,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
          * photo field set ("field:ID"; given by the field's id or name). Empty
          * clears it. Without one, a card is shown by its photo field set, else by
          * its only picture attached. */
-        edit(given, { title, description, fields, owners, due, cover } = {}, who) {
+        edit(given, { title, description, fields, owners, due, remindBefore, cover } = {}, who) {
             const w = whoOf(who);
             const { r, list } = recordOf(given, w, 'write');
             const change = {};
@@ -310,6 +329,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             if (fields !== undefined) change.fields = setFields(list, r, fields);
             if (owners !== undefined) r.owners = change.owners = ownersOf(owners);
             if (due !== undefined) { if (due === null || due === '') { delete r.due; change.due = null; } else r.due = change.due = dueOf(due); }
+            if (remindBefore !== undefined) { if (remindBefore === null || remindBefore === '' || remindBefore === 0) { delete r.remindBefore; change.remindBefore = null; } else r.remindBefore = change.remindBefore = remindBeforeOf(remindBefore); }
             if (cover !== undefined) { const c = coverOf(list, r, cover); if (c) r.cover = change.cover = c; else { delete r.cover; change.cover = null; } }
             r.changed = stamp();
             save(); log(w, 'edit', { record: r.id, list: list.id, change });
@@ -444,6 +464,12 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
         const d = oneLine(given, 20);
         if (!DUE.test(d) || dueAt(d) === null) no('a due date is 2026-11-04, or 2026-11-04 09:00');
         return d;
+    }
+    /* A lead time: a whole number of days before the due time (e.g. 1, 3, 7). */
+    function remindBeforeOf(given) {
+        const n = typeof given === 'number' ? given : Number(String(given).trim());
+        if (!Number.isInteger(n) || n < 1 || n > 3650) no('remind before: a whole number of days (e.g. 1, 3, 7)');
+        return n;
     }
     function descriptionOf(text) {
         if (text === undefined || text === null) return '';

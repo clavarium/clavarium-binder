@@ -156,6 +156,8 @@
 button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text-decoration-color: var(--binder-line); text-underline-offset: 3px; }
 .binder-dot { color: var(--binder-dim); }
 .binder-late { color: var(--binder-danger); }
+.binder-lead { color: var(--binder-dim); white-space: nowrap; }
+.binder-remind-row { align-items: center; gap: .5rem; }
 .binder-who-edit { display: flex; flex-direction: column; gap: .6rem; padding: .8rem; background: var(--binder-panel); border-radius: 12px; }
 .binder-sec { display: flex; flex-direction: column; gap: .5rem; min-width: 0; }
 .binder-sec h3, .binder-history h3 { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--binder-dim); font-weight: 600; }

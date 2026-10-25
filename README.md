@@ -7,7 +7,7 @@ a roadmap, anything followed over time. A list starts from a template (its
 states, its fields, the view it opens in) and everything is changed afterwards.
 A record has a title, a description, a state, its fields, short notes, as many things attached
 as wanted (messages of a chat, files, assets, branches, links, other records),
-owners, a due date, and its history.
+owners, a due date (with an optional lead reminder a few days before it), and its history.
 
     binder                         your lists
     binder show Batches            the records of a list, by state

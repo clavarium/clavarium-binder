@@ -81,13 +81,17 @@ An agent at the limit is refused, and told the number.
     k.due();                                // records whose due time came: tell their owners (below)
     k.store.onChange((line) => ...);        // every change, as the log says it
 
-What is due: `k.due()` gives `[{ record, list }]`, each record whose due time
-came -- a date alone at 09:00, a date and time at that time, by the keeper's
-clock (`now`) in its local time -- not archived, in a list not archived, in a
-state not done. Each is given once per due time: the store keeps it
-(`told`, in state.json), so a restart does not give it again; a due date
-changed gives it again when the new time comes. Call it every minute or so,
-and tell its `owners` as the application does.
+What is due: `k.due()` gives `[{ kind, when, record, card, list, days? }]`, each
+a moment whose time came -- a date alone at 09:00, a date and time at that time,
+by the keeper's clock (`now`) in its local time -- for a record not archived, in
+a list not archived, in a state not done. Two kinds, each given once:
+`{ kind: 'due' }` at the due time, and, where the record has a lead time
+(`remindBefore`, a whole number of days set with `binder edit ID --remind-before
+DAYS`), `{ kind: 'due-soon', days }` that many days before the due -- but only
+while the due is still ahead. The store keeps what it gave (`told` and
+`toldBefore`, in state.json), so a restart does not give it again; a due date or
+a lead changed gives the one it changed again when its new time comes. Call it
+every minute or so, and tell its `owners` as the application does.
 
 And the screen: `mount(element, { call, words, lang, people, picture, openAttached, place, onPlace, onBack })`
 from `clavarium-binder/ui`, with `ui/binder-ui.css` and `ui/texts/*.json`.

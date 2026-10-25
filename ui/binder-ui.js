@@ -29,7 +29,7 @@ export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'n
     'states', 'fields', 'access', 'read', 'write', 'none', 'save', 'empty', 'archived', 'show-archived', 'gate', 'done', 'add-state', 'add-field',
     'kind-message', 'kind-file', 'kind-asset', 'kind-branch', 'kind-link', 'kind-record', 'what', 'name', 'type', 'saved', 'edited', 'by', 'mine', 'all',
     'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'search', 'description', 'edit', 'more', 'approve', 'add', 'ok',
-    'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists',
+    'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'remind-before', 'no-remind', 'days',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'link', 'record'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', link: '🔗', record: '▣' };
@@ -244,6 +244,8 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         try { return `${d.toLocaleDateString(lang, o)}${due.length > 10 ? ` ${due.slice(11)}` : ''}`; } catch { return due; }
     };
     const late = (l, r) => { const t = Date.parse(r.due.length === 10 ? `${r.due}T23:59:59` : r.due.replace(' ', 'T')); return t < Date.now() && !l.states.find((s) => s.id === r.state)?.done; };
+    /* The lead reminder, where one is set: a quiet "−7 j" beside the due date. */
+    const lead = (r) => (r.due && r.remindBefore ? h('span', { class: 'binder-lead', title: w('remind-before') }, `🔔 −${r.remindBefore} ${w('days')}`) : null);
     const stamp = (iso) => { try { return new Date(iso).toLocaleString(lang, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch { return String(iso).slice(0, 16).replace('T', ' '); } };
     const gateOf = (l) => l.states.findIndex((s) => s.gate);
     const doneOf = (l) => l.states.find((s) => s.done) ?? l.states.at(-1);
@@ -258,6 +260,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     const meta = (l, r) => h('span', { class: 'binder-meta' },
         r.owners.length ? r.owners.map(nameOf).join(', ') : null,
         r.due ? h('span', { class: late(l, r) ? 'binder-late' : null }, `⏰ ${when(r.due)}`) : null,
+        lead(r),
         r.attached.length ? h('span', {}, `📎 ${r.attached.length}`) : null,
         r.notes.length ? h('span', {}, `✎ ${r.notes.length}`) : null);
     const sub = (r) => (r.description ? h('span', { class: 'binder-sub' }, firstLine(r.description)) : null);
@@ -374,19 +377,25 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
 
         /* Who and when, on one line: only what is set. */
         const names = r.owners.map(nameOf).join(', ');
-        const whoParts = [names ? h('span', {}, `👤 ${names}`) : null, r.due ? h('span', { class: late(l, r) ? 'binder-late' : null }, `⏰ ${when(r.due)}`) : null].filter(Boolean);
+        const whoParts = [names ? h('span', {}, `👤 ${names}`) : null, r.due ? h('span', { class: late(l, r) ? 'binder-late' : null }, `⏰ ${when(r.due)}`) : null, lead(r)].filter(Boolean);
         const whoLine = whoParts.length ? h(can ? 'button' : 'div', { type: can ? 'button' : null, class: 'binder-who', 'data-act': 'who', 'aria-expanded': can ? String(ui.open === 'who') : null, onclick: can ? () => set(ui.open === 'who' ? null : 'who') : null },
             whoParts.flatMap((x, i) => (i ? [h('span', { class: 'binder-dot', 'aria-hidden': 'true' }, '·'), x] : [x]))) : null;
         let whoEdit = null;
         if (ui.open === 'who') {
             const day = h('input', { type: 'date', value: r.due?.slice(0, 10) ?? '', 'aria-label': w('due') });
             const hour = h('input', { type: 'time', value: r.due?.slice(11) ?? '', 'aria-label': w('due') });
+            /* The lead reminder, offered only once a date is set: none, or a few days before. */
+            const remind = r.due ? h('select', { class: 'binder-remind', 'aria-label': w('remind-before'),
+                onchange: () => void soft(ask('edit', { id: r.id, remindBefore: remind.value ? Number(remind.value) : 0 })).then(refresh) },
+                h('option', { value: '' }, w('no-remind')),
+                [1, 3, 7].map((n) => h('option', { value: String(n), selected: r.remindBefore === n ? true : null }, `−${n} ${w('days')}`))) : null;
             whoEdit = h('div', { class: 'binder-who-edit' },
                 people().length ? h('div', { class: 'binder-owners', role: 'group', 'aria-label': w('owners') }, people().map((p) => h('button', { type: 'button', class: 'binder-chip', 'data-owner': p.id,
                     'aria-pressed': String(r.owners.includes(p.id)),
                     onclick: () => void soft(ask('edit', { id: r.id, owners: r.owners.includes(p.id) ? r.owners.filter((x) => x !== p.id) : [...r.owners, p.id] })).then(refresh) }, p.name))) : null,
                 h('div', { class: 'binder-form' }, day, hour,
-                    h('button', { type: 'button', class: 'binder-primary binder-small', 'data-act': 'save-due', onclick: () => done(ask('edit', { id: r.id, due: day.value ? (hour.value ? `${day.value} ${hour.value}` : day.value) : '' })) }, w('ok'))));
+                    h('button', { type: 'button', class: 'binder-primary binder-small', 'data-act': 'save-due', onclick: () => done(ask('edit', { id: r.id, due: day.value ? (hour.value ? `${day.value} ${hour.value}` : day.value) : '' })) }, w('ok'))),
+                remind ? h('div', { class: 'binder-form binder-remind-row' }, h('span', { class: 'binder-dim' }, w('remind-before')), remind) : null);
         }
 
         /* What is attached: an icon and a name; a tap opens it. */

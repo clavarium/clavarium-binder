@@ -15,8 +15,8 @@ export const HELP = `binder: the lists you were given, and their records.
                                        the records of a list, by state
   binder get ID                        one record: fields, notes, what is attached, its history
   binder search "text"                 in every list you can see
-  binder add LIST "title" [--description "text"] [--state S] [--due DATE] [--owner me] [--note "text"] [--field name=value]
-  binder edit ID [--title "t"] [--description "text"] [--due DATE|none] [--owner me|ID|none] [--field name=value]
+  binder add LIST "title" [--description "text"] [--state S] [--due DATE] [--remind-before DAYS] [--owner me] [--note "text"] [--field name=value]
+  binder edit ID [--title "t"] [--description "text"] [--due DATE|none] [--remind-before DAYS|none] [--owner me|ID|none] [--field name=value]
          [--cover PICTURE|none]          the picture the card is shown by: one attached (its ref), or a photo field
   binder move ID STATE                 past a gate, only what a person approved
   binder note ID "text"                a short note: a decision, a fact, a result
@@ -29,6 +29,7 @@ export const HELP = `binder: the lists you were given, and their records.
                                        keep a binder yourself, with its page (no application)
 
 ID: a record's number, 12 or #12. DATE: 2026-11-04, or "2026-11-04 09:00".
+--remind-before DAYS reminds the owners that many days before the due time (e.g. 1, 3, 7); none removes it.
 A description is for a person: short and clear, what it is and why, 1 to 3 lines
 (Markdown-ish: "- " lists, **bold**, links). --description "" removes it.
 You never approve: a person ticks what may go on. Talking with them stays in the chat.
@@ -52,14 +53,15 @@ export function read(argv) {
     if (!VERBS.includes(verb)) return { refused: `Unknown: ${verb}. Run "binder --help".` };
     const owners = flags.owner === undefined ? undefined : flags.owner === 'none' ? [] : [flags.owner];
     const due = flags.due === 'none' ? '' : flags.due;
+    const remind = flags['remind-before'] === undefined ? {} : { remindBefore: flags['remind-before'] === 'none' ? '' : flags['remind-before'] };
     const has = Object.keys(fields).length ? { fields } : {};
     switch (verb) {
         case 'lists': return ['lists', {}];
         case 'show': return rest[0] ? ['show', { list: rest[0], state: flags.state, mine: !!flags.mine, archived: !!flags.archived }] : { refused: 'say which list: binder show LIST' };
         case 'get': return rest[0] ? ['get', { id: rest[0] }] : { refused: 'say which record: binder get ID' };
         case 'search': return rest.length ? ['search', { text: rest.join(' ') }] : { refused: 'say what to look for' };
-        case 'add': return rest.length >= 2 ? ['add', { list: rest[0], title: rest.slice(1).join(' '), state: flags.state, due, owners, note: flags.note, description: flags.description, ...has }] : { refused: 'binder add LIST "title"' };
-        case 'edit': return rest[0] ? ['edit', { id: rest[0], title: flags.title, description: flags.description, due, owners, ...(flags.cover === undefined ? {} : { cover: flags.cover === 'none' ? '' : flags.cover }), ...has }] : { refused: 'say which record: binder edit ID' };
+        case 'add': return rest.length >= 2 ? ['add', { list: rest[0], title: rest.slice(1).join(' '), state: flags.state, due, owners, note: flags.note, description: flags.description, ...remind, ...has }] : { refused: 'binder add LIST "title"' };
+        case 'edit': return rest[0] ? ['edit', { id: rest[0], title: flags.title, description: flags.description, due, owners, ...remind, ...(flags.cover === undefined ? {} : { cover: flags.cover === 'none' ? '' : flags.cover }), ...has }] : { refused: 'say which record: binder edit ID' };
         case 'move': return rest.length === 2 ? ['move', { id: rest[0], state: rest[1] }] : { refused: 'binder move ID STATE' };
         case 'note': return rest.length >= 2 ? ['note', { id: rest[0], text: rest.slice(1).join(' ') }] : { refused: 'binder note ID "text"' };
         case 'attach': return rest.length >= 3 ? ['attach', { id: rest[0], kind: rest[1], ref: rest[2], title: rest.slice(3).join(' ') }] : { refused: 'binder attach ID KIND REF ["title"]' };

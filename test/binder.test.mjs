@@ -177,6 +177,62 @@ test('what is due: a date alone at 09:00 by the keeper\'s clock; not archived; k
     assert.equal(again.due().length, 0);
 });
 
+test('a lead reminder is said once, remindBefore days before the due, then the due time itself', () => {
+    let t = Date.parse('2026-10-27T10:00:00');
+    const s = openStore(tmp(), { now: () => t });
+    const l = s.createList({ template: 'simple' }, ME);
+    const r = s.add(l.id, { title: 'Voyage à Paris', due: '2026-11-04 09:00', remindBefore: 7, owners: [BOT.id] }, ME);
+    assert.equal(s.due().length, 0, 'before the lead moment: nothing');
+    t = Date.parse('2026-10-28T09:00:00');     // due − 7 days
+    assert.deepEqual(s.due().map((x) => [x.kind, x.days, x.record.id]), [['due-soon', 7, r.id]]);
+    assert.equal(s.due().length, 0, 'the lead is said only once');
+    t = Date.parse('2026-11-01T12:00:00');     // between lead and due
+    assert.equal(s.due().length, 0, 'no second lead, and not yet due');
+    t = Date.parse('2026-11-04T09:00:00');     // the due time
+    assert.deepEqual(s.due().map((x) => x.kind), ['due']);
+    assert.equal(s.due().length, 0, 'the due is said only once');
+});
+
+test('a lead re-arms when the due or the lead changes', () => {
+    let t = Date.parse('2026-10-28T09:00:00');
+    const s = openStore(tmp(), { now: () => t });
+    const l = s.createList({ template: 'simple' }, ME);
+    const r = s.add(l.id, { title: 'Lead', due: '2026-11-04 09:00', remindBefore: 7, owners: [BOT.id] }, ME);
+    const lead = () => s.due().filter((x) => x.kind === 'due-soon');
+    assert.deepEqual(lead().map((x) => x.days), [7], '28 Oct = 4 Nov − 7');
+    assert.equal(lead().length, 0, 'only once');
+    s.edit(r.id, { due: '2026-11-10 09:00' }, ME);   // lead moves to 3 Nov
+    t = Date.parse('2026-11-03T09:00:00');
+    assert.deepEqual(lead().map((x) => x.days), [7], 'moved due: the lead is said afresh');
+    s.edit(r.id, { remindBefore: 3 }, ME);            // lead moves to 7 Nov
+    t = Date.parse('2026-11-07T09:00:00');
+    assert.deepEqual(lead().map((x) => x.days), [3], 'changed lead: said afresh');
+    s.edit(r.id, { remindBefore: 0 }, ME);            // lead removed
+    t = Date.parse('2026-11-09T09:00:00');
+    assert.equal(lead().length, 0, 'removed: never a lead again');
+});
+
+test('no lead without remindBefore; a lead is a whole number of days', () => {
+    const t = Date.parse('2026-11-03T09:00:00');
+    const s = openStore(tmp(), { now: () => t });
+    const l = s.createList({ template: 'simple' }, ME);
+    const r = s.add(l.id, { title: 'Plain', due: '2026-11-04 09:00', owners: [BOT.id] }, ME);
+    assert.equal(s.due().length, 0, 'no due-soon without remindBefore, and not yet due');
+    assert.throws(() => s.edit(r.id, { remindBefore: 0.5 }, ME), /whole number/);
+    assert.throws(() => s.edit(r.id, { remindBefore: -2 }, ME), /whole number/);
+    s.edit(r.id, { remindBefore: 7 }, ME);
+    assert.equal(s.record(r.id, ME).record.remindBefore, 7);
+});
+
+test('past the due time the lead window is gone: only the due is said', () => {
+    const t = Date.parse('2026-11-05T09:00:00');     // already past the due
+    const s = openStore(tmp(), { now: () => t });
+    const l = s.createList({ template: 'simple' }, ME);
+    const r = s.add(l.id, { title: 'Late', due: '2026-11-04 09:00', remindBefore: 7, owners: [BOT.id] }, ME);
+    assert.deepEqual(s.due().map((x) => [x.kind, x.record.id]), [['due', r.id]]);
+    assert.equal(s.due().length, 0);
+});
+
 test('the keeper answers an agent through its folder, as the folder says who it is', async () => {
     const store = tmp(); const side = tmp();
     const k = keeper(store, { sides: () => [{ dir: side, who: BOT }] });
@@ -277,6 +333,9 @@ test('the command line is read as the help says', () => {
     assert.deepEqual(read(['add', 'Batches', 'Dark', 'mode', '--owner', 'me', '--field', 'phone=01 02']),
         ['add', { list: 'Batches', title: 'Dark mode', state: undefined, due: undefined, owners: ['me'], note: undefined, description: undefined, fields: { phone: '01 02' } }]);
     assert.deepEqual(read(['edit', '3', '--due', 'none', '--owner', 'none']), ['edit', { id: '3', title: undefined, description: undefined, due: '', owners: [] }]);
+    assert.equal(read(['edit', '3', '--remind-before', '7'])[1].remindBefore, '7');
+    assert.equal(read(['edit', '3', '--remind-before', 'none'])[1].remindBefore, '', 'none clears the lead');
+    assert.equal('remindBefore' in read(['edit', '3', '--due', 'none'])[1], false, 'no key without the flag');
     assert.equal(read(['add', 'Batches', 'Dark mode', '--description', 'The site in dark.\n- evenings'])[1].description, 'The site in dark.\n- evenings');
     assert.equal(read(['edit', '3', '--description', ''])[1].description, '', 'an empty description is said, to remove it');
     assert.ok(read(['edit', '3', '--description']).refused);

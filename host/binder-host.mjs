@@ -26,7 +26,7 @@ export const TOO_LATE_MS = 60_000;
 
 const day = (iso) => String(iso ?? '').slice(0, 10);
 const owners = (r) => (r.owners.length ? ` @${r.owners.join(' @')}` : '');
-const due = (r) => (r.due ? ` (due ${r.due})` : '');
+const due = (r) => (r.due ? ` (due ${r.due}${r.remindBefore ? `, remind ${r.remindBefore}d before` : ''})` : '');
 /* The first line of a description, as read: without its Markdown marks. */
 export const firstLine = (text) => String(text ?? '').split('\n').map((l) => l.replace(/^\s*[-*]\s+/, '').replace(/\*\*/g, '').trim()).find(Boolean) ?? '';
 
@@ -90,8 +90,8 @@ export function keeper(dir, { sides = () => [], now = () => Date.now() } = {}) {
                 case 'show': data = store.list(a.list, who, { state: a.state, mine: a.mine, archived: a.archived, text: a.text }); break;
                 case 'get': data = store.record(a.id, who); break;
                 case 'search': data = store.search(a.text, who); break;
-                case 'add': data = store.add(a.list, { title: a.title, description: a.description, state: a.state, fields: a.fields, owners: me(a.owners), due: a.due, note: a.note }, who); break;
-                case 'edit': data = store.edit(a.id, { title: a.title, description: a.description, fields: a.fields, owners: me(a.owners), due: a.due, cover: a.cover }, who); break;
+                case 'add': data = store.add(a.list, { title: a.title, description: a.description, state: a.state, fields: a.fields, owners: me(a.owners), due: a.due, remindBefore: a.remindBefore, note: a.note }, who); break;
+                case 'edit': data = store.edit(a.id, { title: a.title, description: a.description, fields: a.fields, owners: me(a.owners), due: a.due, remindBefore: a.remindBefore, cover: a.cover }, who); break;
                 case 'move': { const r = store.move(a.id, a.state, who); data = { ...r, stateName: store.record(r.id, who).list.states.find((x) => x.id === r.state)?.name }; break; }
                 case 'note': data = store.note(a.id, a.text, who); break;
                 case 'attach': data = store.attach(a.id, { kind: a.kind, ref: a.ref, title: a.title }, who); break;
