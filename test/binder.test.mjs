@@ -286,12 +286,12 @@ test('an agent makes a list from a template: given to it alone, to change; a few
 test('lists an agent may make: set by a person alone (0 to 50, 5 by default), kept, in the history, applied; 0 makes none', () => {
     const dir = tmp();
     const s = openStore(dir);
-    assert.deepEqual(s.settings(BOT), { agentLists: AGENT_LISTS_DEFAULT });
+    assert.deepEqual(s.settings(BOT), { agentLists: AGENT_LISTS_DEFAULT, agentColumns: true });
     assert.equal(AGENT_LISTS_DEFAULT, 5);
     assert.throws(() => s.editSettings({ agentLists: 9 }, BOT), /only a person changes the settings/);
     for (const bad of [-1, 51, 2.5, 'two', null, '']) assert.throws(() => s.editSettings({ agentLists: bad }, ME), /from 0 to 50/, String(bad));
     assert.equal(s.settings(ME).agentLists, 5, 'nothing refused was kept');
-    assert.deepEqual(s.editSettings({ agentLists: 2 }, ME), { agentLists: 2 });
+    assert.deepEqual(s.editSettings({ agentLists: 2 }, ME), { agentLists: 2, agentColumns: true });
     assert.equal(openStore(dir).settings(ME).agentLists, 2, 'kept in the store');
     const line = readFileSync(join(dir, 'log.jsonl'), 'utf8').trim().split('\n').map((x) => JSON.parse(x)).find((x) => x.op === 'edit-settings');
     assert.deepEqual([line.by.id, line.change], [ME.id, { agentLists: 2 }], 'in the history');
@@ -308,7 +308,7 @@ test('lists an agent may make: set by a person alone (0 to 50, 5 by default), ke
     s.createList({ template: 'simple' }, OTHER);
     /* Through the keeper: a person from the page, an agent from its folder. */
     const k = keeper(tmp());
-    assert.deepEqual(k.act('edit-settings', { agentLists: 1 }, ME), { ok: true, text: 'Lists an agent may make: 1.', data: { agentLists: 1 } });
+    assert.deepEqual(k.act('edit-settings', { agentLists: 1 }, ME), { ok: true, text: 'Lists an agent may make: 1.', data: { agentLists: 1, agentColumns: true } });
     assert.equal(k.act('edit-settings', { agentLists: 7 }, BOT).ok, false);
     assert.equal(k.act('settings', {}, BOT).data.agentLists, 1);
     k.act('create-list', { template: 'simple' }, BOT);
@@ -630,4 +630,44 @@ test('an agent archives and restores a list it made, but not one it did not; a p
     assert.equal(s.lists(ME).find((l) => l.id === mine.id)?.archived, true);
     /* mine is archived, so it does not count: the agent can still make active lists up to its cap */
     assert.doesNotThrow(() => { for (let i = 0; i < 4; i++) s.createList({ template: 'simple', title: `L${i}` }, BOT); });
+});
+
+test('an agent may add and rename columns, never remove one or touch the gate; a person can turn it off', () => {
+    const s = openStore(tmp());
+    const l = s.createList({ template: 'batches' }, ME);          // a list with a gate
+    s.grant(l.id, BOT.id, 'write', ME);
+    const cols = () => s.lists(BOT).find((x) => x.id === l.id).states;
+    const copy = () => cols().map((x) => ({ id: x.id, name: x.name, ...(x.gate ? { gate: true } : {}), ...(x.done ? { done: true } : {}) }));
+    const gateId = cols().find((x) => x.gate).id;
+
+    /* add a plain column at the front: allowed */
+    let next = copy(); next.unshift({ name: 'À valider' });
+    s.editList(l.id, { states: next }, BOT);
+    assert.ok(cols().some((x) => x.name === 'À valider'), 'the agent added a column');
+
+    /* rename a column: allowed */
+    next = copy(); next[0] = { ...next[0], name: 'Idées' };
+    s.editList(l.id, { states: next }, BOT);
+    assert.equal(cols()[0].name, 'Idées', 'the agent renamed a column');
+
+    /* remove a column: refused */
+    next = copy(); const i = next.findIndex((x) => !x.gate && !x.done); next.splice(i, 1);
+    assert.throws(() => s.editList(l.id, { states: next }, BOT), /does not remove/);
+
+    /* move the gate onto another column: refused */
+    next = copy().map((x) => ({ id: x.id, name: x.name, ...(x.done ? { done: true } : {}) })); next[0].gate = true;
+    assert.throws(() => s.editList(l.id, { states: next }, BOT), /gate/);
+
+    /* move a before-gate column to after the gate: refused */
+    next = copy(); next.push(next.shift());
+    assert.throws(() => s.editList(l.id, { states: next }, BOT), /across the gate/);
+
+    /* an agent still cannot change the title */
+    assert.throws(() => s.editList(l.id, { title: 'x' }, BOT), /only a person/);
+
+    /* a person turns the setting off: the agent can no longer change columns, a person still can */
+    s.editSettings({ agentColumns: false }, ME);
+    assert.throws(() => s.editList(l.id, { states: copy() }, BOT), /turned off/);
+    s.editList(l.id, { states: copy() }, ME);
+    assert.equal(gateId, cols().find((x) => x.gate).id, 'the gate stayed the same throughout');
 });

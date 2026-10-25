@@ -31,6 +31,10 @@ export const TITLE_MAX = 200;
 /* Lists an agent may have made and not archived: 5 until a person sets it (settings.agentLists), 0 to 50. */
 export const AGENT_LISTS_DEFAULT = 5;
 export const AGENT_LISTS_TOP = 50;
+/* Whether an agent may change a list's columns (its states): true until a person turns it off
+   (settings.agentColumns). Even on, an agent never touches the gate -- the person's approval
+   boundary -- nor removes a column: it only adds and renames, so a gate can never be worked around. */
+export const AGENT_COLUMNS_DEFAULT = true;
 /* The default, by its former name. */
 export const AGENT_LISTS_MAX = AGENT_LISTS_DEFAULT;
 export const NOTE_MAX = 2000;
@@ -56,6 +60,33 @@ const key = (text) => oneLine(text, 40).toLowerCase().normalize('NFD').replace(/
 
 export class Refused extends Error {}
 const no = (why) => { throw new Refused(why); };
+
+/* An agent changing a list's columns (its states) may ADD new ones and RENAME existing ones, but
+   never remove a column, never add/remove/move the gate, and never move an existing column across
+   the gate. So the gate -- the person's approval boundary -- can never be worked around. Throws
+   (Refused) when a proposed set of states would break any of that. `have` is the list's states now. */
+function agentColumnsOk(have, proposed) {
+    if (!Array.isArray(proposed) || proposed.length < 1) no('say the columns');
+    const idOf = (st) => oneLine(st?.id, 40) || key(oneLine(st?.name, 60)) || 'state';
+    const propIds = proposed.map(idOf);
+    const propSet = new Set(propIds);
+    for (const st of have) if (!propSet.has(st.id)) no('an agent adds or renames columns, it does not remove one -- ask a person');
+    proposed.forEach((st, i) => {
+        const existing = have.find((h) => h.id === propIds[i]);
+        if (existing) { if (!!st?.gate !== !!existing.gate || !!st?.done !== !!existing.done) no('an agent does not change a column\'s gate or its "done" -- ask a person'); }
+        else if (st?.gate || st?.done) no('an agent does not add a gate or a "done" column -- ask a person');
+    });
+    const gate = have.find((x) => x.gate);
+    if (gate) {
+        const gatePos = propIds.indexOf(gate.id);
+        const haveGatePos = have.findIndex((x) => x.id === gate.id);
+        for (const st of have) {
+            if (st.id === gate.id) continue;
+            const wasBefore = have.findIndex((x) => x.id === st.id) < haveGatePos;
+            if (wasBefore !== (propIds.indexOf(st.id) < gatePos)) no('an agent does not move a column across the gate -- ask a person');
+        }
+    }
+}
 
 /* A due date: "2026-11-04" or "2026-11-04 09:00", kept as written (the keeper's clock reads it). */
 const DUE = /^\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?$/;
@@ -125,7 +156,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
 
     /* Whether a record's title, description or notes hold `q` (lower case). */
     /* The store's settings, as they are now (a store from before them has the defaults). */
-    const settingsNow = () => ({ agentLists: Number.isInteger(s.settings?.agentLists) ? s.settings.agentLists : AGENT_LISTS_DEFAULT });
+    const settingsNow = () => ({ agentLists: Number.isInteger(s.settings?.agentLists) ? s.settings.agentLists : AGENT_LISTS_DEFAULT, agentColumns: typeof s.settings?.agentColumns === 'boolean' ? s.settings.agentColumns : AGENT_COLUMNS_DEFAULT });
 
     const said = (r, q) => r.title.toLowerCase().includes(q) || (r.description ?? '').toLowerCase().includes(q) || r.notes.some((n) => n.text.toLowerCase().includes(q));
 
@@ -214,8 +245,13 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
         },
         editList(given, { title, view, states, fields } = {}, who) {
             const w = whoOf(who);
-            if (!isPerson(w)) no('only a person changes a list');
+            if (!isPerson(w)) {
+                /* An agent may change only the columns (states), when a person allows it, and never the gate. */
+                if (title !== undefined || view !== undefined || fields !== undefined || states === undefined) no('only a person changes a list (an agent may change its columns)');
+                if (!settingsNow().agentColumns) no('a person turned off the columns an agent may change');
+            }
             const list = listOf(given, w, 'write');
+            if (!isPerson(w)) agentColumnsOk(list.states, states);
             const change = {};
             if (title !== undefined) { const t = oneLine(title, TITLE_MAX); if (!t) no('a list needs a title'); list.title = change.title = t; }
             if (view !== undefined) { if (!VIEWS.includes(view)) no(`a view is one of: ${VIEWS.join(', ')}`); list.view = change.view = view; }
@@ -280,7 +316,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
 
         /* ---- the store's settings: anyone reads them, a person changes them ---- */
         settings(who) { whoOf(who); return settingsNow(); },
-        editSettings({ agentLists } = {}, who) {
+        editSettings({ agentLists, agentColumns } = {}, who) {
             const w = whoOf(who);
             if (!isPerson(w)) no('only a person changes the settings');
             const change = {};
@@ -288,6 +324,10 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
                 const n = typeof agentLists === 'string' && agentLists.trim() !== '' ? Number(agentLists) : agentLists;
                 if (!Number.isInteger(n) || n < 0 || n > AGENT_LISTS_TOP) no(`lists an agent may make: a whole number from 0 to ${AGENT_LISTS_TOP}`);
                 change.agentLists = n;
+            }
+            if (agentColumns !== undefined) {
+                const b = agentColumns === true || agentColumns === 'true' ? true : agentColumns === false || agentColumns === 'false' ? false : no('columns an agent may change: true or false');
+                change.agentColumns = b;
             }
             if (!Object.keys(change).length) return settingsNow();
             s.settings = { ...s.settings, ...change };
