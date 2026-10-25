@@ -8,7 +8,7 @@ import { seed } from '../server/templates.mjs';
 import { keeper } from '../host/binder-host.mjs';
 import { ask, asked, TOOLS } from '../server/binder.mjs';
 import { say } from '../host/binder-host.mjs';
-import { blocks, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, KEYS, mount } from '../ui/binder-ui.js';
+import { blocks, toggled, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, KEYS, mount } from '../ui/binder-ui.js';
 import { isPicture as storeIsPicture } from '../server/store.mjs';
 import { DESCRIPTION_MAX, AGENT_LISTS_MAX, AGENT_LISTS_DEFAULT } from '../server/store.mjs';
 import { run, read } from '../bin/binder.mjs';
@@ -328,10 +328,18 @@ test('the keeper says a description: its first line in show, whole in get; the M
     assert.equal(asked('edit', { id: '1', description: '' })[1].description, '');
 });
 
+test('a description\'s list may hold boxes, ticked or not; a tick changes that one line of its text', () => {
+    const text = 'Plan\n- [ ] first\n- [x] **second**\n- plain';
+    assert.deepEqual(blocks(text)[1], { type: 'list', items: [[{ text: 'first' }], [{ bold: 'second' }], [{ text: 'plain' }]], checks: [{ on: false, line: 1 }, { on: true, line: 2 }, null] });
+    assert.equal(toggled(text, 1), 'Plan\n- [x] first\n- [x] **second**\n- plain');
+    assert.equal(toggled(text, 2), 'Plan\n- [ ] first\n- [ ] **second**\n- plain');
+    assert.equal(toggled(text, 3), text, 'a line with no box is left as it is');
+});
+
 test('a description is read as a few blocks: paragraphs, lists, bold, http links; nothing else', () => {
     assert.deepEqual(blocks('One\ntwo\n\n- a\n* **b**\n\nend'), [
         { type: 'p', lines: [[{ text: 'One' }], [{ text: 'two' }]] },
-        { type: 'list', items: [[{ text: 'a' }], [{ bold: 'b' }]] },
+        { type: 'list', items: [[{ text: 'a' }], [{ bold: 'b' }]], checks: [null, null] },
         { type: 'p', lines: [[{ text: 'end' }]] }]);
     assert.deepEqual(inline('see https://example.com/a. and [the doc](https://example.com/d)'), [
         { text: 'see ' }, { link: 'https://example.com/a', text: 'https://example.com/a' }, { text: '.' }, { text: ' and ' }, { link: 'https://example.com/d', text: 'the doc' }]);

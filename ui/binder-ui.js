@@ -92,9 +92,10 @@ export function stateShown(l, r) {
 
 /* A DESCRIPTION, READ: a few lines of Markdown-ish text, as blocks a screen can
  * draw element by element. Paragraphs (a blank line between), lists ("- " or
- * "* "), **bold**, links ([text](https://...) or a bare http(s) address).
+ * "* "), a list item that starts with [ ] or [x] (a box, ticked or not), **bold**,
+ * links ([text](https://...) or a bare http(s) address).
  * Nothing else is understood: whatever else it holds stays text.
- *   [{ type: 'p', lines: [parts] }, { type: 'list', items: [parts] }]
+ *   [{ type: 'p', lines: [parts] }, { type: 'list', items: [parts], checks: [null | { on, line }] }]
  *   parts: [{ text }, { bold }, { link, text }]
  */
 const INLINE = /\*\*([^*\n]+?)\*\*|\[([^\]\n]{1,300})\]\((https?:\/\/[^\s()<>]+)\)|(https?:\/\/[^\s<>"]+)/gi;
@@ -119,13 +120,15 @@ export function inline(text) {
 export function blocks(text) {
     const out = [];
     let para = null; let list = null;
-    for (const raw of String(text ?? '').replace(/\r/g, '').split('\n')) {
+    for (const [at, raw] of String(text ?? '').replace(/\r/g, '').split('\n').entries()) {
         const line = raw.trim();
         const item = /^[-*]\s+(.*)$/.exec(line);
         if (!line) { para = null; list = null; } else if (item) {
             para = null;
-            if (!list) out.push(list = { type: 'list', items: [] });
-            list.items.push(inline(item[1]));
+            if (!list) out.push(list = { type: 'list', items: [], checks: [] });
+            const box = /^\[([ xX])\]\s+(.*)$/.exec(item[1]);
+            list.items.push(inline(box ? box[2] : item[1]));
+            list.checks.push(box ? { on: box[1] !== ' ', line: at } : null);
         } else {
             list = null;
             if (!para) out.push(para = { type: 'p', lines: [] });
@@ -150,12 +153,25 @@ function h(tag, props = {}, ...kids) {
     return el;
 }
 
-/* A description drawn: text nodes, <strong>, and <a> whose address starts with http(s)://. */
-export function rich(text) {
+/* A description's box ticked or unticked: the same text, that one line changed. */
+export function toggled(text, line) {
+    const lines = String(text ?? '').replace(/\r/g, '').split('\n');
+    lines[line] = lines[line].replace(/^(\s*[-*]\s+)\[([ xX])\]/, (_, lead, mark) => `${lead}[${mark === ' ' ? 'x' : ' '}]`);
+    return lines.join('\n');
+}
+/* A description drawn: text nodes, <strong>, and <a> whose address starts with http(s)://.
+   `tick(text)`: given, its boxes can be ticked (the whole new text, to save); else they are only shown. */
+export function rich(text, tick = null) {
     const parts = (ps) => ps.map((x) => (x.bold !== undefined ? h('strong', {}, x.bold)
         : x.link && /^https?:\/\//i.test(x.link) ? h('a', { href: x.link, target: '_blank', rel: 'noopener noreferrer' }, x.text) : x.text ?? ''));
+    const item = (it, check) => {
+        if (!check) return h('li', {}, parts(it));
+        const box = h('input', { type: 'checkbox', class: 'binder-check-item', ...(check.on ? { checked: true } : {}), ...(tick ? {} : { disabled: true }),
+            onchange: () => tick?.(toggled(text, check.line)) });
+        return h('li', { class: 'binder-task', 'data-done': check.on ? 'true' : null }, h('label', {}, box, h('span', {}, parts(it))));
+    };
     return h('div', { class: 'binder-rich' }, blocks(text).map((b) => (b.type === 'list'
-        ? h('ul', {}, b.items.map((it) => h('li', {}, parts(it))))
+        ? h('ul', b.checks.some(Boolean) ? { class: 'binder-tasks' } : {}, b.items.map((it, i) => item(it, b.checks[i])))
         : h('p', {}, b.lines.flatMap((l, i) => (i ? [h('br'), ...parts(l)] : parts(l)))))));
 }
 
@@ -326,7 +342,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 h('button', { type: 'button', class: 'binder-primary binder-small', 'data-act': 'save-description', onclick: () => { delete ui.draft.description; done(ask('edit', { id: r.id, description: text.value })); } }, w('save')),
                 h('button', { type: 'button', class: 'binder-text-btn', onclick: () => { delete ui.draft.description; set(null); } }, w('cancel'))));
         } else {
-            about = r.description ? h('div', { class: 'binder-desc' }, rich(r.description),
+            about = r.description ? h('div', { class: 'binder-desc' }, rich(r.description, can ? (text) => done(ask('edit', { id: r.id, description: text })) : null),
                 can ? h('button', { type: 'button', class: 'binder-text-btn', 'data-act': 'edit-description', onclick: () => set('description') }, w('edit')) : null) : null;
         }
 

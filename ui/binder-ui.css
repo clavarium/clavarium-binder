@@ -178,3 +178,10 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
   .binder-seg button { padding: .4em .6em; }
   .binder-bar .binder-primary { padding: .45em .75em; }
 }
+
+/* A description's boxes: ticked here, kept in its text. */
+.binder-rich ul.binder-tasks { list-style: none; padding-left: 0; }
+.binder-task label { display: flex; gap: .55em; align-items: flex-start; cursor: pointer; }
+.binder-task input { width: 1.15em; height: 1.15em; margin: .2em 0 0; flex: none; accent-color: var(--binder-ok); }
+.binder-task input:disabled { cursor: default; }
+.binder-task[data-done="true"] > label > span { color: var(--binder-dim); text-decoration: line-through; }
