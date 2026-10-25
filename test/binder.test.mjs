@@ -308,7 +308,7 @@ test('lists an agent may make: set by a person alone (0 to 50, 5 by default), ke
     s.createList({ template: 'simple' }, OTHER);
     /* Through the keeper: a person from the page, an agent from its folder. */
     const k = keeper(tmp());
-    assert.deepEqual(k.act('edit-settings', { agentLists: 1 }, ME), { ok: true, text: 'Lists an agent may make: 1.', data: { agentLists: 1, agentColumns: true } });
+    assert.deepEqual(k.act('edit-settings', { agentLists: 1 }, ME), { ok: true, text: 'Lists an agent may make: 1. Columns an agent may change: yes.', data: { agentLists: 1, agentColumns: true } });
     assert.equal(k.act('edit-settings', { agentLists: 7 }, BOT).ok, false);
     assert.equal(k.act('settings', {}, BOT).data.agentLists, 1);
     k.act('create-list', { template: 'simple' }, BOT);
@@ -670,4 +670,32 @@ test('an agent may add and rename columns, never remove one or touch the gate; a
     assert.throws(() => s.editList(l.id, { states: copy() }, BOT), /turned off/);
     s.editList(l.id, { states: copy() }, ME);
     assert.equal(gateId, cols().find((x) => x.gate).id, 'the gate stayed the same throughout');
+});
+
+test('the columns op: an agent adds and renames columns, keeping the gate; a person can turn it off', () => {
+    const k = keeper(tmp());
+    const l = k.store.createList({ template: 'batches' }, ME);   // a list with a gate
+    k.store.grant(l.id, BOT.id, 'write', ME);
+    const cols = () => k.store.lists(BOT).find((x) => x.id === l.id).states;
+    const gateId = cols().find((x) => x.gate).id;
+
+    let r = k.act('columns', { list: l.id, add: 'À valider' }, BOT);
+    assert.equal(r.ok, true, r.text);
+    assert.ok(cols().some((x) => x.name === 'À valider'), 'the agent added a column');
+
+    r = k.act('columns', { list: l.id, add: 'Revue', after: gateId }, BOT);
+    assert.equal(r.ok, true, r.text);
+    const ids = cols().map((x) => x.id);
+    assert.equal(ids.indexOf('revue'), ids.indexOf(gateId) + 1, 'placed right after the gate');
+
+    r = k.act('columns', { list: l.id, rename: { from: 'À valider', to: 'À relire' } }, BOT);
+    assert.equal(r.ok, true, r.text);
+    assert.ok(cols().some((x) => x.name === 'À relire'), 'the agent renamed a column');
+
+    assert.equal(cols().find((x) => x.gate).id, gateId, 'the gate stayed the gate');
+
+    k.store.editSettings({ agentColumns: false }, ME);
+    r = k.act('columns', { list: l.id, add: 'Nope' }, BOT);
+    assert.equal(r.ok, false);
+    assert.match(r.text, /turned off/);
 });

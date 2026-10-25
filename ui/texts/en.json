@@ -76,6 +76,7 @@
   "tools": "More",
   "cover": "Cover",
   "agent-lists": "Lists an agent may make",
+  "agent-columns": "An agent may change the columns",
   "op-add": "Created",
   "op-edit": "Edited",
   "op-move": "Moved",

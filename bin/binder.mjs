@@ -36,7 +36,7 @@ You never approve: a person ticks what may go on. Talking with them stays in the
 The folder used is --dir FOLDER, else $BINDER_DIR, else the nearest ${FOLDER} folder from here up.
 binder ${VERSION}`;
 
-const VERBS = ['lists', 'show', 'get', 'search', 'add', 'edit', 'move', 'note', 'attach', 'detach', 'archive', 'restore', 'new', 'archive-list', 'restore-list'];
+const VERBS = ['lists', 'show', 'get', 'search', 'add', 'edit', 'move', 'note', 'attach', 'detach', 'archive', 'restore', 'new', 'archive-list', 'restore-list', 'columns'];
 
 /* A command line, read: [op, args] or a refusal. */
 export function read(argv) {
@@ -68,7 +68,13 @@ export function read(argv) {
         case 'detach': return rest.length === 2 ? ['detach', { id: rest[0], what: rest[1] }] : { refused: 'binder detach ID WHAT' };
         case 'new': return rest[0] ? ['create-list', { template: rest[0], title: rest.slice(1).join(' ') || undefined }] : { refused: 'binder new TEMPLATE ["title"]' };
         case 'archive-list': case 'restore-list': return rest[0] ? ['archive-list', { list: rest[0], archived: verb === 'archive-list' }] : { refused: `binder ${verb} LIST` };
-        case 'archive': case 'restore': return rest[0] ? ['archive', { id: rest[0], restore: verb === 'restore' }] : { refused: `binder ${verb} ID` };
+        case 'columns': {
+            const [list, action, ...more] = rest;
+            if (!list || !action) return { refused: 'binder columns LIST add "Name" [--after STATE|--before STATE] | binder columns LIST rename "Old" "New"' };
+            if (action === 'add') return more.length ? ['columns', { list, add: more.join(' '), ...(flags.after ? { after: flags.after } : {}), ...(flags.before ? { before: flags.before } : {}) }] : { refused: 'binder columns LIST add "Name"' };
+            if (action === 'rename') return more.length >= 2 ? ['columns', { list, rename: { from: more[0], to: more.slice(1).join(' ') } }] : { refused: 'binder columns LIST rename "Old" "New"' };
+            return { refused: 'binder columns LIST add "Name" | rename "Old" "New"' };
+        }
         default: return { refused: 'not understood' };
     }
 }

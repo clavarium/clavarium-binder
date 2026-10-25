@@ -71,7 +71,8 @@ export function say(op, data, list) {
         case 'attach': return 'Attached.';
         case 'detach': return 'Taken off.';
         case 'archive': return data.archived ? `Archived #${data.id}.` : `Restored #${data.id}.`;
-        case 'settings': case 'edit-settings': return `Lists an agent may make: ${data.agentLists}.`;
+        case 'settings': case 'edit-settings': return `Lists an agent may make: ${data.agentLists}. Columns an agent may change: ${data.agentColumns ? 'yes' : 'no'}.`;
+        case 'edit-list': case 'columns': return `The columns are set: ${(data.states ?? []).map((x) => x.name).join(', ')}.`;
         case 'create-list': return `Made the list ${data.title} [${data.id}], yours to change: binder add ${data.id} "title".`;
         case 'archive-list': return data.archived ? `Archived the list ${data.title} [${data.id}]. A person can restore or delete it.` : `Restored the list ${data.title} [${data.id}].`;
         default: return 'Done.';
@@ -104,11 +105,29 @@ export function keeper(dir, { sides = () => [], now = () => Date.now() } = {}) {
                 case 'edit-note': data = store.editNote(a.id, a.note, a.text, who); break;
                 case 'create-list': data = store.createList({ template: a.template, title: a.title, lang: a.lang }, who); break;
                 case 'edit-list': data = store.editList(a.list, { title: a.title, view: a.view, states: a.states, fields: a.fields }, who); break;
+                case 'columns': {
+                    /* Add or rename a column, keeping every other column (its id, its gate, its "done") as it is,
+                       then edit the list with the whole set -- so the gate is never worked around. */
+                    const match = (ref) => (x) => x.id === ref || x.name.toLowerCase() === String(ref ?? '').toLowerCase();
+                    const l = store.lists(who).find(match(a.list));
+                    if (!l) throw new Refused(`no list ${oneLine(a.list, 100) || '(none given)'}`);
+                    const states = l.states.map((x) => ({ id: x.id, name: x.name, ...(x.gate ? { gate: true } : {}), ...(x.done ? { done: true } : {}) }));
+                    if (a.rename) { const c = states.find(match(a.rename.from)); if (!c) throw new Refused(`no column "${a.rename.from}"`); c.name = oneLine(a.rename.to, 60); }
+                    if (a.add) {
+                        const name = oneLine(a.add, 60); if (!name) throw new Refused('a column needs a name');
+                        let at = states.length;
+                        if (a.after !== undefined) { const i = states.findIndex(match(a.after)); if (i >= 0) at = i + 1; }
+                        else if (a.before !== undefined) { const i = states.findIndex(match(a.before)); if (i >= 0) at = i; }
+                        states.splice(at, 0, { name });
+                    }
+                    data = store.editList(a.list, { states }, who);
+                    break;
+                }
                 case 'grant': data = store.grant(a.list, a.to, a.access ?? null, who); break;
                 case 'archive-list': data = store.archiveList(a.list, a.archived !== false, who); break;
                 case 'delete-list': data = store.deleteList(a.list, who); break;
                 case 'settings': data = store.settings(who); break;
-                case 'edit-settings': data = store.editSettings({ agentLists: a.agentLists }, who); break;
+                case 'edit-settings': data = store.editSettings({ agentLists: a.agentLists, agentColumns: a.agentColumns }, who); break;
                 case 'templates': data = Object.fromEntries(Object.entries(TEMPLATES).map(([k, t]) => [k, t.name])); break;
                 default: return { ok: false, text: `there is no ${oneLine(op, 40)}` };
             }

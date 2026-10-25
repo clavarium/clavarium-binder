@@ -29,7 +29,7 @@ export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'n
     'states', 'fields', 'access', 'read', 'write', 'none', 'save', 'empty', 'archived', 'show-archived', 'gate', 'done', 'add-state', 'add-field',
     'kind-message', 'kind-file', 'kind-asset', 'kind-branch', 'kind-link', 'kind-record', 'what', 'name', 'type', 'saved', 'edited', 'by', 'mine', 'all',
     'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'none-archived', 'none-mine', 'search', 'description', 'edit', 'more', 'approve', 'add', 'ok',
-    'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'remind-before', 'no-remind', 'days',
+    'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'agent-columns', 'remind-before', 'no-remind', 'days',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'link', 'record'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', link: '🔗', record: '▣' };
@@ -581,6 +581,11 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             n.addEventListener('change', () => void soft(ask('edit-settings', { agentLists: n.value })).then((got) => { if (got) ui.settings = got; paint(); }));
             return n;
         }
+        function agentColumns() {
+            const c = h('input', { type: 'checkbox', ...(ui.settings.agentColumns ? { checked: true } : {}), 'data-setting': 'agentColumns' });
+            c.addEventListener('change', () => void soft(ask('edit-settings', { agentColumns: c.checked })).then((got) => { if (got) ui.settings = got; paint(); }));
+            return h('label', { class: 'binder-toggle' }, c, h('span', {}, w('agent-columns')));
+        }
         return h('div', { class: 'binder-page binder-settings' },
             h('div', { class: 'binder-crumb' }, backButton(l.title)),
             h('section', { class: 'binder-box' }, h('h3', {}, w('title')), title),
@@ -588,6 +593,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             h('section', { class: 'binder-box' }, h('h3', {}, w('fields')), fieldRows),
             grants.length ? h('section', { class: 'binder-box' }, h('h3', {}, w('access')), grants) : null,
             ui.settings ? h('section', { class: 'binder-box' }, h('h3', {}, w('agent-lists')), agentLists()) : null,
+            ui.settings ? h('section', { class: 'binder-box' }, h('h3', {}, w('agent-columns')), agentColumns()) : null,
             h('div', { class: 'binder-actions' },
                 h('button', { type: 'button', class: 'binder-ghost', onclick: () => void soft(ask('archive-list', { list: l.id })).then(() => { ui.mode = 'list'; ui.at = null; return refresh(); }) }, w('archive-list')),
                 h('button', { type: 'button', class: 'binder-ghost', onclick: () => { sure.hidden = false; } }, w('delete-list')), sure,
