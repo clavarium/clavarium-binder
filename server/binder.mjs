@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline';
 
-export const VERSION = '0.1.3-next.1';
+export const VERSION = '0.1.3-next.2';
 export const FOLDER = '.binder';
 /* How long an ask waits for its answer. The keeper answers within a second or two. */
 export const WAIT_MS = 20_000;
