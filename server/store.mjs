@@ -49,7 +49,7 @@ export const ATTACHED_MAX = 200;
 export const STATES_MAX = 12;
 export const FIELDS_MAX = 20;
 export const OWNERS_MAX = 10;
-export const ATTACH_KINDS = ['message', 'file', 'asset', 'branch', 'link', 'record'];
+export const ATTACH_KINDS = ['message', 'file', 'asset', 'branch', 'commit', 'link', 'record'];
 /* A file attached that is a picture, by its name (the screen has the same rule). */
 export const isPicture = (ref) => /\.(jpe?g|png|webp|gif)$/i.test(String(ref ?? '').split(/[?#]/)[0]);
 

@@ -76,11 +76,13 @@ test('fields, owners, due dates, notes and attachments are checked', () => {
     const other = s.add(l.id, { title: 'Florist' }, ME);
     s.attach(r.id, { kind: 'record', ref: `#${other.id}` }, ME);
     s.attach(r.id, { kind: 'message', ref: 'abc-123', title: 'They want online orders' }, ME);
+    s.attach(r.id, { kind: 'commit', ref: 'clavarium:abc1234', title: 'The fix' }, ME);
+    assert.equal(s.record(r.id, ME).record.attached.find((a) => a.kind === 'commit').ref, 'clavarium:abc1234', 'a commit is attached by repository:sha');
     assert.throws(() => s.attach(r.id, { kind: 'message', ref: 'abc-123' }, ME), /already/);
     assert.throws(() => s.attach(r.id, { kind: 'record', ref: r.id }, ME), /itself/);
     assert.throws(() => s.attach(r.id, { kind: 'link', ref: 'ftp://x' }, ME), /http/);
     assert.throws(() => s.attach(r.id, { kind: 'pigeon', ref: 'x' }, ME), /attach one of/);
-    assert.equal(s.record(r.id, ME).record.attached.length, 2);
+    assert.equal(s.record(r.id, ME).record.attached.length, 3);
 });
 
 test('a note is changed only by whoever wrote it, and the history says so', () => {

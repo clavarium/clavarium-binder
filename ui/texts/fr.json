@@ -47,6 +47,7 @@
   "kind-file": "Fichier",
   "kind-asset": "Asset",
   "kind-branch": "Branche",
+  "kind-commit": "Commit",
   "kind-link": "Lien",
   "kind-record": "Fiche",
   "what": "Quoi",

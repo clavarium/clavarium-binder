@@ -47,6 +47,7 @@
   "kind-file": "File",
   "kind-asset": "Asset",
   "kind-branch": "Branch",
+  "kind-commit": "Commit",
   "kind-link": "Link",
   "kind-record": "Card",
   "what": "What",

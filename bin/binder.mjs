@@ -20,7 +20,7 @@ export const HELP = `binder: the lists you were given, and their records.
          [--cover PICTURE|none]          the picture the card is shown by: one attached (its ref), or a photo field
   binder move ID STATE                 past a gate, only what a person approved
   binder note ID "text"                a short note: a decision, a fact, a result
-  binder attach ID KIND REF ["title"]  KIND: message, file, asset, branch, link, record
+  binder attach ID KIND REF ["title"]  KIND: message, file, asset, branch, commit, link, record
   binder detach ID WHAT
   binder archive ID | binder restore ID
   binder new TEMPLATE ["title"]        a list of your own, when none you were given fits

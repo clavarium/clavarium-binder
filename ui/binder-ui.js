@@ -31,8 +31,8 @@ export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'n
     'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'none-archived', 'none-mine', 'search', 'description', 'edit', 'more', 'approve', 'add', 'ok',
     'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'agent-columns', 'remind-before', 'no-remind', 'days',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete']);
-const KINDS = ['message', 'file', 'asset', 'branch', 'link', 'record'];
-const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', link: '🔗', record: '▣' };
+const KINDS = ['message', 'file', 'asset', 'branch', 'commit', 'link', 'record'];
+const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', commit: '◉', link: '🔗', record: '▣' };
 const TYPES = ['text', 'number', 'date', 'link', 'photo'];
 const DESCRIPTION_MAX = 4000;
 
