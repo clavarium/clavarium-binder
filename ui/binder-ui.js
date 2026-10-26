@@ -264,6 +264,8 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         r.attached.length ? h('span', {}, `📎 ${r.attached.length}`) : null,
         r.notes.length ? h('span', {}, `✎ ${r.notes.length}`) : null);
     const sub = (r) => (r.description ? h('span', { class: 'binder-sub' }, firstLine(r.description)) : null);
+    /* Its number, so a person can name it: small and faint, before the title. */
+    const num = (r) => h('span', { class: 'binder-num' }, `#${r.id}`);
     /* The fields set, on one line: "Naissance 12 avril 1931 · Saint-Aubin". */
     const factLine = (l, r, cls = 'binder-facts') => { const f = facts(l, r, lang); return f.length ? h('span', { class: cls }, f.map((x) => x.text).join(' · ')) : null; };
     const leave = () => { ui.open = null; ui.more = false; ui.draft = {}; };
@@ -273,7 +275,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
 
     function asList(l, records) {
         return h('div', { class: 'binder-rows' }, records.map((r) => h('div', { class: 'binder-row', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } },
-            tick(l, r), h('div', { class: 'binder-what' }, h('b', {}, r.title), factLine(l, r), sub(r), meta(l, r)), pill(l, r) ?? h('span'))));
+            tick(l, r), h('div', { class: 'binder-what' }, h('b', {}, num(r), ' ', r.title), factLine(l, r), sub(r), meta(l, r)), pill(l, r) ?? h('span'))));
     }
     /* Drag a card from one column to another to change its state. Works with a finger (press and hold)
        and with a mouse; a plain tap/click still opens the card. The server still guards a gate. */
@@ -338,7 +340,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         return columnsDnd(h('div', { class: 'binder-cols' }, l.states.map((s) => {
             const here = records.filter((r) => r.state === s.id);
             return h('section', { class: 'binder-col', 'data-state': s.id }, h('h3', {}, sn(s), h('span', {}, String(here.length))),
-                here.map((r) => h('div', { class: 'binder-card', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } }, h('b', {}, r.title), factLine(l, r), sub(r), meta(l, r))));
+                here.map((r) => h('div', { class: 'binder-card', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } }, h('b', {}, num(r), ' ', r.title), factLine(l, r), sub(r), meta(l, r))));
         })), l);
     }
     /* A card without a picture: a band of a soft colour of its own (from its title), not a large letter alone. */
@@ -355,7 +357,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             return h('div', { class: 'binder-card binder-face', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } },
                 src ? h('img', { src, alt: r.title, loading: 'lazy' })
                     : band(r.title),
-                h('b', {}, r.title), src ? null : sub(r), factLine(l, r, 'binder-facts binder-facts-small'), pill(l, r));
+                h('b', {}, num(r), ' ', r.title), src ? null : sub(r), factLine(l, r, 'binder-facts binder-facts-small'), pill(l, r));
         }));
     }
 

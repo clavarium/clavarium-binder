@@ -617,6 +617,35 @@ test('the screen says where it is (a card, a binder, its settings) when a person
     } finally { for (const n of names) globalThis[n] = was[n]; }
 });
 
+test('a record shows its number before the title, faint, so a person can name it (binder-num)', async () => {
+    class Node { constructor() { this.childNodes = []; } append(...k) { for (const c of k) { c.parent = this; this.childNodes.push(c); } }
+        replaceChildren(...k) { this.childNodes = []; this.append(...k); } remove() { if (this.parent) this.parent.childNodes = this.parent.childNodes.filter((c) => c !== this); }
+        get textContent() { return this.childNodes.map((c) => c.textContent).join(''); } set textContent(t) { this.childNodes = [new Text(String(t))]; } }
+    class Text extends Node { constructor(t) { super(); this.data = t; } get textContent() { return this.data; } }
+    class El extends Node { constructor(tag) { super(); this.tag = tag; this.attrs = {}; this.on = {}; } setAttribute(k, v) { this.attrs[k] = String(v); } get className() { return this.attrs.class ?? ''; } set className(v) { this.attrs.class = String(v); } addEventListener(k, f) { this.on[k] = f; } focus() {} setSelectionRange() {} querySelector() { return null; } }
+    const find = (n, f) => { if (n instanceof El && f(n)) return n; for (const c of n.childNodes ?? []) { const x = find(c, f); if (x) return x; } return null; };
+    const names = ['document', 'Node', 'window', 'requestAnimationFrame'];
+    const was = Object.fromEntries(names.map((n) => [n, globalThis[n]]));
+    Object.assign(globalThis, { Node, window: {}, requestAnimationFrame: () => 0,
+        document: { createElement: (t) => new El(t), createTextNode: (t) => new Text(t), addEventListener() {}, removeEventListener() {} } });
+    const settle = () => new Promise((r) => setTimeout(r, 20));
+    try {
+        const k = keeper(tmp());
+        const list = k.act('create-list', { template: 'batches' }, ME).data;
+        const one = k.act('add', { list: list.id, title: 'Fix diff line numbers' }, ME).data;
+        const root = new El('div');
+        const b = mount(root, { call: async (op, args) => k.act(op, args, ME) });
+        await settle();
+        const numbered = find(root, (e) => (e.attrs.class ?? '').split(' ').includes('binder-num'));
+        assert.ok(numbered, 'a record shows its number');
+        assert.equal(numbered.textContent, `#${one.id}`, 'the number, with a #');
+        /* It sits in the same title line, before the title. */
+        const bold = find(root, (e) => e.tag === 'b' && e.textContent.includes('Fix diff line numbers'));
+        assert.ok(bold && bold.textContent.startsWith(`#${one.id}`), 'the number comes before the title');
+        b.destroy();
+    } finally { for (const n of names) globalThis[n] = was[n]; }
+});
+
 test('an agent archives and restores a list it made, but not one it did not; a person archives any; archived lists do not count', () => {
     const s = openStore(tmp());
     const mine = s.createList({ template: 'simple', title: 'Mine' }, BOT);

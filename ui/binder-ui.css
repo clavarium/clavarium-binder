@@ -89,6 +89,8 @@
 .binder-col { background: var(--binder-panel); border: 1px solid var(--binder-line); border-radius: var(--binder-radius); padding: .6rem; display: flex; flex-direction: column; gap: .5rem; }
 .binder-col h3 { font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--binder-dim); display: flex; justify-content: space-between; }
 .binder-card { background: var(--binder-bg); border: 1px solid var(--binder-line); border-radius: 9px; padding: .6rem .7rem; display: flex; flex-direction: column; gap: .3rem; cursor: pointer; }
+/* A record's number, so a person can name it: faint, a touch smaller, before the title. */
+.binder-num { color: var(--binder-dim); font-weight: 600; font-size: .82em; }
 
 /* As cards, with a face. */
 .binder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: .8rem; }
