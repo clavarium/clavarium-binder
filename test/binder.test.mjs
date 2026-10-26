@@ -625,6 +625,9 @@ test('in a tile the description wraps and is clamped, so a long one does not run
     assert.match(rule, /white-space:\s*normal/, 'the tile description wraps');
     assert.match(rule, /-webkit-line-clamp:\s*2/, 'and is held to two lines');
     assert.match(rule, /overflow:\s*hidden/);
+    /* A long title is held too, so a tile stays tidy whatever the title and the text. */
+    const title = css.split('\n').find((l) => l.trim().startsWith('.binder-face b'));
+    assert.ok(title && /-webkit-line-clamp:\s*3/.test(title) && /overflow-wrap:\s*anywhere/.test(title), 'the tile title wraps and is clamped to three lines');
 });
 
 test('a record shows its number before the title, faint, so a person can name it (binder-num)', async () => {

@@ -105,6 +105,8 @@
 /* In a tile the description wraps (the row view's single-line nowrap is reset) and is clamped to two
    lines: a long one no longer runs out of its card and over its neighbours. */
 .binder-face .binder-sub { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; white-space: normal; overflow-wrap: anywhere; max-width: 100%; font-size: .85em; color: var(--binder-dim); }
+/* A long title wraps (breaking very long words) and is held to three lines, so a tile stays tidy. */
+.binder-face b { overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; max-width: 100%; }
 
 /* A record, whole: one calm column, read on a phone first. */
 .binder-page { display: flex; flex-direction: column; gap: var(--binder-gap); min-width: 0; }
