@@ -617,6 +617,16 @@ test('the screen says where it is (a card, a binder, its settings) when a person
     } finally { for (const n of names) globalThis[n] = was[n]; }
 });
 
+test('in a tile the description wraps and is clamped, so a long one does not run over the next tile', () => {
+    const css = readFileSync(new URL('../ui/binder-ui.css', import.meta.url), 'utf8');
+    const rule = css.split('\n').find((l) => l.trim().startsWith('.binder-face .binder-sub'));
+    assert.ok(rule, 'the tile description has its own rule');
+    /* The row view sets white-space: nowrap; the tile must reset it or the two-line clamp cannot wrap. */
+    assert.match(rule, /white-space:\s*normal/, 'the tile description wraps');
+    assert.match(rule, /-webkit-line-clamp:\s*2/, 'and is held to two lines');
+    assert.match(rule, /overflow:\s*hidden/);
+});
+
 test('a record shows its number before the title, faint, so a person can name it (binder-num)', async () => {
     class Node { constructor() { this.childNodes = []; } append(...k) { for (const c of k) { c.parent = this; this.childNodes.push(c); } }
         replaceChildren(...k) { this.childNodes = []; this.append(...k); } remove() { if (this.parent) this.parent.childNodes = this.parent.childNodes.filter((c) => c !== this); }

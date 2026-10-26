@@ -102,7 +102,9 @@
   background: linear-gradient(135deg, color-mix(in srgb, var(--binder-tint, var(--binder-dim)) 30%, var(--binder-panel)), color-mix(in srgb, var(--binder-tint, var(--binder-dim)) 12%, var(--binder-panel))); }
 .binder-initial { width: 2.4rem; height: 2.4rem; border-radius: 50%; display: grid; place-items: center; font-size: 1.1rem; font-weight: 700;
   color: var(--binder-bg); background: color-mix(in srgb, var(--binder-tint, var(--binder-dim)) 85%, var(--binder-text)); }
-.binder-face .binder-sub { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: .85em; color: var(--binder-dim); }
+/* In a tile the description wraps (the row view's single-line nowrap is reset) and is clamped to two
+   lines: a long one no longer runs out of its card and over its neighbours. */
+.binder-face .binder-sub { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; white-space: normal; overflow-wrap: anywhere; max-width: 100%; font-size: .85em; color: var(--binder-dim); }
 
 /* A record, whole: one calm column, read on a phone first. */
 .binder-page { display: flex; flex-direction: column; gap: var(--binder-gap); min-width: 0; }
