@@ -27,7 +27,7 @@
 export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'no-lists', 'template', 'create', 'cancel', 'title', 'list', 'columns', 'cards', 'back',
     'state', 'owners', 'due', 'notes', 'add-note', 'attached', 'attach', 'history', 'archive', 'restore', 'delete', 'delete-sure', 'approved', 'settings',
     'states', 'fields', 'access', 'read', 'write', 'none', 'save', 'empty', 'archived', 'show-archived', 'gate', 'done', 'add-state', 'add-field',
-    'kind-message', 'kind-file', 'kind-asset', 'kind-branch', 'kind-link', 'kind-record', 'what', 'name', 'type', 'saved', 'edited', 'by', 'mine', 'all',
+    'kind-message', 'kind-file', 'kind-asset', 'kind-branch', 'kind-commit', 'kind-link', 'kind-record', 'what', 'name', 'type', 'saved', 'edited', 'by', 'mine', 'all',
     'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'none-archived', 'none-mine', 'search', 'description', 'edit', 'more', 'approve', 'add', 'ok',
     'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'agent-columns', 'remind-before', 'no-remind', 'days',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete']);
