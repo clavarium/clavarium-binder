@@ -29,7 +29,7 @@ export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'n
     'states', 'fields', 'access', 'read', 'write', 'none', 'save', 'empty', 'archived', 'show-archived', 'gate', 'done', 'add-state', 'add-field',
     'kind-message', 'kind-file', 'kind-asset', 'kind-branch', 'kind-commit', 'kind-link', 'kind-record', 'kind-mail', 'kind-event', 'what', 'name', 'type', 'saved', 'edited', 'by', 'mine', 'all',
     'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'none-archived', 'none-mine', 'search', 'description', 'edit', 'more', 'approve', 'add', 'ok',
-    'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'agent-columns', 'remind-before', 'no-remind', 'days',
+    'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'agent-columns', 'agent-fields', 'remind-before', 'no-remind', 'days',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete',
     'matrix', 'to-place', 'q-do', 'q-plan', 'q-delegate', 'q-later', 'legend-size', 'legend-colour', 'recurrent', 'retype', 'retype-hint', 'retype-apply']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'commit', 'link', 'record', 'mail', 'event'];
@@ -643,6 +643,11 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             c.addEventListener('change', () => void soft(ask('edit-settings', { agentColumns: c.checked })).then((got) => { if (got) ui.settings = got; paint(); }));
             return h('label', { class: 'binder-toggle' }, c, h('span', {}, w('agent-columns')));
         }
+        function agentFields() {
+            const c = h('input', { type: 'checkbox', ...(ui.settings.agentFields ? { checked: true } : {}), 'data-setting': 'agentFields' });
+            c.addEventListener('change', () => void soft(ask('edit-settings', { agentFields: c.checked })).then((got) => { if (got) ui.settings = got; paint(); }));
+            return h('label', { class: 'binder-toggle' }, c, h('span', {}, w('agent-fields')));
+        }
         /* Give the list another type's shape (its view and fields) in one step,
            keeping every record -- e.g. make it a priorities matrix. Applies at once
            and leaves the settings, so a stale save cannot undo the added fields. */
@@ -664,6 +669,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             grants.length ? h('section', { class: 'binder-box' }, h('h3', {}, w('access')), grants) : null,
             ui.settings ? h('section', { class: 'binder-box' }, h('h3', {}, w('agent-lists')), agentLists()) : null,
             ui.settings ? h('section', { class: 'binder-box' }, h('h3', {}, w('agent-columns')), agentColumns()) : null,
+            ui.settings ? h('section', { class: 'binder-box' }, h('h3', {}, w('agent-fields')), agentFields()) : null,
             h('div', { class: 'binder-actions' },
                 h('button', { type: 'button', class: 'binder-ghost', onclick: () => void soft(ask('archive-list', { list: l.id })).then(() => { ui.mode = 'list'; ui.at = null; return refresh(); }) }, w('archive-list')),
                 h('button', { type: 'button', class: 'binder-ghost', onclick: () => { sure.hidden = false; } }, w('delete-list')), sure,

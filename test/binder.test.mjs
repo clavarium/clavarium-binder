@@ -148,7 +148,7 @@ test('editing a list: states that go send their records to the first state; one 
     assert.equal(s.record(r.id, ME).record.state, 'backlog');
     assert.throws(() => s.editList(l.id, { states: [{ name: 'a', gate: true }, { name: 'b', gate: true }] }, ME), /one gate/);
     assert.throws(() => s.editList(l.id, { view: 'pie' }, ME), /a view is/);
-    assert.throws(() => s.editList(l.id, { title: 'x' }, BOT), /only a person/);
+    assert.throws(() => s.editList(l.id, { title: 'x' }, BOT), /rename a list/);
 });
 
 test('due records are said once per due time, not when done', () => {
@@ -285,7 +285,7 @@ test('an agent makes a list from a template: given to it alone, to change; a few
     assert.equal(s.lists(ME).length, 1, 'a person sees it as any');
     const r = s.add(mine.id, { title: 'Fix diff line numbers' }, BOT);
     assert.throws(() => s.move(r.id, 'doing', BOT), /only a person approves/);
-    assert.throws(() => s.editList(mine.id, { title: 'x' }, BOT), /only a person/);
+    assert.throws(() => s.editList(mine.id, { title: 'x' }, BOT), /rename a list/);
     assert.throws(() => s.grant(mine.id, OTHER.id, 'write', BOT), /only a person/);
     assert.throws(() => s.createList({ template: 'nothing' }, BOT), /made from a template/);
     for (let i = 0; i < AGENT_LISTS_MAX - 1; i++) s.createList({ template: 'simple' }, BOT);
@@ -301,12 +301,12 @@ test('an agent makes a list from a template: given to it alone, to change; a few
 test('lists an agent may make: set by a person alone (0 to 50, 5 by default), kept, in the history, applied; 0 makes none', () => {
     const dir = tmp();
     const s = openStore(dir);
-    assert.deepEqual(s.settings(BOT), { agentLists: AGENT_LISTS_DEFAULT, agentColumns: true });
+    assert.deepEqual(s.settings(BOT), { agentLists: AGENT_LISTS_DEFAULT, agentColumns: true, agentFields: false });
     assert.equal(AGENT_LISTS_DEFAULT, 5);
     assert.throws(() => s.editSettings({ agentLists: 9 }, BOT), /only a person changes the settings/);
     for (const bad of [-1, 51, 2.5, 'two', null, '']) assert.throws(() => s.editSettings({ agentLists: bad }, ME), /from 0 to 50/, String(bad));
     assert.equal(s.settings(ME).agentLists, 5, 'nothing refused was kept');
-    assert.deepEqual(s.editSettings({ agentLists: 2 }, ME), { agentLists: 2, agentColumns: true });
+    assert.deepEqual(s.editSettings({ agentLists: 2 }, ME), { agentLists: 2, agentColumns: true, agentFields: false });
     assert.equal(openStore(dir).settings(ME).agentLists, 2, 'kept in the store');
     const line = readFileSync(join(dir, 'log.jsonl'), 'utf8').trim().split('\n').map((x) => JSON.parse(x)).find((x) => x.op === 'edit-settings');
     assert.deepEqual([line.by.id, line.change], [ME.id, { agentLists: 2 }], 'in the history');
@@ -323,7 +323,7 @@ test('lists an agent may make: set by a person alone (0 to 50, 5 by default), ke
     s.createList({ template: 'simple' }, OTHER);
     /* Through the keeper: a person from the page, an agent from its folder. */
     const k = keeper(tmp());
-    assert.deepEqual(k.act('edit-settings', { agentLists: 1 }, ME), { ok: true, text: 'Lists an agent may make: 1. Columns an agent may change: yes.', data: { agentLists: 1, agentColumns: true } });
+    assert.deepEqual(k.act('edit-settings', { agentLists: 1 }, ME), { ok: true, text: 'Lists an agent may make: 1. Columns an agent may change: yes. Fields/type an agent may change: no.', data: { agentLists: 1, agentColumns: true, agentFields: false } });
     assert.equal(k.act('edit-settings', { agentLists: 7 }, BOT).ok, false);
     assert.equal(k.act('settings', {}, BOT).data.agentLists, 1);
     k.act('create-list', { template: 'simple' }, BOT);
@@ -570,8 +570,32 @@ test('retype gives a list another type additively: a simple list becomes a prior
     assert.equal(canMatrix(out), true, 'now it can be a matrix');
     const again = s.retype(l.id, { template: 'priorities', lang: 'fr' }, ME);
     assert.equal(again.fields.length, 4, 'a second convert adds no duplicate fields');
-    assert.throws(() => s.retype(l.id, { template: 'priorities' }, BOT), /only a person/, 'an agent cannot change a list type');
+    assert.throws(() => s.retype(l.id, { template: 'priorities' }, BOT), /not allowed an agent to change a list type/, 'an agent cannot change a list type');
     assert.throws(() => s.retype(l.id, { template: 'nope' }, ME), /no template/);
+});
+
+test('an agent reshapes a list (fields, view, type) only when a person turns agentFields on; even then it adds, never removes, retypes or renames away data', () => {
+    const s = openStore(tmp());
+    const l = s.createList({ template: 'simple', title: 'Suivi' }, BOT); // the agent's own list: it has write
+    /* Off by default: the agent is refused. */
+    assert.throws(() => s.retype(l.id, { template: 'priorities' }, BOT), /not allowed an agent to change a list type/);
+    assert.throws(() => s.editList(l.id, { fields: [{ name: 'Note', type: 'number' }] }, BOT), /not allowed an agent to change the fields or the view/);
+    assert.throws(() => s.editList(l.id, { view: 'cards' }, BOT), /not allowed an agent to change the fields or the view/);
+    /* A person turns it on. */
+    s.editSettings({ agentFields: true }, ME);
+    assert.equal(s.settings(BOT).agentFields, true);
+    /* Now the agent may convert the list (additive matrix) and change its view. */
+    const out = s.retype(l.id, { template: 'priorities' }, BOT);
+    assert.equal(out.view, 'matrix');
+    assert.deepEqual(out.fields.map((f) => f.id), ['urgence', 'importance', 'charge', 'delegabilite']);
+    assert.equal(s.editList(l.id, { view: 'list' }, BOT).view, 'list');
+    const kept = out.fields.map((f) => ({ id: f.id, name: f.name, type: f.type }));
+    /* It still never removes a field, changes a type, or renames the list (data stays). */
+    assert.throws(() => s.editList(l.id, { fields: kept.slice(1) }, BOT), /does not remove one/);
+    assert.throws(() => s.editList(l.id, { fields: kept.map((f, i) => (i === 0 ? { ...f, type: 'text' } : f)) }, BOT), /does not change a field's type/);
+    assert.throws(() => s.editList(l.id, { title: 'x' }, BOT), /rename a list/);
+    /* But it may add a field (keeping the others). */
+    assert.equal(s.editList(l.id, { fields: [...kept, { name: 'Extra', type: 'text' }] }, BOT).fields.length, 5, 'it may add a field');
 });
 
 test('the matrix: the priorities template seeds the four scores, canMatrix needs the two axes, score clamps to 0..100', () => {
@@ -842,7 +866,7 @@ test('an agent may add and rename columns, never remove one or touch the gate; a
     assert.throws(() => s.editList(l.id, { states: next }, BOT), /across the gate/);
 
     /* an agent still cannot change the title */
-    assert.throws(() => s.editList(l.id, { title: 'x' }, BOT), /only a person/);
+    assert.throws(() => s.editList(l.id, { title: 'x' }, BOT), /rename a list/);
 
     /* a person turns the setting off: the agent can no longer change columns, a person still can */
     s.editSettings({ agentColumns: false }, ME);

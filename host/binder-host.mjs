@@ -72,7 +72,7 @@ export function say(op, data, list) {
         case 'attach': return 'Attached.';
         case 'detach': return 'Taken off.';
         case 'archive': return data.archived ? `Archived #${data.id}.` : `Restored #${data.id}.`;
-        case 'settings': case 'edit-settings': return `Lists an agent may make: ${data.agentLists}. Columns an agent may change: ${data.agentColumns ? 'yes' : 'no'}.`;
+        case 'settings': case 'edit-settings': return `Lists an agent may make: ${data.agentLists}. Columns an agent may change: ${data.agentColumns ? 'yes' : 'no'}. Fields/type an agent may change: ${data.agentFields ? 'yes' : 'no'}.`;
         case 'edit-list': case 'columns': return `The columns are set: ${(data.states ?? []).map((x) => x.name).join(', ')}.`;
         case 'retype': return `${data.title} is now a ${data.template} list (view: ${data.view}); its fields: ${data.fields.map((f) => f.name).join(', ') || 'none'}.`;
         case 'create-list': return `Made the list ${data.title} [${data.id}], yours to change: binder add ${data.id} "title".`;
@@ -130,7 +130,7 @@ export function keeper(dir, { sides = () => [], now = () => Date.now() } = {}) {
                 case 'archive-list': data = store.archiveList(a.list, a.archived !== false, who); break;
                 case 'delete-list': data = store.deleteList(a.list, who); break;
                 case 'settings': data = store.settings(who); break;
-                case 'edit-settings': data = store.editSettings({ agentLists: a.agentLists, agentColumns: a.agentColumns }, who); break;
+                case 'edit-settings': data = store.editSettings({ agentLists: a.agentLists, agentColumns: a.agentColumns, agentFields: a.agentFields }, who); break;
                 case 'templates': data = Object.fromEntries(Object.entries(TEMPLATES).map(([k, t]) => [k, t.name])); break;
                 default: return { ok: false, text: `there is no ${oneLine(op, 40)}` };
             }

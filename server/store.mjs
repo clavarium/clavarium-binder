@@ -20,7 +20,9 @@
  * a person sees it as any.
  *
  * SETTINGS: the store's own, a person's alone to change, in the history too.
- *   agentLists   lists an agent may have made and not archived (0 to 50; 0: none)
+ *   agentLists    lists an agent may have made and not archived (0 to 50; 0: none)
+ *   agentColumns  whether an agent may change a list's columns/states (on by default)
+ *   agentFields   whether an agent may change a list's fields and type/view (off by default)
  */
 import { readFileSync, writeFileSync, appendFileSync, renameSync, mkdirSync, existsSync, lstatSync } from 'node:fs';
 import { join } from 'node:path';
@@ -35,6 +37,12 @@ export const AGENT_LISTS_TOP = 50;
    (settings.agentColumns). Even on, an agent never touches the gate -- the person's approval
    boundary -- nor removes a column: it only adds and renames, so a gate can never be worked around. */
 export const AGENT_COLUMNS_DEFAULT = true;
+/* Whether an agent may change a list's FIELDS and VIEW, and convert its type (retype):
+   off until a person turns it on (settings.agentFields). Off by default -- reshaping a
+   list is a person's by default, authorised per instance. Even on, an agent only adds and
+   renames fields (never removes one or changes a type), never renames the list, and never
+   ticks a gate: those stay the person's. */
+export const AGENT_FIELDS_DEFAULT = false;
 /* The default, by its former name. */
 export const AGENT_LISTS_MAX = AGENT_LISTS_DEFAULT;
 export const NOTE_MAX = 2000;
@@ -86,6 +94,22 @@ function agentColumnsOk(have, proposed) {
             if (wasBefore !== (propIds.indexOf(st.id) < gatePos)) no('an agent does not move a column across the gate -- ask a person');
         }
     }
+}
+
+/* Whether an agent's proposed fields keep every field the list has (by id) and
+   leave an existing field's type alone: like the columns, an agent adds and
+   renames fields, it does not remove one or change its type -- a person does
+   (so no record's data is dropped or reinterpreted under it). */
+function agentFieldsOk(have, proposed) {
+    if (!Array.isArray(proposed)) no('say the fields');
+    const idOf = (f) => oneLine(f?.id, 40) || key(oneLine(f?.name, 60)) || 'field';
+    const propIds = proposed.map(idOf);
+    const propSet = new Set(propIds);
+    for (const f of have) if (!propSet.has(f.id)) no('an agent adds or renames fields, it does not remove one -- ask a person');
+    proposed.forEach((f, i) => {
+        const existing = have.find((h) => h.id === propIds[i]);
+        if (existing && f?.type !== existing.type) no('an agent does not change a field\'s type -- ask a person');
+    });
 }
 
 /* A due date: "2026-11-04" or "2026-11-04 09:00", kept as written (the keeper's clock reads it). */
@@ -156,7 +180,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
 
     /* Whether a record's title, description or notes hold `q` (lower case). */
     /* The store's settings, as they are now (a store from before them has the defaults). */
-    const settingsNow = () => ({ agentLists: Number.isInteger(s.settings?.agentLists) ? s.settings.agentLists : AGENT_LISTS_DEFAULT, agentColumns: typeof s.settings?.agentColumns === 'boolean' ? s.settings.agentColumns : AGENT_COLUMNS_DEFAULT });
+    const settingsNow = () => ({ agentLists: Number.isInteger(s.settings?.agentLists) ? s.settings.agentLists : AGENT_LISTS_DEFAULT, agentColumns: typeof s.settings?.agentColumns === 'boolean' ? s.settings.agentColumns : AGENT_COLUMNS_DEFAULT, agentFields: typeof s.settings?.agentFields === 'boolean' ? s.settings.agentFields : AGENT_FIELDS_DEFAULT });
 
     const said = (r, q) => r.title.toLowerCase().includes(q) || (r.description ?? '').toLowerCase().includes(q) || r.notes.some((n) => n.text.toLowerCase().includes(q));
 
@@ -254,12 +278,20 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
         editList(given, { title, view, states, fields } = {}, who) {
             const w = whoOf(who);
             if (!isPerson(w)) {
-                /* An agent may change only the columns (states), when a person allows it, and never the gate. */
-                if (title !== undefined || view !== undefined || fields !== undefined || states === undefined) no('only a person changes a list (an agent may change its columns)');
-                if (!settingsNow().agentColumns) no('a person turned off the columns an agent may change');
+                /* An agent changes a list only as a person allows, and never the title or the gate.
+                   States: when agentColumns is on (adds/renames, never the gate). Fields and view:
+                   when agentFields is on (adds/renames fields, never removes one or changes a type). */
+                const set = settingsNow();
+                if (title !== undefined) no('an agent does not rename a list -- ask a person');
+                if ((fields !== undefined || view !== undefined) && !set.agentFields) no('a person has not allowed an agent to change the fields or the view');
+                if (states !== undefined && !set.agentColumns) no('a person turned off the columns an agent may change');
+                if (title === undefined && view === undefined && fields === undefined && states === undefined) no('say what to change');
             }
             const list = listOf(given, w, 'write');
-            if (!isPerson(w)) agentColumnsOk(list.states, states);
+            if (!isPerson(w)) {
+                if (states !== undefined) agentColumnsOk(list.states, states);
+                if (fields !== undefined) agentFieldsOk(list.fields, fields);
+            }
             const change = {};
             if (title !== undefined) { const t = oneLine(title, TITLE_MAX); if (!t) no('a list needs a title'); list.title = change.title = t; }
             if (view !== undefined) { if (!VIEWS.includes(view)) no(`a view is one of: ${VIEWS.join(', ')}`); list.view = change.view = view; }
@@ -298,7 +330,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
          * data are left untouched; a person's, like any change to a list's shape. */
         retype(given, { template, lang = 'en' } = {}, who) {
             const w = whoOf(who);
-            if (!isPerson(w)) no('only a person changes a list type');
+            if (!isPerson(w) && !settingsNow().agentFields) no('a person has not allowed an agent to change a list type');
             const list = listOf(given, w, 'write');
             const base = seed(template, lang);
             const have = new Set(list.fields.map((f) => f.id));
@@ -344,19 +376,18 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
 
         /* ---- the store's settings: anyone reads them, a person changes them ---- */
         settings(who) { whoOf(who); return settingsNow(); },
-        editSettings({ agentLists, agentColumns } = {}, who) {
+        editSettings({ agentLists, agentColumns, agentFields } = {}, who) {
             const w = whoOf(who);
             if (!isPerson(w)) no('only a person changes the settings');
+            const bool = (v, what) => (v === true || v === 'true' ? true : v === false || v === 'false' ? false : no(what));
             const change = {};
             if (agentLists !== undefined) {
                 const n = typeof agentLists === 'string' && agentLists.trim() !== '' ? Number(agentLists) : agentLists;
                 if (!Number.isInteger(n) || n < 0 || n > AGENT_LISTS_TOP) no(`lists an agent may make: a whole number from 0 to ${AGENT_LISTS_TOP}`);
                 change.agentLists = n;
             }
-            if (agentColumns !== undefined) {
-                const b = agentColumns === true || agentColumns === 'true' ? true : agentColumns === false || agentColumns === 'false' ? false : no('columns an agent may change: true or false');
-                change.agentColumns = b;
-            }
+            if (agentColumns !== undefined) change.agentColumns = bool(agentColumns, 'columns an agent may change: true or false');
+            if (agentFields !== undefined) change.agentFields = bool(agentFields, 'fields an agent may change: true or false');
             if (!Object.keys(change).length) return settingsNow();
             s.settings = { ...s.settings, ...change };
             save(); log(w, 'edit-settings', { change });

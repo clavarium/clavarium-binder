@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline';
 
-export const VERSION = '0.1.13-next.1';
+export const VERSION = '0.1.14-next.1';
 export const FOLDER = '.binder';
 /* How long an ask waits for its answer. The keeper answers within a second or two. */
 export const WAIT_MS = 20_000;
@@ -75,6 +75,7 @@ export const TOOLS = [
     { name: 'detach', description: 'Take back something attached to a record.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, what: S('what get shows of it: its ref or its id') }, required: ['id', 'what'] } },
     { name: 'new-list', description: 'Make a list from a template (batches, development, customers, people, roadmap, simple) when none you were given fits: it is given to you alone, and the person sees it. Batches: the work you propose; the person ticks what you may start.', inputSchema: { type: 'object', properties: { template: S('batches, development, customers, people, roadmap or simple'), title: S('its name; the template\'s by default') }, required: ['template'] } },
     { name: 'archive-list', description: 'Archive a list you made (it leaves your tabs; a person still sees it and can restore or delete it), or restore it. You cannot delete a list; only a person does. Archived lists do not count against your few-lists limit.', inputSchema: { type: 'object', properties: { list: S('its name or id'), restore: { type: 'boolean' } }, required: ['list'] } },
+    { name: 'retype', description: 'Change a list\'s type: apply a template\'s view and add its missing fields (e.g. make a list a "priorities" matrix), keeping every record and what the list already has -- it never removes anything. Allowed only where a person turned on "fields an agent may change".', inputSchema: { type: 'object', properties: { list: S('its name or id'), template: S('batches, development, customers, people, priorities, roadmap or simple'), lang: S('en or fr, for the names of the fields added') }, required: ['list', 'template'] } },
     { name: 'archive', description: 'Archive a record (it leaves the list; found again with archived), or restore it.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, restore: { type: 'boolean' } }, required: ['id'] } },
 ];
 /* A tool's arguments as the keeper reads them. */
@@ -94,6 +95,7 @@ export function asked(name, a = {}) {
         case 'archive': return ['archive', { id: a.id, restore: !!a.restore }];
         case 'new-list': return ['create-list', { template: a.template, title: a.title }];
         case 'archive-list': return ['archive-list', { list: a.list, archived: !a.restore }];
+        case 'retype': return ['retype', { list: a.list, template: a.template, lang: a.lang }];
         default: return null;
     }
 }
