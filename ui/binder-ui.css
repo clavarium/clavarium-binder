@@ -362,3 +362,18 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 /* A card opened on the matrix: its name is in its summary, and its path would cross it. */
 .binder-dot-wrap.open .binder-dot-label { visibility: hidden; }
 .binder-plot:has(.binder-dot-wrap.open) .binder-leaders { opacity: .35; }
+/* Moving points (#174): the page holds still under a finger, a taken point grows and shows
+   its values above it, its name steps aside until it is set down. */
+.binder-move-btn[aria-pressed="true"] { background: var(--binder-action); color: var(--binder-on-action) !important; border-color: var(--binder-action); }
+.binder-plot.binder-moving { touch-action: none; outline: 2px dashed var(--binder-line); outline-offset: 4px; }
+.binder-plot.binder-moving .binder-dot { cursor: grab; touch-action: none; }
+.binder-dot-wrap.binder-dragging { z-index: 20; }
+.binder-dot-wrap.binder-dragging .binder-dot { cursor: grabbing; transform: translate(-50%, 50%) scale(1.5); }
+.binder-dot-wrap.binder-dragging .binder-dot-label { visibility: hidden; }
+.binder-dot-wrap.binder-dragging::after { content: attr(data-reading); position: absolute; left: 0; bottom: calc(var(--r) * 1.5 + 2.4rem); transform: translateX(-50%);
+  font-size: .8rem; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; padding: .25em .6em; border-radius: 999px;
+  background: var(--binder-text); color: var(--binder-panel); pointer-events: none; }
+/* Said after a move, with its Undo: floating at the foot of the screen, so the square never shifts. */
+.binder-move-note { position: fixed; left: 50%; bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 70;
+  display: flex; align-items: center; gap: .7rem; max-width: calc(100vw - 2rem); padding: .5rem .6rem .5rem .9rem; font-size: .84rem; color: var(--binder-text);
+  background: var(--binder-panel); border: 1px solid var(--binder-line); border-radius: 12px; box-shadow: 0 10px 30px -8px rgba(0, 0, 0, .45); }

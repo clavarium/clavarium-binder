@@ -32,7 +32,7 @@ export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'n
     'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'agent-columns', 'agent-fields', 'remind-before', 'no-remind', 'days',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete',
     'matrix', 'to-place', 'q-do', 'q-plan', 'q-delegate', 'q-later', 'legend-size', 'legend-colour', 'recurrent', 'retype', 'retype-hint', 'retype-apply', 'no-repeat', 'repeat-free', 'open-card', 'fullscreen', 'fullscreen-exit',
-    'legend-me', 'legend-none', 'delegability', 'shortcuts', 'mx-all', 'mx-mine', 'mx-deleg', 'all-hidden', 'urgency', 'urgency-hand', 'urgency-auto', 'urgency-from', 'auto']);
+    'legend-me', 'legend-none', 'delegability', 'shortcuts', 'mx-all', 'mx-mine', 'mx-deleg', 'all-hidden', 'urgency', 'urgency-hand', 'urgency-auto', 'urgency-from', 'auto', 'mx-move', 'mx-moved', 'mx-moved-hand', 'undo']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'commit', 'link', 'record', 'mail', 'event'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', commit: '◉', link: '🔗', record: '▣', mail: '📧', event: '📅' };
 const TYPES = ['text', 'number', 'date', 'link', 'photo'];
@@ -577,7 +577,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     let matrixLeave = null; let matrixTrailClear = null;
     /* The matrix's own view state, kept across repaints (and reset when the binder changes):
        which owner categories are hidden, and whether the delegability arcs show. */
-    let mxFor = null; let mxHide = new Set(); let mxRings = true;
+    let mxFor = null; let mxHide = new Set(); let mxRings = true; let mxMove = false; let mxNote = null; let mxFs = false;
     const s100 = (v) => Math.max(0, Math.min(100, Number(v) || 0));
     /* THE MATRIX: urgency across (→), importance up (↑); a point's HUE says who owns it
        (gold = me, one colour per person, grey = nobody), its SIZE says the charge, and a thin
@@ -764,16 +764,83 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
            every case a CSS cover (position:fixed) so the button always works. Escape or the button
            leaves it (the key is caught below, next to the one that closes a menu). */
         const fsBtn = h('button', { type: 'button', class: 'binder-ghost binder-small binder-fs', 'aria-pressed': 'false', 'aria-label': w('fullscreen'), title: w('fullscreen') }, '⛶');
-        const bar = h('div', { class: 'binder-matrix-bar' }, chips, h('span', { class: 'binder-mx-spacer' }), fsBtn);
+        /* MOVING (#174): a mode, so a point never moves by accident. In it a point is taken and
+           set down -- by finger, pen or mouse -- and its urgency and importance follow it. The
+           page is kept still under the finger, the point grows and its values show above it.
+           Saved on release; "Undo" stays a few seconds. A tap still opens its summary. */
+        const moveBtn = l.access === 'write' ? h('button', { type: 'button', class: 'binder-ghost binder-small binder-move-btn', 'aria-pressed': String(mxMove) }, `✥ ${w('mx-move')}`) : null;
+        const note = h('div', { class: 'binder-move-note', role: 'status', 'aria-live': 'polite' });
+        note.hidden = true;
+        let noteTimer = null;
+        /* The note outlives a repaint (a save brings one): kept with its end time. */
+        const say = (text, undo, until = Date.now() + 7000) => {
+            clearTimeout(noteTimer);
+            mxNote = { text, undo, until };
+            note.replaceChildren(h('span', {}, text), undo ? h('button', { type: 'button', class: 'binder-ghost binder-small', onclick: () => { note.hidden = true; mxNote = null; undo(); } }, w('undo')) : null);
+            note.hidden = false;
+            noteTimer = setTimeout(() => { note.hidden = true; mxNote = null; }, Math.max(0, until - Date.now()));
+        };
+        const setMove = (on) => { mxMove = on; moveBtn?.setAttribute('aria-pressed', String(on)); plot.classList?.toggle?.('binder-moving', on); if (!on) { note.hidden = true; mxNote = null; } };
+        moveBtn?.addEventListener('click', () => setMove(!mxMove));
+        /* Redraw one point where its record now stands, its name placed again. */
+        const redraw = (r) => { const i = dotEls.findIndex((e) => e.getAttribute('data-record') === r.id); if (i < 0) return; const el = dot(r); dotEls[i].replaceWith(el); dotEls[i] = el; placeLabels(); };
+        const put = async (r, to, back) => {
+            const before = { fields: { ...r.fields }, urgencyFrom: r.urgencyFrom ?? null };
+            const wasAuto = urgencyAuto(r);
+            r.fields = { ...r.fields, [X]: to.x, [Y]: to.y }; if (wasAuto) r.urgencyFrom = null;
+            redraw(r);
+            try { await ask('edit', { id: r.id, fields: { [X]: to.x, [Y]: to.y }, ...(wasAuto ? { urgencyFrom: 'none' } : {}) }); } catch { Object.assign(r, before); redraw(r); return; }
+            if (back) return;
+            say(`${w(wasAuto ? 'mx-moved-hand' : 'mx-moved')} ${fieldName(l, X)} ${to.x} · ${fieldName(l, Y)} ${to.y}`, async () => {
+                r.fields = before.fields; r.urgencyFrom = before.urgencyFrom; redraw(r);
+                await soft(ask('edit', { id: r.id, fields: { [X]: before.fields[X] ?? null, [Y]: before.fields[Y] ?? null }, ...(wasAuto ? { urgencyFrom: before.urgencyFrom } : {}) }));
+            });
+        };
+        let drag = null; let swallow = false;
+        plot.addEventListener('pointerdown', (e) => {
+            if (!mxMove) return;
+            const pt = e.target.closest?.('.binder-dot'); if (!pt) return;
+            const r = placed.find((x) => x.id === pt.getAttribute('data-record')); if (!r) return;
+            drag = { r, wrap: pt.closest('.binder-dot-wrap'), id: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false, at: null };
+            try { pt.setPointerCapture(e.pointerId); } catch { /* the plot still hears it */ }
+        });
+        plot.addEventListener('pointermove', (e) => {
+            if (!drag || e.pointerId !== drag.id) return;
+            if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 6) return;
+            e.preventDefault();
+            const a = plot.getBoundingClientRect();
+            const x = Math.round(Math.max(0, Math.min(100, ((e.clientX - a.left) / a.width) * 100)));
+            const y = Math.round(Math.max(0, Math.min(100, ((a.bottom - e.clientY) / a.height) * 100)));
+            if (!drag.moved) { drag.moved = true; drag.wrap.classList.add('binder-dragging'); for (const o of plot.querySelectorAll('.binder-dot-wrap.open')) o.classList.remove('open'); clearTrail(); }
+            drag.at = { x, y };
+            drag.wrap.style.setProperty('left', `${x}%`); drag.wrap.style.setProperty('bottom', `${y}%`);
+            drag.wrap.setAttribute('data-reading', `${fieldName(l, X)} ${x} · ${fieldName(l, Y)} ${y}`);
+        });
+        const drop = (e) => {
+            if (!drag || e.pointerId !== drag.id) return;
+            const d = drag; drag = null;
+            d.wrap.classList.remove('binder-dragging'); d.wrap.removeAttribute('data-reading');
+            if (!d.moved || !d.at) return;
+            swallow = true; setTimeout(() => { swallow = false; }, 0);
+            if (e.type === 'pointercancel') { redraw(d.r); return; }
+            void put(d.r, d.at);
+        };
+        plot.addEventListener('pointerup', drop); plot.addEventListener('pointercancel', drop);
+        plot.addEventListener('click', (e) => { if (swallow) { e.stopPropagation(); e.preventDefault(); swallow = false; } }, true);
+        const bar = h('div', { class: 'binder-matrix-bar' }, chips, h('span', { class: 'binder-mx-spacer' }), moveBtn, fsBtn);
         const unplaced = rest.length ? h('div', { class: 'binder-unplaced' },
             h('h3', {}, `${w('to-place')} (${rest.length})`),
             h('div', { class: 'binder-unplaced-row' }, rest.map((r) => h('button', { type: 'button', class: 'binder-chip binder-unplaced-chip', 'data-record': r.id, onclick: () => open(r) }, `#${r.n} ${r.title}`)))) : null;
-        const root = h('div', { class: 'binder-matrix' }, bar, plot, legend, unplaced);
+        const root = h('div', { class: 'binder-matrix' }, bar, note, plot, legend, unplaced);
+        setMove(mxMove);
+        if (mxNote && mxNote.until > Date.now()) say(mxNote.text, mxNote.undo, mxNote.until);
         const setFs = () => { const on = root.classList?.contains?.('binder-matrix-max') ?? false; fsBtn.textContent = on ? '⤢' : '⛶'; fsBtn.title = on ? w('fullscreen-exit') : w('fullscreen'); fsBtn.setAttribute('aria-pressed', String(on)); if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => placeLabels()); };
-        const enter = () => { root.classList?.add?.('binder-matrix-max'); setFs(); try { root.requestFullscreen?.().catch(() => {}); } catch { /* not granted: the cover stands in */ } };
-        const leave = () => { root.classList?.remove?.('binder-matrix-max'); setFs(); try { if (document.fullscreenElement === root) document.exitFullscreen?.(); } catch { /* already out */ } };
+        const enter = () => { mxFs = true; root.classList?.add?.('binder-matrix-max'); setFs(); try { root.requestFullscreen?.().catch(() => {}); } catch { /* not granted: the cover stands in */ } };
+        const leave = () => { mxFs = false; root.classList?.remove?.('binder-matrix-max'); setFs(); try { if (document.fullscreenElement === root) document.exitFullscreen?.(); } catch { /* already out */ } };
         fsBtn.addEventListener('click', () => ((root.classList?.contains?.('binder-matrix-max') ?? false) ? leave() : enter()));
-        root.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && root.classList.contains('binder-matrix-max')) { root.classList.remove('binder-matrix-max'); setFs(); } });
+        root.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && root.classList.contains('binder-matrix-max')) { mxFs = false; root.classList.remove('binder-matrix-max'); setFs(); } });
+        /* Kept across a repaint (a save while moving points): the cover only, the real API asks a gesture. */
+        if (mxFs) { root.classList?.add?.('binder-matrix-max'); setFs(); }
         matrixLeave = leave;
         sync();
         return root;

@@ -121,5 +121,9 @@
   "urgency-hand": "By hand",
   "urgency-auto": "Automatic, up to the due date",
   "urgency-from": "From",
-  "auto": "auto"
+  "auto": "auto",
+  "mx-move": "Move",
+  "mx-moved": "Moved:",
+  "mx-moved-hand": "Moved, urgency now by hand:",
+  "undo": "Undo"
 }

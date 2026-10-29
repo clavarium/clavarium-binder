@@ -136,5 +136,9 @@
   "urgency-hand": "À la main",
   "urgency-auto": "Automatique, jusqu'à l'échéance",
   "urgency-from": "Depuis le",
-  "auto": "auto"
+  "auto": "auto",
+  "mx-move": "Déplacer",
+  "mx-moved": "Déplacée :",
+  "mx-moved-hand": "Déplacée, urgence à la main :",
+  "undo": "Annuler"
 }

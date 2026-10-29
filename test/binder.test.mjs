@@ -662,6 +662,8 @@ test('the matrix view: placed cards become bubbles at their scores, the rest wai
         const chips = all(root, (e) => (e.attrs.class ?? '').includes('binder-unplaced-chip'));
         assert.equal(chips.length, 1, 'the card with no scores waits to be placed');
         assert.ok(all(root, (e) => e.attrs['data-view'] === 'matrix').length, 'the matrix view is offered on a list that carries the axes');
+        const move = all(root, (e) => (e.attrs.class ?? '').includes('binder-move-btn'))[0];
+        assert.ok(move && move.attrs['aria-pressed'] === 'false', 'points can be moved, in a mode that starts off (#174)');
         const openBtn = all(wrapA, (e) => e.attrs.class === 'binder-pop-open')[0];
         openBtn.on.click();
         await settle();
