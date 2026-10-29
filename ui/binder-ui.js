@@ -32,7 +32,7 @@ export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'n
     'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'agent-columns', 'agent-fields', 'remind-before', 'no-remind', 'days',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete',
     'matrix', 'to-place', 'q-do', 'q-plan', 'q-delegate', 'q-later', 'legend-size', 'legend-colour', 'recurrent', 'retype', 'retype-hint', 'retype-apply', 'no-repeat', 'repeat-free', 'open-card', 'fullscreen', 'fullscreen-exit',
-    'legend-me', 'legend-none', 'delegability', 'shortcuts', 'mx-all', 'mx-mine', 'mx-deleg', 'all-hidden', 'urgency', 'urgency-hand', 'urgency-auto', 'urgency-from', 'auto', 'mx-move', 'mx-moved', 'mx-moved-hand', 'undo', 'my-share', 'nobody-yet', 'delegable-to']);
+    'legend-me', 'legend-none', 'delegability', 'shortcuts', 'mx-all', 'mx-mine', 'mx-deleg', 'all-hidden', 'urgency', 'urgency-hand', 'urgency-auto', 'urgency-from', 'auto', 'mx-move', 'mx-moved', 'mx-moved-hand', 'undo', 'my-share', 'nobody-yet', 'delegable-to', 'late', 'due-soon', 'to-handle']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'commit', 'link', 'record', 'mail', 'event'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', commit: '◉', link: '🔗', record: '▣', mail: '📧', event: '📅' };
 const TYPES = ['text', 'number', 'date', 'link', 'photo'];
@@ -235,6 +235,24 @@ export function placeNames(dots, area, walls = [], { pad = 2, step = 12, rings =
     return best.out;
 }
 /* Changed in the last three days: a card wears a quiet halo, "something new". */
+/* PAST ITS DUE (#181): a due day is over at its end; a due time, at that time. A card done is never late. */
+const dueEnd = (r) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/.exec(String(r?.due ?? ''));
+    if (!m) return null;
+    return { end: m[4] ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : new Date(+m[1], +m[2] - 1, +m[3] + 1).getTime(), start: new Date(+m[1], +m[2] - 1, +m[3], +(m[4] ?? 0), +(m[5] ?? 0)).getTime() };
+};
+export function lateOf(r, doneState = null, now = Date.now()) {
+    if (!r?.due || r.archived || (doneState && r.state === doneState)) return false;
+    const d = dueEnd(r); return d !== null && now >= d.end;
+}
+/* CALLING (#181): from its reminder (so many days before its due) -- or, with none, from its due --
+   a card calls; past its due it is late as well. */
+export function callingOf(r, doneState = null, now = Date.now()) {
+    if (!r?.due || r.archived || (doneState && r.state === doneState)) return false;
+    const d = dueEnd(r); if (d === null) return false;
+    const before = Number(r.remindBefore) > 0 ? Number(r.remindBefore) * 864e5 : 0;
+    return now >= (before ? d.start - before : d.start);
+}
 const fresh = (r) => { const t = Date.parse(r.changed ?? ''); return Number.isFinite(t) && Date.now() - t < 3 * 864e5; };
 
 /* A DESCRIPTION, READ: a few lines of Markdown-ish text, as blocks a screen can
@@ -578,7 +596,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     let matrixLeave = null; let matrixTrailClear = null;
     /* The matrix's own view state, kept across repaints (and reset when the binder changes):
        which owner categories are hidden, and whether the delegability arcs show. */
-    let mxFor = null; let mxHide = new Set(); let mxRings = true; let mxMove = false; let mxNote = null; let mxFs = false; let mxCarry = false;
+    let mxFor = null; let mxHide = new Set(); let mxRings = true; let mxMove = false; let mxNote = null; let mxFs = false; let mxCarry = false; let mxLate = false;
     const s100 = (v) => Math.max(0, Math.min(100, Number(v) || 0));
     /* THE MATRIX: urgency across (→), importance up (↑); a point's HUE says who owns it
        (gold = me, one colour per person, grey = nobody), its SIZE says the charge, and a thin
@@ -639,6 +657,8 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             const facts = [`${fieldName(l, X)} ${x}${urgencyAuto(r) ? ` (${w('auto')})` : ''}`, `${fieldName(l, Y)} ${y}`];
             if (c !== null) facts.push(`${fieldName(l, SIZE)} ${c}${share !== null ? ` · ${w('my-share')} ${share}` : ''}`);
             if (d !== null) facts.push(`${fieldName(l, TINT)} ${d}${hasGauge ? ` → ${helper ? labelFor(helper) : w('nobody-yet')}` : ''}`);
+            const late = lateOf(r, done?.id); const calling = callingOf(r, done?.id);
+            if (calling) facts.push(`${w(late ? 'late' : 'due-soon')} (${String(r.due).slice(0, 16)})`);
             const gauge = h('button', { type: 'button', class: `binder-dot${hasGauge ? ` has-gauge${helper ? '' : ' gauge-wish'}` : ''}`, 'data-helper': helper, 'data-record': r.id, 'data-fresh': fresh(r) ? '' : null,
                 'data-done': done && r.state === done.id ? '' : null, 'aria-haspopup': 'true',
                 'aria-label': `${r.title} — ${facts.join(' · ')}`,
@@ -660,7 +680,9 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 h('div', { class: 'binder-pop-facts' }, facts.join(' · ')),
                 r.description ? h('p', { class: 'binder-pop-desc' }, snippet(r.description)) : null,
                 h('button', { type: 'button', class: 'binder-pop-open', onclick: () => open(r) }, w('open-card')));
-            const wrap = h('div', { class: 'binder-dot-wrap', 'data-record': r.id, 'data-side': x >= 72 ? 'left' : null }, gauge, label, card);
+            /* Late: a soft halo further out than the arc, that calls a few times then stays; a "!" beside. */
+            const wrap = h('div', { class: `binder-dot-wrap${calling ? ' binder-calling' : ''}${late ? ' binder-late' : ''}`, 'data-record': r.id, 'data-side': x >= 72 ? 'left' : null },
+                calling ? h('span', { class: 'binder-halo', 'aria-hidden': 'true' }) : null, gauge, late ? h('span', { class: 'binder-late-mark', 'aria-hidden': 'true' }, '!') : null, label, card);
             wrap.style?.setProperty('left', `${x}%`);
             wrap.style?.setProperty('bottom', `${y}%`);
             wrap.style?.setProperty('--dot', `${dia.toFixed(2)}rem`);
@@ -713,7 +735,9 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                take (mine faded, their arc plain); a person hidden takes their arc off mine. */
             const helped = (r) => { const hp = helperOf(r); return hp !== null && !mxHide.has(hp); };
             /* "Mine": what I carry only; else a card is shown when its carrier, or its helper, is. */
-            const shown = placed.filter((r) => (mxCarry ? ownerCat(r) === 'me' : !mxHide.has(ownerCat(r)) || helped(r)));
+            const shown = placed.filter((r) => (mxCarry ? ownerCat(r) === 'me' : !mxHide.has(ownerCat(r)) || helped(r)) && (!mxLate || callingOf(r, done?.id)));
+            /* More than three calling: the halos stay still, or the whole square would blink. */
+            plot.classList?.toggle?.('binder-late-many', shown.filter((r) => callingOf(r, done?.id)).length > 3);
             plot.classList?.toggle?.('binder-is-empty', shown.length === 0);
             plot.classList?.toggle?.('binder-gauges-off', !mxRings);
             for (const r of shown) {
@@ -739,7 +763,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 const p = d.point.getBoundingClientRect(); const wide = size(d.label);
                 d.label.classList.add('narrow'); const narrow = size(d.label); d.label.classList.remove('narrow');
                 /* A point with an arc reaches 6px further (its ring). */
-                return { x: p.left - area.left + p.width / 2, y: p.top - area.top + p.height / 2, r: p.width / 2 + (d.point.classList.contains('has-gauge') ? 6 : 0), ...wide, narrow: narrow.w < wide.w ? narrow : null, left: d.left };
+                return { x: p.left - area.left + p.width / 2, y: p.top - area.top + p.height / 2, r: p.width / 2 + (d.point.classList.contains('has-gauge') ? 6 : 0) + (d.point.closest('.binder-calling') ? 5 : 0), ...wide, narrow: narrow.w < wide.w ? narrow : null, left: d.left };
             });
             const walls = [...plot.querySelectorAll('.binder-quad span')].map((e) => rel(e.getBoundingClientRect()));
             const spots = placeNames(dots, { w: area.width, h: area.height }, walls);
@@ -784,6 +808,16 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             ringBtn.addEventListener('click', () => { mxRings = !mxRings; sync(); });
             legend.append(ringBtn);
         }
+        /* Late ones (#181): counted; a tap shows only them, again shows all. */
+        const lateCount = placed.filter((r) => callingOf(r, done?.id)).length;
+        let lateBtn = null;
+        if (lateCount) {
+            legend.append(h('span', { class: 'binder-leg-sep' }));
+            /* A filter, not a show/hide: never struck through; marked while it narrows the square. */
+            lateBtn = h('button', { type: 'button', class: 'binder-leg binder-leg-late', 'data-on': mxLate ? 'true' : null }, h('span', { class: 'binder-late-glyph', 'aria-hidden': 'true' }), document.createTextNode(`${w('to-handle')} · ${lateCount}`));
+            lateBtn.addEventListener('click', () => { mxLate = !mxLate; if (mxLate) lateBtn.setAttribute('data-on', 'true'); else lateBtn.removeAttribute?.('data-on'); renderDots(); });
+            legend.append(lateBtn);
+        } else mxLate = false;
         legend.append(h('span', { class: 'binder-size-key' }, h('span', { class: 'binder-sz binder-sz1' }), h('span', { class: 'binder-sz binder-sz2' }), h('span', { class: 'binder-sz binder-sz3' }), document.createTextNode(` ${w('legend-size')}`)));
         /* Quick chips set the whole legend at once. */
         const chip = (key, apply) => { const b = h('button', { type: 'button', class: 'binder-chip' }, w(key)); b.addEventListener('click', () => { mxCarry = false; apply(); sync(); }); return b; };
@@ -1007,10 +1041,17 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         let attachForm = null;
         if (can && ui.open === 'attach') {
             const kind = h('select', { 'aria-label': w('attach') }, KINDS.map((k) => h('option', { value: k }, w(`kind-${k}`))));
+            /* Another card: picked by its title among this binder's cards, not a number typed (#180). */
+            const others = (ui.data?.records ?? []).filter((x) => x.id !== r.id);
+            const pickId = `binder-cards-${r.id}`;
+            const pick = h('datalist', { id: pickId }, others.map((x) => h('option', { value: `#${x.n} ${x.title}` })));
             const ref = h('input', { type: 'text', placeholder: w('what'), 'aria-label': w('what') });
+            const follow = () => { if (kind.value === 'record') ref.setAttribute('list', pickId); else ref.removeAttribute?.('list'); };
+            kind.addEventListener('change', follow);
             later(() => ref.focus());
-            attachForm = h('div', { class: 'binder-form' }, kind, ref,
-                h('button', { type: 'button', class: 'binder-primary binder-small', 'data-act': 'attach', onclick: () => { if (ref.value.trim()) done(ask('attach', { id: r.id, kind: kind.value, ref: ref.value })); } }, w('attach')),
+            const refOf = () => (kind.value === 'record' ? (/^#?(\d+)/.exec(ref.value.trim())?.[1] ?? ref.value.trim()) : ref.value);
+            attachForm = h('div', { class: 'binder-form' }, kind, ref, pick,
+                h('button', { type: 'button', class: 'binder-primary binder-small', 'data-act': 'attach', onclick: () => { if (ref.value.trim()) done(ask('attach', { id: r.id, kind: kind.value, ref: refOf() })); } }, w('attach')),
                 h('button', { type: 'button', class: 'binder-text-btn', onclick: () => set(null) }, w('cancel')));
         }
         const thumb = (a) => { const src = a.kind === 'file' && isPicture(a.ref) ? picture(a.ref) : null; return src ? h('img', { class: 'binder-ic binder-thumb', src, alt: '' }) : h('span', { class: 'binder-ic', 'aria-hidden': 'true' }, ICON[a.kind] ?? '•'); };

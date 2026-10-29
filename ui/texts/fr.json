@@ -143,5 +143,8 @@
   "undo": "Annuler",
   "my-share": "ma part",
   "nobody-yet": "personne encore",
-  "delegable-to": "Part délégable"
+  "delegable-to": "Part délégable",
+  "late": "En retard",
+  "due-soon": "Rappel",
+  "to-handle": "À traiter"
 }

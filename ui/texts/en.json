@@ -128,5 +128,8 @@
   "undo": "Undo",
   "my-share": "my share",
   "nobody-yet": "nobody yet",
-  "delegable-to": "Delegable share"
+  "delegable-to": "Delegable share",
+  "late": "Late",
+  "due-soon": "Reminder",
+  "to-handle": "To handle"
 }

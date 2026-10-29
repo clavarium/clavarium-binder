@@ -8,7 +8,7 @@ import { seed } from '../server/templates.mjs';
 import { keeper } from '../host/binder-host.mjs';
 import { ask, asked, TOOLS } from '../server/binder.mjs';
 import { say } from '../host/binder-host.mjs';
-import { blocks, toggled, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, canMatrix, score, trailOf, placeNames, MATRIX_AXES, KEYS, mount } from '../ui/binder-ui.js';
+import { blocks, toggled, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, canMatrix, score, trailOf, placeNames, lateOf, callingOf, MATRIX_AXES, KEYS, mount } from '../ui/binder-ui.js';
 import { isPicture as storeIsPicture } from '../server/store.mjs';
 import { DESCRIPTION_MAX, AGENT_LISTS_MAX, AGENT_LISTS_DEFAULT } from '../server/store.mjs';
 import { run, read } from '../bin/binder.mjs';
@@ -1078,4 +1078,24 @@ test('two on a card: the second owner\'s share is 5 at least, for an agent as fo
     assert.equal(s.record(mine.id, ME).record.fields.delegabilite, 5);
     s.edit(mine.id, { fields: { delegabilite: 40 } }, ME);
     assert.equal(s.record(mine.id, ME).record.fields.delegabilite, 40);
+});
+
+test('late (#181): past its due day (at its end) or its due time; never when done or archived', () => {
+    const at = (s) => new Date(s).getTime();
+    assert.equal(lateOf({ due: '2026-10-28' }, null, at('2026-10-28T23:00')), false, 'its day is not over');
+    assert.equal(lateOf({ due: '2026-10-28' }, null, at('2026-10-29T00:30')), true);
+    assert.equal(lateOf({ due: '2026-10-29 09:00' }, null, at('2026-10-29T09:30')), true);
+    assert.equal(lateOf({ due: '2026-10-29 09:00' }, null, at('2026-10-29T08:30')), false);
+    assert.equal(lateOf({ due: '2026-10-01', state: 'done' }, 'done', at('2026-10-29T08:30')), false);
+    assert.equal(lateOf({ due: '2026-10-01', archived: true }, null, at('2026-10-29T08:30')), false);
+    assert.equal(lateOf({}, null), false);
+});
+
+test('calling (#181): from its reminder, or from its due with none', () => {
+    const at = (s) => new Date(s).getTime();
+    assert.equal(callingOf({ due: '2026-11-05', remindBefore: 3 }, null, at('2026-11-01T12:00')), false);
+    assert.equal(callingOf({ due: '2026-11-05', remindBefore: 3 }, null, at('2026-11-02T00:10')), true, 'three days before');
+    assert.equal(callingOf({ due: '2026-11-05' }, null, at('2026-11-04T23:00')), false);
+    assert.equal(callingOf({ due: '2026-11-05' }, null, at('2026-11-05T08:00')), true, 'its day');
+    assert.equal(lateOf({ due: '2026-11-05' }, null, at('2026-11-05T08:00')), false, 'calling, not late yet');
 });
