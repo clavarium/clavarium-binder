@@ -131,5 +131,10 @@
   "mx-all": "Tout",
   "mx-mine": "À moi",
   "mx-deleg": "Délégué",
-  "all-hidden": "Rien à afficher (tout est masqué)."
+  "all-hidden": "Rien à afficher (tout est masqué).",
+  "urgency": "Urgence",
+  "urgency-hand": "À la main",
+  "urgency-auto": "Automatique, jusqu'à l'échéance",
+  "urgency-from": "Depuis le",
+  "auto": "auto"
 }

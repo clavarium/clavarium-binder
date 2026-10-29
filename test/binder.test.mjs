@@ -946,3 +946,18 @@ test('a card\'s path on the matrix: its first scores, each move, then where it s
     assert.deepEqual(trailOf([], { fields: { urgence: 10, importance: 90 } }), [{ x: 10, y: 90 }]);
     assert.deepEqual(trailOf([{ change: { fields: { urgence: 40 } } }, { change: { fields: { importance: 60 } } }], { fields: { urgence: 40, importance: 60 } }), [{ x: 40, y: 60 }]);
 });
+
+test('a priorities matrix explains itself to an agent: the fields and their scale, and what a card it wrote still lacks', () => {
+    const k = keeper(tmp());
+    const prio = k.act('create-list', { template: 'priorities', title: 'Sujets', lang: 'fr' }, ME).data;
+    const shown = k.act('show', { list: prio.id }, ME).text;
+    assert.match(shown, /priorities matrix/);
+    assert.match(shown, /urgence: how soon/);
+    assert.match(shown, /delegabilite: how readily/);
+    const bare = k.act('add', { list: prio.id, title: 'Une fiche' }, ME);
+    assert.match(bare.text, /Not on the matrix yet: it needs urgence and importance/);
+    assert.match(bare.text, /Nobody carries it/);
+    const placed = k.act('add', { list: prio.id, title: 'Une autre', fields: { urgence: 60, importance: 40 }, owners: ['me'] }, ME);
+    assert.equal(placed.text, `Added #${placed.data.id}: Une autre.`, 'placed and carried: nothing more to say');
+    assert.doesNotMatch(k.act('show', { list: k.act('create-list', { template: 'simple', title: 'Simple' }, ME).data.id }, ME).text, /matrix/, 'a list that is no matrix says nothing of it');
+});

@@ -32,7 +32,7 @@ export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'n
     'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'agent-columns', 'agent-fields', 'remind-before', 'no-remind', 'days',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete',
     'matrix', 'to-place', 'q-do', 'q-plan', 'q-delegate', 'q-later', 'legend-size', 'legend-colour', 'recurrent', 'retype', 'retype-hint', 'retype-apply', 'no-repeat', 'repeat-free', 'open-card', 'fullscreen', 'fullscreen-exit',
-    'legend-me', 'legend-none', 'delegability', 'shortcuts', 'mx-all', 'mx-mine', 'mx-deleg', 'all-hidden']);
+    'legend-me', 'legend-none', 'delegability', 'shortcuts', 'mx-all', 'mx-mine', 'mx-deleg', 'all-hidden', 'urgency', 'urgency-hand', 'urgency-auto', 'urgency-from', 'auto']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'commit', 'link', 'record', 'mail', 'event'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', commit: '◉', link: '🔗', record: '▣', mail: '📧', event: '📅' };
 const TYPES = ['text', 'number', 'date', 'link', 'photo'];
@@ -110,6 +110,22 @@ export function score(r, id) {
     const n = typeof v === 'number' ? v : parseFloat(v);
     return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null;
 }
+/* ITS URGENCY AS A MATRIX READS IT (#168): automatic -- 0 on its start date (urgencyFrom),
+   100 at its due date, rising as the days pass, recomputed at each look -- when it has both;
+   else the one set by hand. */
+const when0 = (s) => Date.parse(String(s).replace(' ', 'T'));
+export function urgencyOf(r, now = Date.now()) {
+    if (r?.urgencyFrom && r?.due) {
+        const from = when0(r.urgencyFrom); const to = when0(r.due);
+        if (Number.isFinite(from) && Number.isFinite(to)) {
+            if (now >= to) return 100;
+            if (to <= from || now <= from) return 0;
+            return Math.round(((now - from) / (to - from)) * 100);
+        }
+    }
+    return score(r, MATRIX_AXES.x);
+}
+export const urgencyAuto = (r) => Boolean(r?.urgencyFrom && r?.due);
 /* ITS PATH ON THE MATRIX (#167): the places a card stood, oldest first, rebuilt from its
    history (each change of its scores is kept there, with the first ones), ending where it
    stands now. A place is kept only once both axes are known, and only when it moved. */
@@ -124,7 +140,7 @@ export function trailOf(history, r) {
         if (Object.hasOwn(f, Y)) py = f[Y] === null ? null : score({ fields: f }, Y);
         push(px, py);
     }
-    push(score(r, X), score(r, Y));
+    push(urgencyOf(r), score(r, Y));
     return pts;
 }
 /* Changed in the last three days: a card wears a quiet halo, "something new". */
@@ -480,32 +496,36 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     function asMatrix(l, records) {
         const done = l.states.find((s) => s.done);
         const placed = []; const rest = [];
-        for (const r of records) (score(r, MATRIX_AXES.x) !== null && score(r, MATRIX_AXES.y) !== null ? placed : rest).push(r);
+        for (const r of records) (urgencyOf(r) !== null && score(r, MATRIX_AXES.y) !== null ? placed : rest).push(r);
         const X = MATRIX_AXES.x; const Y = MATRIX_AXES.y; const SIZE = MATRIX_AXES.size; const TINT = MATRIX_AXES.tint;
         const stName = (r) => l.states.find((s) => s.id === r.state)?.name ?? r.state;
         const snippet = (t) => { const s = String(t).replace(/\s+/g, ' ').trim(); return s.length > 160 ? `${s.slice(0, 159)}…` : s; };
         /* Who owns a card: me when I am among its owners, else the first other person, else nobody.
            Colour per category: me gold, each person a stable palette slot, nobody neutral grey. */
         const meId = (people() || []).find((p) => p.me)?.id ?? null;
-        const persons = (people() || []).filter((p) => p.kind === 'person');
-        const personIndex = new Map(persons.filter((p) => p.id !== meId).map((p, i) => [p.id, i]));
-        const ownerCat = (r) => { const os = r.owners ?? []; if (meId && os.includes(meId)) return 'me'; const p = os.find((id) => typeof id === 'string' && id.startsWith('person:') && id !== meId); return p || 'none'; };
-        const colorOf = (cat) => (cat === 'me' ? 'var(--bm-me)' : cat === 'none' ? 'var(--bm-none)' : `var(--bm-${(personIndex.get(cat) ?? 0) % 6 + 1})`);
-        const labelFor = (cat) => (cat === 'me' ? w('legend-me') : cat === 'none' ? w('legend-none') : nameOf(cat));
+        /* Who it is with: mine, else its first other owner -- a person or a conversation (an
+           agent it was handed to is delegated too) -- else nobody. */
+        const ownerCat = (r) => { const os = (r.owners ?? []).filter((id) => typeof id === 'string'); if (meId && os.includes(meId)) return 'me'; return os.find((id) => id !== meId) ?? 'none'; };
         const present = new Set(placed.map(ownerCat));
-        const cats = []; if (present.has('me')) cats.push('me'); for (const p of persons) { if (p.id !== meId && present.has(p.id)) cats.push(p.id); } if (present.has('none')) cats.push('none');
+        /* Each delegate its own colour, in the order people() gives them, then any other owner seen. */
+        const known = (people() || []).map((p) => p.id);
+        const delegates = [...known.filter((id) => id !== meId && present.has(id)), ...[...present].filter((c) => c !== 'me' && c !== 'none' && !known.includes(c))];
+        const personIndex = new Map(delegates.map((id, i) => [id, i]));
+        const colorOf = (cat) => (cat === 'me' ? 'var(--bm-me)' : cat === 'none' ? 'var(--bm-none)' : `var(--bm-${(personIndex.get(cat) ?? 0) % 6 + 1})`);
+        const labelFor = (cat) => (cat === 'me' ? w('legend-me') : cat === 'none' ? w('legend-none') : nameOf(cat).replace(/^[a-z]+:/, ''));
+        const cats = [...(present.has('me') ? ['me'] : []), ...delegates, ...(present.has('none') ? ['none'] : [])];
         const anyGauge = placed.some((r) => ownerCat(r) === 'me' && s100(score(r, TINT)) > 0 && score(r, TINT) !== null);
         /* Fresh binder: hide "nobody" by default (the least useful) — but only when there is
            something else to show, so a list where nobody is assigned is not an empty plot. */
         if (mxFor !== l.id) { mxFor = l.id; mxHide = new Set(present.has('none') && present.size > 1 ? ['none'] : []); mxRings = true; }
         const MINR = 0.6; const MAXR = 2.2;
         const dot = (r) => {
-            const x = score(r, X); const y = score(r, Y);
+            const x = urgencyOf(r); const y = score(r, Y);
             const c = score(r, SIZE); const d = score(r, TINT);
             const cat = ownerCat(r); const mine = cat === 'me';
             const hasGauge = mine && d !== null && d > 0;
             const dia = MINR + (s100(c ?? 20) / 100) * (MAXR - MINR);
-            const facts = [`${fieldName(l, X)} ${x}`, `${fieldName(l, Y)} ${y}`];
+            const facts = [`${fieldName(l, X)} ${x}${urgencyAuto(r) ? ` (${w('auto')})` : ''}`, `${fieldName(l, Y)} ${y}`];
             if (c !== null) facts.push(`${fieldName(l, SIZE)} ${c}`);
             if (d !== null) facts.push(`${fieldName(l, TINT)} ${d}`);
             const gauge = h('button', { type: 'button', class: `binder-dot${hasGauge ? ' has-gauge' : ''}`, 'data-record': r.id, 'data-fresh': fresh(r) ? '' : null,
@@ -581,6 +601,32 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             plot.classList?.toggle?.('binder-is-empty', shown.length === 0);
             plot.classList?.toggle?.('binder-gauges-off', !mxRings);
             for (const r of shown) { const el = dot(r); dotEls.push(el); plot.append(el); }
+            if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => placeLabels());
+        };
+        /* Names never on top of one another, of a point, or of the corner and axis words: each
+           tries its own side, then the other, inside the square; one that fits nowhere is left
+           to its summary. The bigger points first: theirs are the most worth keeping. Measured
+           on the page, once drawn (and again when the square changes size). */
+        const placeLabels = () => {
+            if (!plot.isConnected || !plot.getBoundingClientRect) return;
+            const box = (e) => e.getBoundingClientRect();
+            const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+            const grow = (r, p) => ({ left: r.left - p, right: r.right + p, top: r.top - p, bottom: r.bottom + p });
+            const area = box(plot);
+            const items = dotEls.map((wrap) => ({ point: wrap.querySelector('.binder-dot'), label: wrap.querySelector('.binder-dot-label') })).filter((d) => d.point && d.label);
+            const taken = [...items.map((d) => ({ of: d, r: grow(box(d.point), 2) })),
+                ...[...plot.querySelectorAll('.binder-quad span, .binder-axis')].map((e) => ({ of: null, r: grow(box(e), 3) }))];
+            for (const d of [...items].sort((a, b) => box(b.point).width - box(a.point).width)) {
+                d.label.classList.remove('binder-name-hidden');
+                const first = d.label.classList.contains('left');
+                let set = false;
+                for (const left of [first, !first]) {
+                    d.label.classList.toggle('left', left);
+                    const r = grow(box(d.label), 2);
+                    if (r.left >= area.left && r.right <= area.right && !taken.some((t) => t.of !== d && hit(r, t.r))) { taken.push({ of: d, r }); set = true; break; }
+                }
+                if (!set) { d.label.classList.toggle('left', first); d.label.classList.add('binder-name-hidden'); }
+            }
         };
         /* The legend, built from the categories actually present, each a show/hide toggle; then
            (where any exists) the delegability arcs toggle, and the size key. */
@@ -616,7 +662,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             h('h3', {}, `${w('to-place')} (${rest.length})`),
             h('div', { class: 'binder-unplaced-row' }, rest.map((r) => h('button', { type: 'button', class: 'binder-chip binder-unplaced-chip', 'data-record': r.id, onclick: () => open(r) }, `#${r.n} ${r.title}`)))) : null;
         const root = h('div', { class: 'binder-matrix' }, bar, plot, legend, unplaced);
-        const setFs = () => { const on = root.classList?.contains?.('binder-matrix-max') ?? false; fsBtn.textContent = on ? '⤢' : '⛶'; fsBtn.title = on ? w('fullscreen-exit') : w('fullscreen'); fsBtn.setAttribute('aria-pressed', String(on)); };
+        const setFs = () => { const on = root.classList?.contains?.('binder-matrix-max') ?? false; fsBtn.textContent = on ? '⤢' : '⛶'; fsBtn.title = on ? w('fullscreen-exit') : w('fullscreen'); fsBtn.setAttribute('aria-pressed', String(on)); if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => placeLabels()); };
         const enter = () => { root.classList?.add?.('binder-matrix-max'); setFs(); try { root.requestFullscreen?.().catch(() => {}); } catch { /* not granted: the cover stands in */ } };
         const leave = () => { root.classList?.remove?.('binder-matrix-max'); setFs(); try { if (document.fullscreenElement === root) document.exitFullscreen?.(); } catch { /* already out */ } };
         fsBtn.addEventListener('click', () => ((root.classList?.contains?.('binder-matrix-max') ?? false) ? leave() : enter()));
@@ -722,6 +768,20 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 h('option', { value: '', selected: !r.repeat ? true : null }, w('no-repeat')),
                 [7, 14, 30].map((n) => h('option', { value: String(n), selected: r.repeat === n ? true : null }, `↻ ${n} ${w('days')}`)),
                 h('option', { value: 'on', selected: r.repeat === true ? true : null }, `↻ ${w('repeat-free')}`));
+            /* Its urgency (#168), on a list with a matrix and once it has a due date: set by hand,
+               or rising on its own from a start date to the due date. Automatic starts today;
+               its start can be moved. */
+            const urgency = canMatrix(l) && r.due ? (() => {
+                const today = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 10); };
+                const from = h('input', { type: 'date', value: r.urgencyFrom?.slice(0, 10) ?? '', 'aria-label': w('urgency-from') });
+                from.hidden = !r.urgencyFrom;
+                from.addEventListener('change', () => { if (from.value) void soft(ask('edit', { id: r.id, urgencyFrom: from.value })).then(refresh); });
+                const mode = h('select', { class: 'binder-remind', 'aria-label': w('urgency'),
+                    onchange: () => void soft(ask('edit', { id: r.id, urgencyFrom: mode.value === 'auto' ? (from.value || today()) : 'none' })).then(refresh) },
+                    h('option', { value: 'hand', selected: !r.urgencyFrom ? true : null }, w('urgency-hand')),
+                    h('option', { value: 'auto', selected: r.urgencyFrom ? true : null }, w('urgency-auto')));
+                return h('div', { class: 'binder-form binder-remind-row' }, h('span', { class: 'binder-dim' }, w('urgency')), mode, from);
+            })() : null;
             whoEdit = h('div', { class: 'binder-who-edit' },
                 people().length ? h('div', { class: 'binder-owners', role: 'group', 'aria-label': w('owners') }, people().map((p) => h('button', { type: 'button', class: 'binder-chip', 'data-owner': p.id,
                     'aria-pressed': String(r.owners.includes(p.id)),
@@ -729,7 +789,8 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 h('div', { class: 'binder-form' }, day, hour,
                     h('button', { type: 'button', class: 'binder-primary binder-small', 'data-act': 'save-due', onclick: () => done(ask('edit', { id: r.id, due: day.value ? (hour.value ? `${day.value} ${hour.value}` : day.value) : '' })) }, w('ok'))),
                 remind ? h('div', { class: 'binder-form binder-remind-row' }, h('span', { class: 'binder-dim' }, w('remind-before')), remind) : null,
-                h('div', { class: 'binder-form binder-remind-row' }, h('span', { class: 'binder-dim' }, w('recurrent')), repeat));
+                h('div', { class: 'binder-form binder-remind-row' }, h('span', { class: 'binder-dim' }, w('recurrent')), repeat),
+                urgency);
         }
 
         /* What is attached: an icon and a name; a tap opens it. */

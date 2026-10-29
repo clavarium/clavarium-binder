@@ -30,6 +30,34 @@ const due = (r) => (r.due ? ` (due ${r.due}${r.remindBefore ? `, remind ${r.remi
 /* The first line of a description, as read: without its Markdown marks. */
 export const firstLine = (text) => String(text ?? '').split('\n').map((l) => l.replace(/^\s*[-*]\s+/, '').replace(/\*\*/g, '').trim()).find(Boolean) ?? '';
 
+/* A PRIORITIES MATRIX, as an agent fills it: which fields place a card, on what scale, and who
+   carries it -- told where it reads the binder, and again when a card it wrote is not placed. */
+export const isMatrix = (l) => ['urgence', 'importance'].every((id) => (l?.fields ?? []).some((f) => f.id === id && f.type === 'number'));
+const MATRIX_FIELDS = [
+    ['urgence', 'how soon it must be done (100: now)'],
+    ['importance', 'how much it matters (100: essential)'],
+    ['charge', 'the effort it takes (100: a lot)'],
+    ['delegabilite', 'how readily someone else could do it (0: only its owner; 100: anyone)'],
+];
+const ownerIds = (records) => [...new Set(records.flatMap((r) => r.owners ?? []))];
+export function matrixGuide(l, ids = []) {
+    const has = (id) => l.fields.some((f) => f.id === id);
+    return ['This binder is a priorities matrix: give every card these numbers, 0 to 100 --',
+        ...MATRIX_FIELDS.filter(([id]) => has(id)).map(([id, what]) => `  ${id}: ${what}`),
+        `  binder edit ID --field urgence=80 --field importance=70${has('charge') ? ' --field charge=40' : ''}${has('delegabilite') ? ' --field delegabilite=20' : ''}`,
+        `Who carries it (its owner): a person's id for theirs, "me" for yours, "none" for nobody${ids.length ? ` (ids on this binder: ${ids.join(', ')})` : ''}: binder edit ID --owner ...`,
+        'Its urgency may instead rise on its own up to its due date: binder edit ID --due DATE --urgency-from DATE.'].join('\n');
+}
+/* What a card on a matrix still lacks to be placed and read: said after it is written. */
+export function matrixMissing(l, r) {
+    if (!isMatrix(l)) return '';
+    const lack = ['urgence', 'importance'].filter((id) => r.fields?.[id] === undefined && !(id === 'urgence' && r.urgencyFrom && r.due));
+    const out = [];
+    if (lack.length) out.push(`Not on the matrix yet: it needs ${lack.join(' and ')} (0 to 100): binder edit ${r.id} ${lack.map((id) => `--field ${id}=..`).join(' ')}. "binder show ${l.id}" says what each means.`);
+    if (!(r.owners ?? []).length) out.push(`Nobody carries it: binder edit ${r.id} --owner <the person's id> (theirs), me (yours), or leave it.`);
+    return out.join('\n');
+}
+
 /* ---- what an agent reads: plain lines ---- */
 export function say(op, data, list) {
     switch (op) {
@@ -49,6 +77,7 @@ export function say(op, data, list) {
                 }
             }
             if (l.states.some((x) => x.gate)) out.push('Past a gate, only what a person approved.');
+            if (isMatrix(l)) out.push(matrixGuide(l, ownerIds(records)));
             return out.join('\n');
         }
         case 'get': {
@@ -56,9 +85,11 @@ export function say(op, data, list) {
             const st = l.states.find((x) => x.id === r.state);
             const out = [`#${r.id} ${r.title}`, `  list: ${l.title}; state: ${st?.name ?? r.state}${r.approved ? ' (approved)' : ''}${r.archived ? '; archived' : ''}${owners(r) ? `; owners:${owners(r)}` : ''}${due(r)}`];
             if (r.repeat) out.push(`  recurrent ↻: ${typeof r.repeat === 'number' ? `every ${r.repeat} days` : 'no fixed rhythm'} (a move to done reopens it, shifting its due)`);
+            if (r.urgencyFrom) out.push(`  urgency: automatic, rising from ${r.urgencyFrom} to its due date${r.due ? '' : ' (no due date yet: none until one is set)'}; --urgency-from none sets it by hand`);
             if (r.description) out.push('Description:', ...r.description.split('\n').map((x) => (x ? `  ${x}` : '')));
             else out.push('No description yet: give one (what it is and why, 1-3 lines for a person) with binder edit ID --description "...".');
             for (const f of l.fields) if (r.fields[f.id] !== undefined) out.push(`  ${f.name}: ${r.fields[f.id]}${r.cover === `field:${f.id}` ? ' (cover)' : ''}`);
+            { const lacks = matrixMissing(l, r); if (lacks) out.push(lacks); }
             if (r.notes.length) { out.push('Notes:'); for (const n of r.notes) out.push(`  ${day(n.at)} ${n.by.name}: ${n.text.replace(/\n/g, '\n    ')}${n.edited ? ' (edited)' : ''}`); }
             if (r.attached.length) { out.push('Attached:'); for (const a of r.attached) out.push(`  ${a.kind} ${a.kind === 'record' ? `#${a.ref}` : a.ref}${a.title ? ` "${a.title}"` : ''}${r.cover === a.id ? ' (cover)' : ''}`); }
             out.push(`History: ${history.length} change${history.length === 1 ? '' : 's'}, the last ${history.length ? `${day(history.at(-1).at)} by ${history.at(-1).by.name}` : 'none'}.`);
@@ -97,7 +128,7 @@ export function keeper(dir, { sides = () => [], now = () => Date.now() } = {}) {
                 case 'get': data = store.record(a.id, who); break;
                 case 'search': data = store.search(a.text, who); break;
                 case 'add': data = store.add(a.list, { title: a.title, description: a.description, state: a.state, fields: a.fields, owners: me(a.owners), due: a.due, remindBefore: a.remindBefore, note: a.note }, who); break;
-                case 'edit': data = store.edit(a.id, { title: a.title, description: a.description, fields: a.fields, owners: me(a.owners), due: a.due, remindBefore: a.remindBefore, repeat: a.repeat, cover: a.cover }, who); break;
+                case 'edit': data = store.edit(a.id, { title: a.title, description: a.description, fields: a.fields, owners: me(a.owners), due: a.due, remindBefore: a.remindBefore, repeat: a.repeat, cover: a.cover, urgencyFrom: a.urgencyFrom }, who); break;
                 case 'move': { const r = store.move(a.id, a.state, who, { next: a.next }); data = { ...r, stateName: store.record(r.id, who).list.states.find((x) => x.id === r.state)?.name }; break; }
                 case 'note': data = store.note(a.id, a.text, who); break;
                 case 'attach': data = store.attach(a.id, { kind: a.kind, ref: a.ref, title: a.title }, who); break;
@@ -149,7 +180,10 @@ export function keeper(dir, { sides = () => [], now = () => Date.now() } = {}) {
                 case 'templates': data = Object.fromEntries(Object.entries(TEMPLATES).map(([k, t]) => [k, t.name])); break;
                 default: return { ok: false, text: `there is no ${oneLine(op, 40)}` };
             }
-            return { ok: true, text: say(op, data, titleOf), data };
+            /* A card written on a matrix but not placed (or carried by nobody): said at once. */
+            let more = '';
+            if ((op === 'add' || op === 'edit') && data?.id) { try { const d = store.record(data.id, who); more = matrixMissing(d.list, d.record); } catch { /* said without it */ } }
+            return { ok: true, text: [say(op, data, titleOf), more].filter(Boolean).join('\n'), data };
         } catch (error) {
             if (error instanceof Refused) return { ok: false, text: error.message };
             throw error;

@@ -438,7 +438,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
          * photo field set ("field:ID"; given by the field's id or name). Empty
          * clears it. Without one, a card is shown by its photo field set, else by
          * its only picture attached. */
-        edit(given, { title, description, fields, owners, due, remindBefore, cover, repeat } = {}, who) {
+        edit(given, { title, description, fields, owners, due, remindBefore, cover, repeat, urgencyFrom } = {}, who) {
             const w = whoOf(who);
             const { r, list } = recordOf(given, w, 'write');
             const change = {};
@@ -449,6 +449,12 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             if (owners !== undefined) r.owners = change.owners = ownersOf(owners);
             if (due !== undefined) { if (due === null || due === '') { delete r.due; change.due = null; } else r.due = change.due = dueOf(due); }
             if (remindBefore !== undefined) { if (remindBefore === null || remindBefore === '' || remindBefore === 0) { delete r.remindBefore; change.remindBefore = null; } else r.remindBefore = change.remindBefore = remindBeforeOf(remindBefore); }
+            /* Its urgency, automatic (#168): rising on its own from this date to its due date, as a
+               matrix reads it; absent, its urgency is the one set by hand. Never both. */
+            if (urgencyFrom !== undefined) {
+                if (urgencyFrom === null || urgencyFrom === '' || urgencyFrom === 'none') { delete r.urgencyFrom; change.urgencyFrom = null; }
+                else { const day = oneLine(urgencyFrom, 20); if (!DUE.test(day) || dueAt(day) === null) no('urgency from: a date, 2026-11-04 (or 2026-11-04 09:00)'); r.urgencyFrom = change.urgencyFrom = day; }
+            }
             if (cover !== undefined) { const c = coverOf(list, r, cover); if (c) r.cover = change.cover = c; else { delete r.cover; change.cover = null; } }
             r.changed = stamp();
             save(); log(w, 'edit', { record: r.id, list: list.id, change });

@@ -116,5 +116,10 @@
   "mx-all": "All",
   "mx-mine": "Mine",
   "mx-deleg": "Delegated",
-  "all-hidden": "Nothing to show (all hidden)."
+  "all-hidden": "Nothing to show (all hidden).",
+  "urgency": "Urgency",
+  "urgency-hand": "By hand",
+  "urgency-auto": "Automatic, up to the due date",
+  "urgency-from": "From",
+  "auto": "auto"
 }

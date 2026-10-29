@@ -82,7 +82,8 @@ export function start(o, { quiet = false } = {}) {
         const send = (code, type, body) => { res.writeHead(code, { 'content-type': `${type}; charset=utf-8`, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(body); };
         if (req.method === 'GET' && url.pathname === '/') return send(200, 'text/html', PAGE(o.lang));
         if (req.method === 'GET' && files[url.pathname]) return send(200, files[url.pathname], readFileSync(join(UI, url.pathname.slice('/ui/'.length))));
-        if (req.method === 'GET' && url.pathname === '/api/people') return send(200, 'application/json', JSON.stringify([PERSON, ...o.sides.map((s) => s.who)]));
+        /* The person on this machine is "me" (a matrix tells mine from delegated by it). */
+        if (req.method === 'GET' && url.pathname === '/api/people') return send(200, 'application/json', JSON.stringify([{ ...PERSON, me: true }, ...o.sides.map((s) => s.who)]));
         if (req.method === 'GET' && url.pathname === '/api/changes') {
             res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store' }); res.write(': on\n\n');
             watchers.add(res); req.on('close', () => watchers.delete(res)); return undefined;
