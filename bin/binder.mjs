@@ -16,9 +16,9 @@ export const HELP = `binder: the lists you were given, and their records.
   binder get ID                        one record: fields, notes, what is attached, its history
   binder search "text"                 in every list you can see
   binder add LIST "title" [--description "text"] [--state S] [--due DATE] [--remind-before DAYS] [--owner me] [--note "text"] [--field name=value]
-  binder edit ID [--title "t"] [--description "text"] [--due DATE|none] [--remind-before DAYS|none] [--owner me|ID|none] [--field name=value]
+  binder edit ID [--title "t"] [--description "text"] [--due DATE|none] [--remind-before DAYS|none] [--repeat on|DAYS|none] [--owner me|ID|none] [--field name=value]
          [--cover PICTURE|none]          the picture the card is shown by: one attached (its ref), or a photo field
-  binder move ID STATE                 past a gate, only what a person approved
+  binder move ID STATE [--next DATE]   past a gate, only what a person approved; a recurrent record reopens on done
   binder note ID "text"                a short note: a decision, a fact, a result
   binder attach ID KIND REF ["title"]  KIND: message, file, asset, branch, commit, link, record
   binder detach ID WHAT
@@ -61,8 +61,8 @@ export function read(argv) {
         case 'get': return rest[0] ? ['get', { id: rest[0] }] : { refused: 'say which record: binder get ID' };
         case 'search': return rest.length ? ['search', { text: rest.join(' ') }] : { refused: 'say what to look for' };
         case 'add': return rest.length >= 2 ? ['add', { list: rest[0], title: rest.slice(1).join(' '), state: flags.state, due, owners, note: flags.note, description: flags.description, ...remind, ...has }] : { refused: 'binder add LIST "title"' };
-        case 'edit': return rest[0] ? ['edit', { id: rest[0], title: flags.title, description: flags.description, due, owners, ...remind, ...(flags.cover === undefined ? {} : { cover: flags.cover === 'none' ? '' : flags.cover }), ...has }] : { refused: 'say which record: binder edit ID' };
-        case 'move': return rest.length === 2 ? ['move', { id: rest[0], state: rest[1] }] : { refused: 'binder move ID STATE' };
+        case 'edit': return rest[0] ? ['edit', { id: rest[0], title: flags.title, description: flags.description, due, owners, ...remind, ...(flags.repeat === undefined ? {} : { repeat: flags.repeat }), ...(flags.cover === undefined ? {} : { cover: flags.cover === 'none' ? '' : flags.cover }), ...has }] : { refused: 'say which record: binder edit ID' };
+        case 'move': return rest.length === 2 ? ['move', { id: rest[0], state: rest[1], next: flags.next }] : { refused: 'binder move ID STATE' };
         case 'note': return rest.length >= 2 ? ['note', { id: rest[0], text: rest.slice(1).join(' ') }] : { refused: 'binder note ID "text"' };
         case 'attach': return rest.length >= 3 ? ['attach', { id: rest[0], kind: rest[1], ref: rest[2], title: rest.slice(3).join(' ') }] : { refused: 'binder attach ID KIND REF ["title"]' };
         case 'detach': return rest.length === 2 ? ['detach', { id: rest[0], what: rest[1] }] : { refused: 'binder detach ID WHAT' };

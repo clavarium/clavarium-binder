@@ -369,10 +369,11 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
          * photo field set ("field:ID"; given by the field's id or name). Empty
          * clears it. Without one, a card is shown by its photo field set, else by
          * its only picture attached. */
-        edit(given, { title, description, fields, owners, due, remindBefore, cover } = {}, who) {
+        edit(given, { title, description, fields, owners, due, remindBefore, cover, repeat } = {}, who) {
             const w = whoOf(who);
             const { r, list } = recordOf(given, w, 'write');
             const change = {};
+            if (repeat !== undefined) { if (repeat === null || repeat === '' || repeat === 'none' || repeat === false || repeat === 0) { delete r.repeat; change.repeat = null; } else r.repeat = change.repeat = repeatOf(repeat); }
             if (title !== undefined) { const t = oneLine(title, TITLE_MAX); if (!t) no('a record needs a title'); r.title = change.title = t; }
             if (description !== undefined) { const d = descriptionOf(description); if (d) r.description = change.description = d; else { delete r.description; change.description = null; } }
             if (fields !== undefined) change.fields = setFields(list, r, fields);
@@ -384,10 +385,24 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             save(); log(w, 'edit', { record: r.id, list: list.id, change });
             return r;
         },
-        move(given, state, who) {
+        move(given, state, who, { next } = {}) {
             const w = whoOf(who);
             const { r, list } = recordOf(given, w, 'write');
             const st = stateOf(list, state);
+            /* A recurrent record never closes: a move to a done state rolls it over --
+             * back to the first open state, its due shifted to the next occurrence
+             * (by its rhythm, or to --next, or left as is when it has no rhythm). */
+            if (st.done && r.repeat) {
+                const open = list.states.find((x) => !x.done) ?? list.states[0];
+                const from = r.state; r.state = open.id;
+                const change = { from, to: open.id, recurred: true };
+                if (next !== undefined && next !== null && next !== '') r.due = change.due = dueOf(next);
+                else if (typeof r.repeat === 'number') r.due = change.due = addDays(r.due ?? today(), r.repeat);
+                delete r.told; delete r.toldBefore;
+                r.changed = stamp();
+                save(); log(w, 'move', { record: r.id, list: list.id, change });
+                return r;
+            }
             if (past(list, st.id)) {
                 if (isPerson(w)) r.approved = true;
                 else if (!r.approved) no(`only a person approves: it stays ${list.states.find((x) => x.id === r.state)?.name}, until they tick it`);
@@ -519,6 +534,23 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
         const n = typeof given === 'number' ? given : Number(String(given).trim());
         if (!Number.isInteger(n) || n < 1 || n > 3650) no('remind before: a whole number of days (e.g. 1, 3, 7)');
         return n;
+    }
+    /* A recurrence: `true` (recurrent, no fixed rhythm) or a whole number of days
+     * (e.g. 7, 14). Empty / none / 0 clears it. */
+    function repeatOf(given) {
+        if (given === true || given === 'on' || given === 'yes') return true;
+        const n = typeof given === 'number' ? given : Number(String(given).trim());
+        if (Number.isInteger(n) && n >= 1 && n <= 3650) return n;
+        no('recurrence: on (no fixed rhythm), a number of days (e.g. 7, 14), or none');
+    }
+    const today = () => new Date(now()).toISOString().slice(0, 10);
+    /* A due date shifted by n days, keeping its time of day if it had one. Done on
+     * the UTC date parts, so no hour or daylight shift moves the day. */
+    function addDays(due, n) {
+        const date = String(due).slice(0, 10); const time = String(due).length > 10 ? String(due).slice(11) : null;
+        const d = new Date(`${date}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n);
+        const shifted = d.toISOString().slice(0, 10);
+        return time ? `${shifted} ${time}` : shifted;
     }
     function descriptionOf(text) {
         if (text === undefined || text === null) return '';

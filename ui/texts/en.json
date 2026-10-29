@@ -96,5 +96,6 @@
   "q-delegate": "Delegate",
   "q-later": "Later",
   "legend-size": "Size",
-  "legend-colour": "Colour"
+  "legend-colour": "Colour",
+  "recurrent": "Recurrent (never closes)"
 }

@@ -497,6 +497,32 @@ test('the words: every key in both languages, none for an empty thing', () => {
     }
 });
 
+test('a recurrent record never closes: a move to done reopens it and shifts its due; --next and no-rhythm too', () => {
+    const s = openStore(tmp());
+    const l = s.createList({ template: 'simple', title: 'Fond' }, ME);
+    const open = l.states.find((x) => !x.done).id;
+    const doneId = l.states.find((x) => x.done).id;
+    /* A rhythm of 14 days with a due: done -> reopened, due + 14 days. */
+    const a = s.add(l.id, { title: 'Point bimensuel', due: '2026-11-04' }, ME);
+    s.edit(a.id, { repeat: 14 }, ME);
+    assert.equal(s.record(a.id, ME).record.repeat, 14);
+    const moved = s.move(a.id, doneId, ME);
+    assert.equal(moved.state, open, 'it reopens instead of closing');
+    assert.equal(moved.due, '2026-11-18', 'its due is pushed one rhythm on');
+    /* --next overrides the rhythm. */
+    const m2 = s.move(a.id, doneId, ME, { next: '2026-12-01' });
+    assert.equal(m2.state, open); assert.equal(m2.due, '2026-12-01');
+    /* No fixed rhythm (repeat on): reopens, keeps its due, waits for a person to set the next. */
+    const b = s.add(l.id, { title: 'Accompagnement', due: '2026-11-10' }, ME);
+    s.edit(b.id, { repeat: 'on' }, ME);
+    const mb = s.move(b.id, doneId, ME);
+    assert.equal(mb.state, open); assert.equal(mb.repeat, true); assert.equal(mb.due, '2026-11-10', 'no rhythm: the due is left as is');
+    /* Clearing recurrence makes done close again. */
+    s.edit(b.id, { repeat: 'none' }, ME);
+    assert.equal(s.record(b.id, ME).record.repeat, undefined);
+    assert.equal(s.move(b.id, doneId, ME).state, doneId, 'once not recurrent, done closes');
+});
+
 test('show filters by activity: what changed since a day, and what is open but quiet for so long', () => {
     const s = openStore(tmp());
     const l = s.createList({ template: 'simple', title: 'Suivi' }, ME);

@@ -44,7 +44,7 @@ export function say(op, data, list) {
                 if (!here.length) continue;
                 out.push(`${st.name}${st.gate ? ' (a person approves)' : ''}:`);
                 for (const r of here) {
-                    out.push(`  #${r.id} ${r.title}${owners(r)}${due(r)}${r.attached.length ? ` [${r.attached.length} attached]` : ''}`);
+                    out.push(`  #${r.id} ${r.title}${owners(r)}${due(r)}${r.repeat ? ` ↻${typeof r.repeat === 'number' ? ` ${r.repeat}d` : ''}` : ''}${r.attached.length ? ` [${r.attached.length} attached]` : ''}`);
                     if (r.description) out.push(`      ${firstLine(r.description).slice(0, 120)}`);
                 }
             }
@@ -55,6 +55,7 @@ export function say(op, data, list) {
             const { record: r, list: l, history } = data;
             const st = l.states.find((x) => x.id === r.state);
             const out = [`#${r.id} ${r.title}`, `  list: ${l.title}; state: ${st?.name ?? r.state}${r.approved ? ' (approved)' : ''}${r.archived ? '; archived' : ''}${owners(r) ? `; owners:${owners(r)}` : ''}${due(r)}`];
+            if (r.repeat) out.push(`  recurrent ↻: ${typeof r.repeat === 'number' ? `every ${r.repeat} days` : 'no fixed rhythm'} (a move to done reopens it, shifting its due)`);
             if (r.description) out.push('Description:', ...r.description.split('\n').map((x) => (x ? `  ${x}` : '')));
             else out.push('No description yet: give one (what it is and why, 1-3 lines for a person) with binder edit ID --description "...".');
             for (const f of l.fields) if (r.fields[f.id] !== undefined) out.push(`  ${f.name}: ${r.fields[f.id]}${r.cover === `field:${f.id}` ? ' (cover)' : ''}`);
@@ -93,8 +94,8 @@ export function keeper(dir, { sides = () => [], now = () => Date.now() } = {}) {
                 case 'get': data = store.record(a.id, who); break;
                 case 'search': data = store.search(a.text, who); break;
                 case 'add': data = store.add(a.list, { title: a.title, description: a.description, state: a.state, fields: a.fields, owners: me(a.owners), due: a.due, remindBefore: a.remindBefore, note: a.note }, who); break;
-                case 'edit': data = store.edit(a.id, { title: a.title, description: a.description, fields: a.fields, owners: me(a.owners), due: a.due, remindBefore: a.remindBefore, cover: a.cover }, who); break;
-                case 'move': { const r = store.move(a.id, a.state, who); data = { ...r, stateName: store.record(r.id, who).list.states.find((x) => x.id === r.state)?.name }; break; }
+                case 'edit': data = store.edit(a.id, { title: a.title, description: a.description, fields: a.fields, owners: me(a.owners), due: a.due, remindBefore: a.remindBefore, repeat: a.repeat, cover: a.cover }, who); break;
+                case 'move': { const r = store.move(a.id, a.state, who, { next: a.next }); data = { ...r, stateName: store.record(r.id, who).list.states.find((x) => x.id === r.state)?.name }; break; }
                 case 'note': data = store.note(a.id, a.text, who); break;
                 case 'attach': data = store.attach(a.id, { kind: a.kind, ref: a.ref, title: a.title }, who); break;
                 case 'detach': data = store.detach(a.id, a.what, who); break;

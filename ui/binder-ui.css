@@ -265,3 +265,4 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-unplaced h3 { margin: 0 0 .45rem; font-size: .9rem; color: var(--binder-dim); }
 .binder-unplaced-row { display: flex; flex-wrap: wrap; gap: .4rem; }
 .binder-unplaced-chip { cursor: pointer; }
+.binder-repeat { color: var(--binder-action); white-space: nowrap; }

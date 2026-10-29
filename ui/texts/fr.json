@@ -111,5 +111,6 @@
   "q-delegate": "Déléguer",
   "q-later": "Plus tard",
   "legend-size": "Taille",
-  "legend-colour": "Couleur"
+  "legend-colour": "Couleur",
+  "recurrent": "Récurrent (ne se clôt jamais)"
 }

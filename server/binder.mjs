@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline';
 
-export const VERSION = '0.1.10-next.1';
+export const VERSION = '0.1.11-next.1';
 export const FOLDER = '.binder';
 /* How long an ask waits for its answer. The keeper answers within a second or two. */
 export const WAIT_MS = 20_000;
@@ -68,8 +68,8 @@ export const TOOLS = [
     { name: 'get', description: 'One record whole: its fields, notes, what is attached, its history.', inputSchema: { type: 'object', properties: { id: S('the record number, as #12 or 12') }, required: ['id'] } },
     { name: 'search', description: 'Records whose title, notes or fields hold a text, in every list you can see.', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
     { name: 'add', description: 'Add a record to a list (in its first state unless you say), with a short title and a description a person understands at a glance. You cannot add it approved: a person ticks it.', inputSchema: { type: 'object', properties: { list: S('its name or id'), title: { type: 'string' }, description: DESCRIBE, state: { type: 'string' }, due: S('2026-11-04 or 2026-11-04 09:00'), remindBefore: { type: 'integer', description: 'remind the owners this many days before the due time (e.g. 1, 3, 7)' }, owner: S('"me", or an id'), note: { type: 'string' }, fields: { type: 'object', description: '{ field name: value }' } }, required: ['list', 'title'] } },
-    { name: 'edit', description: 'Change a record: title, description, fields, owners, due date, lead reminder, cover picture (empty to remove it).', inputSchema: { type: 'object', properties: { id: { type: 'string' }, title: { type: 'string' }, description: DESCRIBE, due: { type: 'string' }, remindBefore: { type: 'integer', description: 'remind the owners this many days before the due time (e.g. 1, 3, 7); 0 removes it' }, owner: S('"me", or an id; empty for nobody'), fields: { type: 'object' }, cover: S('the picture the card is shown by, when it has several: a picture attached (its ref) or a photo field; empty to remove it') }, required: ['id'] } },
-    { name: 'move', description: 'Put a record in another state of its list. Past a gate (an approval), only once a person approved it.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, state: { type: 'string' } }, required: ['id', 'state'] } },
+    { name: 'edit', description: 'Change a record: title, description, fields, owners, due date, lead reminder, recurrence, cover picture (empty to remove it).', inputSchema: { type: 'object', properties: { id: { type: 'string' }, title: { type: 'string' }, description: DESCRIBE, due: { type: 'string' }, remindBefore: { type: 'integer', description: 'remind the owners this many days before the due time (e.g. 1, 3, 7); 0 removes it' }, repeat: S('make it recurrent (it never closes): "on" (no fixed rhythm), a number of days (e.g. 7, 14), or "none" to clear'), owner: S('"me", or an id; empty for nobody'), fields: { type: 'object' }, cover: S('the picture the card is shown by, when it has several: a picture attached (its ref) or a photo field; empty to remove it') }, required: ['id'] } },
+    { name: 'move', description: 'Put a record in another state of its list. Past a gate (an approval), only once a person approved it. A recurrent record moved to a done state does not close: it reopens with its due shifted to the next occurrence (or to "next").', inputSchema: { type: 'object', properties: { id: { type: 'string' }, state: { type: 'string' }, next: S('for a recurrent record rolled over: its next due day (YYYY-MM-DD), instead of the rhythm') }, required: ['id', 'state'] } },
     { name: 'note', description: 'Add a short note to a record: a decision, a fact, a result. Talking with the person stays in the chat.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, text: { type: 'string' } }, required: ['id', 'text'] } },
     { name: 'attach', description: 'Attach something to a record: a message of the chat, a file, an asset, a branch, a commit, a link, another record.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, kind: { type: 'string', enum: ['message', 'file', 'asset', 'branch', 'commit', 'link', 'record'] }, ref: S('what it is: a path, a URL, repository:branch, repository:sha, a message id, a record number'), title: { type: 'string' } }, required: ['id', 'kind', 'ref'] } },
     { name: 'detach', description: 'Take back something attached to a record.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, what: S('what get shows of it: its ref or its id') }, required: ['id', 'what'] } },
@@ -86,8 +86,8 @@ export function asked(name, a = {}) {
         case 'get': return ['get', { id: a.id }];
         case 'search': return ['search', { text: a.text }];
         case 'add': return ['add', { list: a.list, title: a.title, description: a.description, state: a.state, due: a.due, remindBefore: a.remindBefore, owners, note: a.note, fields: a.fields }];
-        case 'edit': return ['edit', { id: a.id, title: a.title, description: a.description, due: a.due, remindBefore: a.remindBefore, owners, fields: a.fields, cover: a.cover }];
-        case 'move': return ['move', { id: a.id, state: a.state }];
+        case 'edit': return ['edit', { id: a.id, title: a.title, description: a.description, due: a.due, remindBefore: a.remindBefore, repeat: a.repeat, owners, fields: a.fields, cover: a.cover }];
+        case 'move': return ['move', { id: a.id, state: a.state, next: a.next }];
         case 'note': return ['note', { id: a.id, text: a.text }];
         case 'attach': return ['attach', { id: a.id, kind: a.kind, ref: a.ref, title: a.title }];
         case 'detach': return ['detach', { id: a.id, what: a.what }];

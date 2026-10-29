@@ -31,7 +31,7 @@ export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'n
     'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'none-archived', 'none-mine', 'search', 'description', 'edit', 'more', 'approve', 'add', 'ok',
     'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'agent-columns', 'remind-before', 'no-remind', 'days',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete',
-    'matrix', 'to-place', 'q-do', 'q-plan', 'q-delegate', 'q-later', 'legend-size', 'legend-colour']);
+    'matrix', 'to-place', 'q-do', 'q-plan', 'q-delegate', 'q-later', 'legend-size', 'legend-colour', 'recurrent']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'commit', 'link', 'record'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', commit: '◉', link: '🔗', record: '▣' };
 const TYPES = ['text', 'number', 'date', 'link', 'photo'];
@@ -276,6 +276,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         r.owners.length ? r.owners.map(nameOf).join(', ') : null,
         r.due ? h('span', { class: late(l, r) ? 'binder-late' : null }, `⏰ ${when(r.due)}`) : null,
         lead(r),
+        r.repeat ? h('span', { class: 'binder-repeat', title: w('recurrent') }, `↻${typeof r.repeat === 'number' ? ` ${r.repeat} ${w('days')}` : ''}`) : null,
         r.attached.length ? h('span', {}, `📎 ${r.attached.length}`) : null,
         r.notes.length ? h('span', {}, `✎ ${r.notes.length}`) : null);
     const sub = (r) => (r.description ? h('span', { class: 'binder-sub' }, firstLine(r.description)) : null);
