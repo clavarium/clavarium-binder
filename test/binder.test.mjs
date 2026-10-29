@@ -990,7 +990,7 @@ test('names on the matrix are placed around their points, never on one another, 
     const [edge] = placeNames([{ x: 380, y: 100, r: 8, w: 60, h: 14, left: true }], { w: 400, h: 400 });
     assert.ok(edge.x + 60 < 380, 'on the left of a point at the right edge');
     /* A cluster: every name placed, inside the square, on no point and no other name. */
-    const dots = Array.from({ length: 8 }, (_, i) => ({ x: 150 + (i % 4) * 22, y: 150 + Math.floor(i / 4) * 22, r: 7, w: 70, h: 28, narrow: { w: 45, h: 42 } }));
+    const dots = Array.from({ length: 8 }, (_, i) => ({ x: 120 + (i % 4) * 50, y: 150 + Math.floor(i / 4) * 40, r: 7, w: 70, h: 28, narrow: { w: 45, h: 42 } }));
     const got = placeNames(dots, { w: 400, h: 400 });
     assert.ok(got.every(Boolean), 'room is found for each');
     const boxes = got.map((s, i) => ({ x: s.x, y: s.y, ...(s.narrow ? dots[i].narrow : { w: dots[i].w, h: dots[i].h }) }));
@@ -999,7 +999,10 @@ test('names on the matrix are placed around their points, never on one another, 
         for (const d of dots) assert.ok(!hit(b, { x: d.x - d.r, y: d.y - d.r, w: 2 * d.r, h: 2 * d.r }), 'on no point');
         for (const [j, c] of boxes.entries()) if (j !== i) assert.ok(!hit(b, c), 'on no other name');
     }
-    assert.ok(got.some((s) => s.lead), 'some set a little away, with a line');
+    /* Too tight for every name: some are left to their summary, never put on another. */
+    const tight = Array.from({ length: 8 }, (_, i) => ({ x: 150 + (i % 4) * 22, y: 150 + Math.floor(i / 4) * 22, r: 7, w: 70, h: 28 }));
+    const some = placeNames(tight, { w: 400, h: 400 });
+    assert.ok(some.some(Boolean) && some.some((s) => s === null), 'some placed, the rest left out');
     /* No room at all: left to its summary. */
     assert.deepEqual(placeNames([{ x: 10, y: 10, r: 8, w: 300, h: 14 }], { w: 40, h: 40 }), [null]);
 });

@@ -152,7 +152,7 @@ export function trailOf(history, r) {
    In pixels, y downwards: dots [{ x, y, r, w, h, left, narrow: { w, h } }] (centre, radius, its
    name's size, whether it would rather sit on the left), area { w, h }, walls [{ left, top, right, bottom }].
    Each answer: { x, y } (the name's top-left corner), lead (a line to draw), narrow, or null (no room). */
-export function placeNames(dots, area, walls = [], { pad = 2, step = 13, rings = 9 } = {}) {
+export function placeNames(dots, area, walls = [], { pad = 2, step = 12, rings = 6 } = {}) {
     const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
     const grow = (r, p) => ({ left: r.left - p, top: r.top - p, right: r.right + p, bottom: r.bottom + p });
     const rect = (x, y, w, h) => ({ left: x, top: y, right: x + w, bottom: y + h });
@@ -201,14 +201,18 @@ export function placeNames(dots, area, walls = [], { pad = 2, step = 13, rings =
                         if (r.left < pad || r.top < pad || r.right > area.w - pad || r.bottom > area.h - pad) return;
                         const box = grow(r, pad);
                         if (points.some((p) => hit(box, p)) || taken.some((t) => hit(box, t))) return;
-                        /* Nearer is better; narrower, or a line crossing a point or a name, costs. */
+                        /* Nearer is better; narrower, or a line crossing another, costs; a line through a point or a name is never drawn. */
+                        /* A name nearer another point than its own reads as that one's: never there. */
+                        const gap = (j) => { const q = near(r, dots[j].x, dots[j].y); return Math.hypot(q.x - dots[j].x, q.y - dots[j].y) - dots[j].r; };
+                        const own = gap(i);
+                        if (dots.some((_, j) => j !== i && gap(j) < own - 2)) return;
                         let cost = k * 12 + n * 0.4 + (narrow ? 10 : 0);
                         if (k > 0) {
                             const e = near(r, d.x, d.y);
-                            if (points.some((p, j) => j !== i && cross(d.x, d.y, e.x, e.y, p))) cost += 60;
-                            if (taken.some((t) => cross(d.x, d.y, e.x, e.y, t))) cost += 35;
-                            if (lines.some((l) => meet(d.x, d.y, e.x, e.y, l))) cost += 45;
-                            cost += Math.hypot(e.x - d.x, e.y - d.y) * 0.1;
+                            if (points.some((p, j) => j !== i && cross(d.x, d.y, e.x, e.y, p))) return;
+                            if (taken.some((t) => cross(d.x, d.y, e.x, e.y, t))) return;
+                            if (lines.some((l) => meet(d.x, d.y, e.x, e.y, l))) cost += 90;
+                            cost += Math.hypot(e.x - d.x, e.y - d.y) * 0.3;
                         }
                         if (!best || cost < best.cost) best = { cost, box, x, y, lead: k > 0, narrow, line: k > 0 ? [d.x, d.y, near(r, d.x, d.y)] : null };
                     });
@@ -222,8 +226,12 @@ export function placeNames(dots, area, walls = [], { pad = 2, step = 13, rings =
     const crowd = dots.map((d) => dots.filter((e) => Math.hypot(e.x - d.x, e.y - d.y) < 70).length);
     const orders = [(a, b) => dots[b].r - dots[a].r, (a, b) => crowd[b] - crowd[a] || dots[b].r - dots[a].r, (a, b) => dots[a].x - dots[b].x,
         (a, b) => dots[b].x - dots[a].x, (a, b) => dots[a].y - dots[b].y, (a, b) => dots[b].y - dots[a].y, (a, b) => crowd[a] - crowd[b]];
+    /* And a few shuffles, from a fixed seed so the same cards always land the same way. */
+    let seed = 7;
+    const rand = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+    const shuffles = Array.from({ length: 80 }, () => { const o = [...ids]; for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; } return o; });
     let best = null;
-    for (const by of orders) { const r = run([...ids].sort(by)); if (!best || r.score < best.score) best = r; }
+    for (const order of [...orders.map((by) => [...ids].sort(by)), ...shuffles]) { const r = run(order); if (!best || r.score < best.score) best = r; if (best.score === 0) break; }
     return best.out;
 }
 /* Changed in the last three days: a card wears a quiet halo, "something new". */
