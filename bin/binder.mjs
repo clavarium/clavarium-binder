@@ -15,6 +15,7 @@ export const HELP = `binder: the lists you were given, and their records.
                                        the records of a list, by state
   binder get ID                        one record: fields, notes, what is attached, its history
   binder search "text"                 in every list you can see
+  binder people                        who may carry a record (--owner ID): the person you work for, others, conversations
   binder add LIST "title" [--description "text"] [--state S] [--due DATE] [--remind-before DAYS] [--owner me] [--note "text"] [--field name=value]
   binder edit ID [--title "t"] [--description "text"] [--due DATE|none] [--remind-before DAYS|none] [--repeat on|DAYS|none] [--urgency-from DATE|none] [--owner me|ID|none] [--field name=value]
          [--cover PICTURE|none]          the picture the card is shown by: one attached (its ref), or a photo field
@@ -40,7 +41,7 @@ You never approve: a person ticks what may go on. Talking with them stays in the
 The folder used is --dir FOLDER, else $BINDER_DIR, else the nearest ${FOLDER} folder from here up.
 binder ${VERSION}`;
 
-const VERBS = ['lists', 'show', 'get', 'search', 'add', 'edit', 'move', 'note', 'attach', 'detach', 'archive', 'restore', 'new', 'retype', 'archive-list', 'restore-list', 'columns', 'field'];
+const VERBS = ['lists', 'people', 'show', 'get', 'search', 'add', 'edit', 'move', 'note', 'attach', 'detach', 'archive', 'restore', 'new', 'retype', 'archive-list', 'restore-list', 'columns', 'field'];
 
 /* A command line, read: [op, args] or a refusal. */
 export function read(argv) {
@@ -61,6 +62,7 @@ export function read(argv) {
     const has = Object.keys(fields).length ? { fields } : {};
     switch (verb) {
         case 'lists': return ['lists', {}];
+        case 'people': return ['people', {}];
         case 'show': return rest[0] ? ['show', { list: rest[0], state: flags.state, mine: !!flags.mine, archived: !!flags.archived, changedSince: flags['changed-since'], quietFor: flags['quiet-for'] }] : { refused: 'say which list: binder show LIST' };
         case 'get': return rest[0] ? ['get', { id: rest[0] }] : { refused: 'say which record: binder get ID' };
         case 'search': return rest.length ? ['search', { text: rest.join(' ') }] : { refused: 'say what to look for' };

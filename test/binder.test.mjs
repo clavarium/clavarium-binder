@@ -961,3 +961,23 @@ test('a priorities matrix explains itself to an agent: the fields and their scal
     assert.equal(placed.text, `Added #${placed.data.id}: Une autre.`, 'placed and carried: nothing more to say');
     assert.doesNotMatch(k.act('show', { list: k.act('create-list', { template: 'simple', title: 'Simple' }, ME).data.id }, ME).text, /matrix/, 'a list that is no matrix says nothing of it');
 });
+
+test('an agent is told who may carry a card, by id: the person it works for, itself, the other conversations', () => {
+    const SELF = { id: 'conversation:self', kind: 'agent', name: 'self' };
+    const roster = [{ id: 'person:owner', kind: 'person', name: 'Owner', me: true }, { id: 'person:ann@example.org', kind: 'person', name: 'ann@example.org' },
+        { id: 'conversation:intranet', kind: 'agent', name: 'intranet' }, SELF];
+    const k = keeper(tmp(), { people: () => roster });
+    const prio = k.act('create-list', { template: 'priorities', title: 'Sujets', lang: 'fr' }, ME).data;
+    k.act('grant', { list: prio.id, to: SELF.id, access: 'write' }, ME);
+    const shown = k.act('show', { list: prio.id }, SELF).text;
+    assert.match(shown, /the person you work for: --owner person:owner \(Owner\)/);
+    assert.match(shown, /another person: --owner person:ann@example\.org/);
+    assert.match(shown, /yourself, this conversation: --owner me/);
+    assert.match(shown, /another conversation: --owner conversation:NAME \(conversation:intranet\)$/m, 'itself is not "another"');
+    const people = k.act('people', {}, SELF).text;
+    assert.match(people, /person:owner {2}Owner -- the person you work for/);
+    assert.match(people, /conversation:self {2}self -- yourself/);
+    const theirs = k.act('add', { list: prio.id, title: 'La leur', fields: { urgence: 60, importance: 40 }, owners: ['person:owner'] }, SELF);
+    assert.deepEqual(k.act('get', { id: theirs.data.id }, SELF).data.record.owners, ['person:owner']);
+    assert.match(keeper(tmp()).act('people', {}, SELF).text, /No roster here/, 'a binder alone has no roster');
+});

@@ -40,13 +40,28 @@ const MATRIX_FIELDS = [
     ['delegabilite', 'how readily someone else could do it (0: only its owner; 100: anyone)'],
 ];
 const ownerIds = (records) => [...new Set(records.flatMap((r) => r.owners ?? []))];
-export function matrixGuide(l, ids = []) {
+export function matrixGuide(l, ids = [], people = []) {
     const has = (id) => l.fields.some((f) => f.id === id);
     return ['This binder is a priorities matrix: give every card these numbers, 0 to 100 --',
         ...MATRIX_FIELDS.filter(([id]) => has(id)).map(([id, what]) => `  ${id}: ${what}`),
         `  binder edit ID --field urgence=80 --field importance=70${has('charge') ? ' --field charge=40' : ''}${has('delegabilite') ? ' --field delegabilite=20' : ''}`,
-        `Who carries it (its owner): a person's id for theirs, "me" for yours, "none" for nobody${ids.length ? ` (ids on this binder: ${ids.join(', ')})` : ''}: binder edit ID --owner ...`,
+        ...ownerGuide(ids, people),
         'Its urgency may instead rise on its own up to its due date: binder edit ID --due DATE --urgency-from DATE.'].join('\n');
+}
+/* Who may carry a card, by id: the person you work for first, then yourself ("me"), the other
+   conversations, nobody. Without a roster, the ids already on the binder. */
+export function ownerGuide(ids = [], people = []) {
+    const persons = people.filter((p) => p.kind === 'person');
+    const agents = people.filter((p) => p.kind === 'agent').map((p) => p.id);
+    if (!persons.length) return [`Who carries it (its owner): a person's id for theirs, "me" for yours, "none" for nobody${ids.length ? ` (ids on this binder: ${ids.join(', ')})` : ''}: binder edit ID --owner ...`];
+    const mine = persons.filter((p) => p.me);
+    return ['Who carries it (its owner) -- give every card one, it colours its point: binder edit ID --owner ...',
+        ...(mine.length ? mine : persons.slice(0, 1)).map((p) => `  the person you work for: --owner ${p.id} (${p.name})`),
+        ...persons.filter((p) => !(mine.length ? mine : persons.slice(0, 1)).includes(p)).slice(0, 6).map((p) => `  another person: --owner ${p.id} (${p.name})`),
+        '  yourself, this conversation: --owner me',
+        `  another conversation: --owner conversation:NAME${agents.length ? ` (${agents.slice(0, 6).join(', ')}${agents.length > 6 ? ', ...' : ''})` : ''}`,
+        '  nobody yet: --owner none',
+        '  everyone who may carry one: binder people'];
 }
 /* What a card on a matrix still lacks to be placed and read: said after it is written. */
 export function matrixMissing(l, r) {
@@ -54,12 +69,12 @@ export function matrixMissing(l, r) {
     const lack = ['urgence', 'importance'].filter((id) => r.fields?.[id] === undefined && !(id === 'urgence' && r.urgencyFrom && r.due));
     const out = [];
     if (lack.length) out.push(`Not on the matrix yet: it needs ${lack.join(' and ')} (0 to 100): binder edit ${r.id} ${lack.map((id) => `--field ${id}=..`).join(' ')}. "binder show ${l.id}" says what each means.`);
-    if (!(r.owners ?? []).length) out.push(`Nobody carries it: binder edit ${r.id} --owner <the person's id> (theirs), me (yours), or leave it.`);
+    if (!(r.owners ?? []).length) out.push(`Nobody carries it: binder edit ${r.id} --owner <the person's id> (theirs), me (yours), or leave it. "binder people" gives the ids.`);
     return out.join('\n');
 }
 
 /* ---- what an agent reads: plain lines ---- */
-export function say(op, data, list) {
+export function say(op, data, list, people = []) {
     switch (op) {
         case 'lists': return data.length === 0 ? 'You were given no list.'
             : ['Your lists:', ...data.map((l) => `  ${l.title} [${l.id}]: ${l.count} record${l.count === 1 ? '' : 's'}, ${l.access === 'write' ? 'you may change it' : 'read only'}`),
@@ -77,7 +92,7 @@ export function say(op, data, list) {
                 }
             }
             if (l.states.some((x) => x.gate)) out.push('Past a gate, only what a person approved.');
-            if (isMatrix(l)) out.push(matrixGuide(l, ownerIds(records)));
+            if (isMatrix(l)) out.push(matrixGuide(l, ownerIds(records), people));
             return out.join('\n');
         }
         case 'get': {
@@ -110,11 +125,13 @@ export function say(op, data, list) {
         case 'create-list': return `Made the list ${data.title} [${data.id}], yours to change: binder add ${data.id} "title".`;
         case 'archive-list': return data.archived ? `Archived the list ${data.title} [${data.id}]. A person can restore or delete it.` : `Restored the list ${data.title} [${data.id}].`;
         case 'order-lists': return 'The order of the binders is set.';
+        case 'people': return data.length ? ['Who may carry a card (binder edit ID --owner ID):', ...data.map((p) => `  ${p.id}  ${p.name}${p.me ? ' -- the person you work for' : p.you ? ' -- yourself ("me")' : ''}`), '  me  yourself; none  nobody'].join('\n')
+            : 'No roster here: "me" for yourself, "none" for nobody, or an id already on a card.';
         default: return 'Done.';
     }
 }
 
-export function keeper(dir, { sides = () => [], now = () => Date.now() } = {}) {
+export function keeper(dir, { sides = () => [], now = () => Date.now(), people = () => [] } = {}) {
     const store = openStore(dir, { now });
     const titleOf = (id) => store.lists({ id: 'keeper', kind: 'person' }).find((l) => l.id === id)?.title ?? id;
     /* ONE ASK, as `who`: { ok, text, data }. An agent's "me" is its own id. */
@@ -177,13 +194,14 @@ export function keeper(dir, { sides = () => [], now = () => Date.now() } = {}) {
                 case 'delete-list': data = store.deleteList(a.list, who); break;
                 case 'settings': data = store.settings(who); break;
                 case 'edit-settings': data = store.editSettings({ agentLists: a.agentLists, agentColumns: a.agentColumns, agentFields: a.agentFields }, who); break;
+                case 'people': data = people().map((p) => (p.id === who.id ? { ...p, you: true } : p)); break;
                 case 'templates': data = Object.fromEntries(Object.entries(TEMPLATES).map(([k, t]) => [k, t.name])); break;
                 default: return { ok: false, text: `there is no ${oneLine(op, 40)}` };
             }
             /* A card written on a matrix but not placed (or carried by nobody): said at once. */
             let more = '';
             if ((op === 'add' || op === 'edit') && data?.id) { try { const d = store.record(data.id, who); more = matrixMissing(d.list, d.record); } catch { /* said without it */ } }
-            return { ok: true, text: [say(op, data, titleOf), more].filter(Boolean).join('\n'), data };
+            return { ok: true, text: [say(op, data, titleOf, op === 'show' ? people().filter((p) => p.id !== who.id) : []), more].filter(Boolean).join('\n'), data };
         } catch (error) {
             if (error instanceof Refused) return { ok: false, text: error.message };
             throw error;
