@@ -667,11 +667,11 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
            I come in on someone else's. Its arc wears their colour and runs over their share; on one
            of mine with nobody named yet, the arc is grey and dashed -- a wish, still all mine. */
         const helperOf = (r) => { const os = (r.owners ?? []).filter((id) => typeof id === 'string'); return os.length > 1 ? asCat(os[1]) : null; };
-        /* MY MATRIX: only what concerns me -- what I carry, and theirs where I come in. A card of
-           nobody's is no point: it waits below, to be given to someone. (Seen with no one known as
-           me -- a binder alone -- everything is shown, as before.) */
+        /* Every card with someone on it is a point, in the colour of who carries it -- what I handed
+           to someone stays in sight. (Seeing only mine is a tap away: "Mine" in the legend.) A card
+           of nobody's is no point: it waits below, to be given to someone. */
         const unowned = meId ? placed.filter((r) => ownerCat(r) === 'none') : [];
-        if (meId) { const mineOnly = placed.filter((r) => ownerCat(r) === 'me' || helperOf(r) === 'me'); placed.length = 0; placed.push(...mineOnly); }
+        if (meId) { const someone = placed.filter((r) => ownerCat(r) !== 'none'); placed.length = 0; placed.push(...someone); }
         const present = new Set([...placed.map(ownerCat), ...placed.map(helperOf).filter(Boolean)]);
         /* Each delegate its own colour, in the order people() gives them, then any other owner seen. */
         const known = (people() || []).map((p) => p.id);

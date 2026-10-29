@@ -1056,7 +1056,8 @@ test('the delegable share (#177): an arc in the colour of who could take it, das
         assert.match(dotOf(theirs.id).attrs['aria-label'], /(ma part|my-share) 8/);
         /* First seen: only what concerns me -- theirs where I come in, faded; theirs without me, not at all. */
         assert.ok(wrapOf(theirs.id), 'theirs where I come in is shown');
-        assert.equal(wrapOf(notMe.id), undefined, 'a card I have no part in is no point of my matrix');
+        assert.ok(wrapOf(notMe.id), 'a card handed to someone else stays in sight, in their colour (regression of 0.2.79)');
+        assert.equal(all(wrapOf(notMe.id), (e) => (e.attrs.class ?? '').split(' ')[0] === 'binder-dot')[0].style.props['--c'], 'var(--bm-1)');
         assert.equal(dotOf(unsaid.id).style.props['--pct'], '5', 'where I come in, my arc shows at least 5 %');
         assert.equal(wrapOf(nobodys.id), undefined, 'a card of nobody\'s is no point...');
         assert.ok(all(root, (e) => (e.attrs.class ?? '').includes('binder-unplaced-chip') && e.attrs['data-record'] === nobodys.id).length, '...it waits below, to be given');
