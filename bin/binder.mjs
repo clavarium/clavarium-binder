@@ -66,6 +66,8 @@ export function read(argv) {
         case 'note': return rest.length >= 2 ? ['note', { id: rest[0], text: rest.slice(1).join(' ') }] : { refused: 'binder note ID "text"' };
         case 'attach': return rest.length >= 3 ? ['attach', { id: rest[0], kind: rest[1], ref: rest[2], title: rest.slice(3).join(' ') }] : { refused: 'binder attach ID KIND REF ["title"]' };
         case 'detach': return rest.length === 2 ? ['detach', { id: rest[0], what: rest[1] }] : { refused: 'binder detach ID WHAT' };
+        case 'archive': return rest[0] ? ['archive', { id: rest[0], restore: false }] : { refused: 'binder archive ID' };
+        case 'restore': return rest[0] ? ['archive', { id: rest[0], restore: true }] : { refused: 'binder restore ID' };
         case 'new': return rest[0] ? ['create-list', { template: rest[0], title: rest.slice(1).join(' ') || undefined }] : { refused: 'binder new TEMPLATE ["title"]' };
         case 'archive-list': case 'restore-list': return rest[0] ? ['archive-list', { list: rest[0], archived: verb === 'archive-list' }] : { refused: `binder ${verb} LIST` };
         case 'columns': {

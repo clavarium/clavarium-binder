@@ -344,6 +344,9 @@ test('the command line is read as the help says', () => {
     assert.deepEqual(read([]), ['lists', {}]);
     assert.ok(read(['fly']).refused);
     assert.ok(read(['move', '3']).refused);
+    assert.deepEqual(read(['archive', '12']), ['archive', { id: '12', restore: false }], 'archive is handled, not "not understood"');
+    assert.deepEqual(read(['restore', '12']), ['archive', { id: '12', restore: true }], 'restore is the archive action with restore');
+    assert.ok(read(['archive']).refused, 'archive needs an id');
     assert.ok(Refused);
 });
 
