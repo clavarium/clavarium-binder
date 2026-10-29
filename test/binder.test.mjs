@@ -670,6 +670,18 @@ test('the matrix view: placed cards become bubbles at their scores, the rest wai
     } finally { for (const n of names) globalThis[n] = was[n]; }
 });
 
+test('a note, a title or a field longer than kept is refused, never cut in the middle (#51)', () => {
+    const s = openStore(tmp());
+    const l = s.createList({ template: 'priorities' }, ME);
+    const r = s.add(l.id, { title: 'Ship it' }, ME);
+    assert.throws(() => s.note(r.id, 'n'.repeat(2001), ME), /2001 characters; 2000 at most -- nothing was changed/);
+    assert.throws(() => s.add(l.id, { title: 't'.repeat(201) }, ME), /nothing was changed/);
+    assert.throws(() => s.edit(r.id, { title: 't'.repeat(201) }, ME), /nothing was changed/);
+    assert.throws(() => s.edit(r.id, { fields: { urgence: '9'.repeat(1001) } }, ME), /nothing was changed/);
+    assert.equal(s.record(r.id, ME).record.title, 'Ship it', 'the refused edit changed nothing');
+    assert.equal(s.note(r.id, 'A short note.', ME).text, 'A short note.', 'within the limit, kept whole');
+});
+
 test('the cover: set by a person or an agent, a picture only, gone with its picture', () => {
     const s = openStore(tmp());
     const l = s.createList({ template: 'people' }, ME);

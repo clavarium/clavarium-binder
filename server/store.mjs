@@ -64,6 +64,12 @@ export const isPicture = (ref) => /\.(jpe?g|png|webp|gif)$/i.test(String(ref ?? 
 const NOT_SHOWN = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F​-‏‪-‮⁠-⁤⁦-⁩﻿]/gu;
 export const oneLine = (text, max) => String(text ?? '').replace(/\r/g, '').replace(NOT_SHOWN, '').replace(/\s+/g, ' ').trim().slice(0, max);
 export const block = (text, max) => String(text ?? '').replace(/\r/g, '').replace(NOT_SHOWN, '').replace(/[ \t]+\n/g, '\n').trim().slice(0, max);
+/* A text kept whole: refused when longer than kept, never cut in the middle of a sentence,
+   so whoever wrote it (an agent above all) is told and shortens it. Nothing is changed meanwhile. */
+const whole = (clean, what, max) => {
+    if (clean.length > max) no(`${what} is ${clean.length} characters; ${max} at most -- nothing was changed: shorten it and try again`);
+    return clean;
+};
 const key = (text) => oneLine(text, 40).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 export class Refused extends Error {}
@@ -279,7 +285,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
                 if (Object.values(s.lists).filter((l) => l.by === w.id && !l.archived).length >= most) no(`${most} lists made by you at most, as a person set: use one of yours`);
             }
             const base = seed(template, lang);
-            const name = oneLine(title, TITLE_MAX) || base.title;
+            const name = whole(oneLine(title, Infinity), 'a title', TITLE_MAX) || base.title;
             let id = key(name) || 'list';
             for (let i = 2; s.lists[id]; i++) id = `${key(name) || 'list'}-${i}`;
             s.lists[id] = { id, ...base, title: name, access: isPerson(w) ? {} : { [w.id]: 'write' }, created: stamp(), by: w.id };
@@ -304,7 +310,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
                 if (fields !== undefined) agentFieldsOk(list.fields, fields);
             }
             const change = {};
-            if (title !== undefined) { const t = oneLine(title, TITLE_MAX); if (!t) no('a list needs a title'); list.title = change.title = t; }
+            if (title !== undefined) { const t = whole(oneLine(title, Infinity), 'a title', TITLE_MAX); if (!t) no('a list needs a title'); list.title = change.title = t; }
             if (view !== undefined) { if (!VIEWS.includes(view)) no(`a view is one of: ${VIEWS.join(', ')}`); list.view = change.view = view; }
             if (states !== undefined) {
                 if (!Array.isArray(states) || states.length < 1 || states.length > STATES_MAX) no(`a list has 1 to ${STATES_MAX} states`);
@@ -409,7 +415,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
         add(given, { title, description, state, fields, owners, due, remindBefore, note } = {}, who) {
             const w = whoOf(who);
             const list = listOf(given, w, 'write');
-            const t = oneLine(title, TITLE_MAX); if (!t) no('a record needs a title');
+            const t = whole(oneLine(title, Infinity), 'a title', TITLE_MAX); if (!t) no('a record needs a title');
             if (Object.values(s.records).filter((r) => r.list === list.id).length >= RECORDS_MAX) no(`${RECORDS_MAX} records in a list at most`);
             const st = state ? stateOf(list, state) : list.states[0];
             const approved = isPerson(w) && past(list, st.id);
@@ -436,7 +442,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             const { r, list } = recordOf(given, w, 'write');
             const change = {};
             if (repeat !== undefined) { if (repeat === null || repeat === '' || repeat === 'none' || repeat === false || repeat === 0) { delete r.repeat; change.repeat = null; } else r.repeat = change.repeat = repeatOf(repeat); }
-            if (title !== undefined) { const t = oneLine(title, TITLE_MAX); if (!t) no('a record needs a title'); r.title = change.title = t; }
+            if (title !== undefined) { const t = whole(oneLine(title, Infinity), 'a title', TITLE_MAX); if (!t) no('a record needs a title'); r.title = change.title = t; }
             if (description !== undefined) { const d = descriptionOf(description); if (d) r.description = change.description = d; else { delete r.description; change.description = null; } }
             if (fields !== undefined) change.fields = setFields(list, r, fields);
             if (owners !== undefined) r.owners = change.owners = ownersOf(owners);
@@ -513,7 +519,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             if (kind === 'link' && !/^https?:\/\//i.test(what)) no('a link starts with http:// or https://');
             if (r.attached.length >= ATTACHED_MAX) no(`${ATTACHED_MAX} things attached at most`);
             if (r.attached.some((a) => a.kind === kind && a.ref === what)) no('that is attached already');
-            const a = { id: randomUUID(), kind, ref: kind === 'record' ? what.replace(/^#/, '') : what, title: oneLine(title, TITLE_MAX), at: stamp(), by: w.id };
+            const a = { id: randomUUID(), kind, ref: kind === 'record' ? what.replace(/^#/, '') : what, title: whole(oneLine(title, Infinity), 'a title', TITLE_MAX), at: stamp(), by: w.id };
             r.attached.push(a); r.changed = stamp();
             save(); log(w, 'attach', { record: r.id, list: list.id, change: { kind, ref: a.ref } });
             return a;
@@ -563,7 +569,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             const f = list.fields.find((x) => x.id === k) ?? list.fields.find((x) => x.name.toLowerCase() === String(k).toLowerCase());
             if (!f) no(`the list ${list.title} has no field "${k}"${list.fields.length ? ` (it has: ${list.fields.map((x) => x.name).join(', ')})` : ''}`);
             if (v === null || v === '') { delete r.fields[f.id]; change[f.id] = null; if (r.cover === `field:${f.id}`) delete r.cover; continue; }
-            const value = oneLine(v, FIELD_MAX);
+            const value = whole(oneLine(v, Infinity), f.name, FIELD_MAX);
             if (f.type === 'number' && !Number.isFinite(Number(value))) no(`${f.name} is a number`);
             if (f.type === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) no(`${f.name} is a date: 2026-11-04`);
             if (f.type === 'link' && !/^https?:\/\//i.test(value)) no(`${f.name} is a link: https://...`);
@@ -621,7 +627,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
         if (d.length > DESCRIPTION_MAX) no(`a description is ${DESCRIPTION_MAX} characters at most (this one is ${d.length})`);
         return d;
     }
-    function noteOf(text) { const t = block(text, NOTE_MAX); if (!t) no('a note needs a text'); return t; }
+    function noteOf(text) { const t = whole(block(text, Infinity), 'a note', NOTE_MAX); if (!t) no('a note needs a text'); return t; }
 
     return api;
 }
