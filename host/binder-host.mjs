@@ -89,7 +89,7 @@ export function keeper(dir, { sides = () => [], now = () => Date.now() } = {}) {
             let data;
             switch (op) {
                 case 'lists': data = store.lists(who); break;
-                case 'show': data = store.list(a.list, who, { state: a.state, mine: a.mine, archived: a.archived, text: a.text }); break;
+                case 'show': data = store.list(a.list, who, { state: a.state, mine: a.mine, archived: a.archived, text: a.text, changedSince: a.changedSince, quietFor: a.quietFor }); break;
                 case 'get': data = store.record(a.id, who); break;
                 case 'search': data = store.search(a.text, who); break;
                 case 'add': data = store.add(a.list, { title: a.title, description: a.description, state: a.state, fields: a.fields, owners: me(a.owners), due: a.due, remindBefore: a.remindBefore, note: a.note }, who); break;

@@ -166,14 +166,22 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
         reload() { s = read(); },
         /* Every list `who` can see. */
         lists(who) { const w = whoOf(who); return Object.values(s.lists).filter((l) => access(l, w)).map((l) => shownList(l, w)); },
-        list(given, who, { state, mine, archived = false, text } = {}) {
+        list(given, who, { state, mine, archived = false, text, changedSince, quietFor } = {}) {
             const w = whoOf(who);
             const list = listOf(given, w);
             const st = state ? stateOf(list, state) : null;
             const q = oneLine(text, 100).toLowerCase();
+            /* By activity: changedSince keeps what moved on or after a day; quietFor
+             * keeps what is still open and has not moved in that many days (stale). */
+            const sinceT = changedSince ? Date.parse(String(changedSince).length === 10 ? `${changedSince}T00:00:00` : String(changedSince).replace(' ', 'T')) : null;
+            const quietMs = Number.isFinite(Number(quietFor)) && Number(quietFor) > 0 ? Number(quietFor) * 86400000 : null;
+            const done = list.states.find((x) => x.done);
+            const movedAt = (r) => Date.parse(r.changed ?? r.created ?? '');
             const records = Object.values(s.records).filter((r) => r.list === list.id && !!r.archived === !!archived
                 && (!st || r.state === st.id) && (!mine || r.owners.includes(w.id))
-                && (!q || said(r, q)));
+                && (!q || said(r, q))
+                && (sinceT === null || !Number.isFinite(sinceT) || movedAt(r) >= sinceT)
+                && (quietMs === null || ((!done || r.state !== done.id) && Date.now() - movedAt(r) >= quietMs)));
             const order = new Map(list.states.map((x, i) => [x.id, i]));
             records.sort((a, b) => (order.get(a.state) - order.get(b.state)) || (a.n - b.n));
             return { list: shownList(list, w), records };

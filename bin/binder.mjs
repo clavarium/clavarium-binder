@@ -11,7 +11,7 @@ import { ask, findFolder, FOLDER, VERSION } from '../server/binder.mjs';
 export const HELP = `binder: the lists you were given, and their records.
 
   binder                               your lists
-  binder show LIST [--state S] [--mine] [--archived]
+  binder show LIST [--state S] [--mine] [--archived] [--changed-since YYYY-MM-DD] [--quiet-for DAYS]
                                        the records of a list, by state
   binder get ID                        one record: fields, notes, what is attached, its history
   binder search "text"                 in every list you can see
@@ -57,7 +57,7 @@ export function read(argv) {
     const has = Object.keys(fields).length ? { fields } : {};
     switch (verb) {
         case 'lists': return ['lists', {}];
-        case 'show': return rest[0] ? ['show', { list: rest[0], state: flags.state, mine: !!flags.mine, archived: !!flags.archived }] : { refused: 'say which list: binder show LIST' };
+        case 'show': return rest[0] ? ['show', { list: rest[0], state: flags.state, mine: !!flags.mine, archived: !!flags.archived, changedSince: flags['changed-since'], quietFor: flags['quiet-for'] }] : { refused: 'say which list: binder show LIST' };
         case 'get': return rest[0] ? ['get', { id: rest[0] }] : { refused: 'say which record: binder get ID' };
         case 'search': return rest.length ? ['search', { text: rest.join(' ') }] : { refused: 'say what to look for' };
         case 'add': return rest.length >= 2 ? ['add', { list: rest[0], title: rest.slice(1).join(' '), state: flags.state, due, owners, note: flags.note, description: flags.description, ...remind, ...has }] : { refused: 'binder add LIST "title"' };

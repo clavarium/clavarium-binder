@@ -497,6 +497,24 @@ test('the words: every key in both languages, none for an empty thing', () => {
     }
 });
 
+test('show filters by activity: what changed since a day, and what is open but quiet for so long', () => {
+    const s = openStore(tmp());
+    const l = s.createList({ template: 'simple', title: 'Suivi' }, ME);
+    const doneId = l.states.find((x) => x.done).id;
+    s.add(l.id, { title: 'Fresh today' }, ME);
+    const b = s.add(l.id, { title: 'Open but quiet for weeks' }, ME);
+    const c = s.add(l.id, { title: 'Done long ago' }, ME);
+    /* Backdate two live records; close one, so "quiet" never catches what is done. */
+    const recB = s.record(b.id, ME).record; recB.changed = '2020-01-01T00:00:00';
+    const recC = s.record(c.id, ME).record; recC.changed = '2020-01-01T00:00:00'; recC.state = doneId;
+    const titles = (opts) => s.list(l.id, ME, opts).records.map((r) => r.title).sort();
+    assert.deepEqual(titles({}).length, 3, 'all three without a filter');
+    assert.deepEqual(titles({ changedSince: '2999-01-01' }), [], 'nothing changed since the future');
+    assert.deepEqual(titles({ changedSince: new Date(Date.now() - 86400000).toISOString().slice(0, 10) }), ['Fresh today'], 'only what moved since yesterday');
+    assert.deepEqual(titles({ quietFor: 7 }), ['Open but quiet for weeks'], 'open and stale, not the fresh one, not the done one');
+    assert.deepEqual(titles({ quietFor: 99999 }), [], 'quiet for longer than anything has existed: none');
+});
+
 test('the matrix: the priorities template seeds the four scores, canMatrix needs the two axes, score clamps to 0..100', () => {
     const p = seed('priorities', 'fr');
     assert.equal(p.view, 'matrix');

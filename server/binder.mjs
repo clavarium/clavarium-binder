@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline';
 
-export const VERSION = '0.1.9-next.1';
+export const VERSION = '0.1.10-next.1';
 export const FOLDER = '.binder';
 /* How long an ask waits for its answer. The keeper answers within a second or two. */
 export const WAIT_MS = 20_000;
@@ -64,7 +64,7 @@ const S = (description) => ({ type: 'string', description });
 const DESCRIBE = S('for a person, short and clear: what it is and why, 1 to 3 lines (Markdown-ish: "- " lists, **bold**, links); empty removes it');
 export const TOOLS = [
     { name: 'lists', description: 'The lists you were given, with how many records each holds and whether you may change them.', inputSchema: { type: 'object', properties: {} } },
-    { name: 'show', description: 'The records of a list, by state. Filter by state, or only yours.', inputSchema: { type: 'object', properties: { list: S('its name or id'), state: S('a state of the list'), mine: { type: 'boolean' }, archived: { type: 'boolean' } }, required: ['list'] } },
+    { name: 'show', description: 'The records of a list, by state. Filter by state, only yours, by activity (changed since a day, or open and quiet for so many days).', inputSchema: { type: 'object', properties: { list: S('its name or id'), state: S('a state of the list'), mine: { type: 'boolean' }, archived: { type: 'boolean' }, changedSince: S('only records changed on or after this day (YYYY-MM-DD): what moved since'), quietFor: { type: 'integer', description: 'only records still open that have not changed in this many days: what has gone quiet' } }, required: ['list'] } },
     { name: 'get', description: 'One record whole: its fields, notes, what is attached, its history.', inputSchema: { type: 'object', properties: { id: S('the record number, as #12 or 12') }, required: ['id'] } },
     { name: 'search', description: 'Records whose title, notes or fields hold a text, in every list you can see.', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
     { name: 'add', description: 'Add a record to a list (in its first state unless you say), with a short title and a description a person understands at a glance. You cannot add it approved: a person ticks it.', inputSchema: { type: 'object', properties: { list: S('its name or id'), title: { type: 'string' }, description: DESCRIBE, state: { type: 'string' }, due: S('2026-11-04 or 2026-11-04 09:00'), remindBefore: { type: 'integer', description: 'remind the owners this many days before the due time (e.g. 1, 3, 7)' }, owner: S('"me", or an id'), note: { type: 'string' }, fields: { type: 'object', description: '{ field name: value }' } }, required: ['list', 'title'] } },
@@ -82,7 +82,7 @@ export function asked(name, a = {}) {
     const owners = a.owner === undefined ? undefined : a.owner === '' ? [] : [a.owner];
     switch (name) {
         case 'lists': return ['lists', {}];
-        case 'show': return ['show', { list: a.list, state: a.state, mine: !!a.mine, archived: !!a.archived }];
+        case 'show': return ['show', { list: a.list, state: a.state, mine: !!a.mine, archived: !!a.archived, changedSince: a.changedSince, quietFor: a.quietFor }];
         case 'get': return ['get', { id: a.id }];
         case 'search': return ['search', { text: a.text }];
         case 'add': return ['add', { list: a.list, title: a.title, description: a.description, state: a.state, due: a.due, remindBefore: a.remindBefore, owners, note: a.note, fields: a.fields }];
