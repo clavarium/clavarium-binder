@@ -11,7 +11,7 @@
  */
 
 export const LANGUAGES = ['en', 'fr'];
-export const VIEWS = ['list', 'columns', 'cards'];
+export const VIEWS = ['list', 'columns', 'cards', 'matrix'];
 export const FIELD_TYPES = ['text', 'number', 'date', 'link', 'photo'];
 
 const T = (en, fr) => ({ en, fr });
@@ -71,6 +71,23 @@ export const TEMPLATES = {
             ['shipped', T('Shipped', 'Livré'), { done: true }],
         ],
         fields: [['target', T('Target', 'Échéance visée'), 'date']],
+    },
+    priorities: {
+        name: T('Priorities', 'Priorités'),
+        view: 'matrix',
+        states: [
+            ['todo', T('To do', 'À faire')],
+            ['doing', T('Doing', 'En cours')],
+            ['done', T('Done', 'Fait'), { done: true }],
+        ],
+        /* The four scores the matrix reads, by these ids: urgency and importance
+         * place a card (x, y), effort sizes it, delegability tints it. 0 to 100. */
+        fields: [
+            ['urgence', T('Urgency', 'Urgence'), 'number'],
+            ['importance', T('Importance', 'Importance'), 'number'],
+            ['charge', T('Effort', 'Charge'), 'number'],
+            ['delegabilite', T('Delegability', 'Délégabilité'), 'number'],
+        ],
     },
     simple: {
         name: T('Follow-up', 'Suivi simple'),

@@ -30,7 +30,8 @@ export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'n
     'kind-message', 'kind-file', 'kind-asset', 'kind-branch', 'kind-commit', 'kind-link', 'kind-record', 'what', 'name', 'type', 'saved', 'edited', 'by', 'mine', 'all',
     'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'none-archived', 'none-mine', 'search', 'description', 'edit', 'more', 'approve', 'add', 'ok',
     'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'agent-columns', 'remind-before', 'no-remind', 'days',
-    'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete']);
+    'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete',
+    'matrix', 'to-place', 'q-do', 'q-plan', 'q-delegate', 'q-later', 'legend-size', 'legend-colour']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'commit', 'link', 'record'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', commit: '◉', link: '🔗', record: '▣' };
 const TYPES = ['text', 'number', 'date', 'link', 'photo'];
@@ -96,6 +97,20 @@ export function stateShown(l, r) {
     if (open.length !== 1 || l.states.some((s) => s.gate)) return true;
     return r.state !== l.states[0]?.id;
 }
+
+/* THE MATRIX reads four number fields by their id: urgency (x) and importance
+ * (y) place a card, effort (charge) sizes it, delegability tints it. A list
+ * offers the matrix only once it carries the two axes. */
+export const MATRIX_AXES = { x: 'urgence', y: 'importance', size: 'charge', tint: 'delegabilite' };
+export const canMatrix = (l) => ['urgence', 'importance'].every((id) => (l.fields ?? []).some((f) => f.id === id && f.type === 'number'));
+/* A field's value as a 0..100 score, or null when it is not a number. */
+export function score(r, id) {
+    const v = r.fields?.[id];
+    const n = typeof v === 'number' ? v : parseFloat(v);
+    return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null;
+}
+/* Changed in the last three days: a card wears a quiet halo, "something new". */
+const fresh = (r) => { const t = Date.parse(r.changed ?? ''); return Number.isFinite(t) && Date.now() - t < 3 * 864e5; };
 
 /* A DESCRIPTION, READ: a few lines of Markdown-ish text, as blocks a screen can
  * draw element by element. Paragraphs (a blank line between), lists ("- " or
@@ -229,7 +244,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         const chip = (k) => (ui[k] ? h('button', { type: 'button', class: 'binder-chip', 'aria-pressed': 'true', 'data-act': `off-${k}`, onclick: () => flip(k) }, w(k === 'mine' ? 'mine' : 'archived'), h('span', { 'aria-hidden': 'true' }, ' ×')) : null);
         return h('div', { class: 'binder-bar' },
             h('h2', {}, l.title), chip('mine'), chip('archived'),
-            h('div', { class: 'binder-seg', role: 'group' }, ['list', 'columns', 'cards'].map((v) => h('button', { type: 'button', 'aria-pressed': String(v === view), 'data-view': v, onclick: () => { ui.view = v; paint(); } }, w(v)))),
+            h('div', { class: 'binder-seg', role: 'group' }, [...['list', 'columns', 'cards'], ...(canMatrix(l) ? ['matrix'] : [])].map((v) => h('button', { type: 'button', 'aria-pressed': String(v === view), 'data-view': v, onclick: () => { ui.view = v; paint(); } }, w(v)))),
             l.access === 'write' && !ui.archived ? h('button', { type: 'button', class: 'binder-primary', 'data-act': 'new-item', onclick: () => { ui.mode = 'new-item'; paint(); } }, `+ ${w('new-item')}`) : null,
             h('div', { class: 'binder-pop' }, h('button', { type: 'button', class: 'binder-ghost binder-dots', 'data-act': 'tools', 'aria-haspopup': 'menu', 'aria-expanded': String(ui.open === 'tools'), 'aria-label': w('tools'), title: w('tools'),
                 onclick: () => { ui.open = ui.open === 'tools' ? null : 'tools'; paint(); } }, '…'), menu));
@@ -359,6 +374,44 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                     : band(r.title),
                 h('b', {}, num(r), ' ', r.title), src ? null : sub(r), factLine(l, r, 'binder-facts binder-facts-small'), pill(l, r));
         }));
+    }
+    /* THE MATRIX: urgency across, importance up; effort sizes the bubble,
+       delegability tints it (dark = keep, light = hand off), a halo marks what
+       changed lately. A card with both axes is a bubble that opens on a tap; the
+       rest wait below, "to place". Clicking a bubble opens the card to score it. */
+    const fieldName = (l, id) => l.fields.find((f) => f.id === id)?.name ?? id;
+    function asMatrix(l, records) {
+        const done = l.states.find((s) => s.done);
+        const placed = []; const rest = [];
+        for (const r of records) (score(r, MATRIX_AXES.x) !== null && score(r, MATRIX_AXES.y) !== null ? placed : rest).push(r);
+        const dot = (r) => {
+            const x = score(r, MATRIX_AXES.x); const y = score(r, MATRIX_AXES.y);
+            const c = score(r, MATRIX_AXES.size); const d = score(r, MATRIX_AXES.tint);
+            const facts = [`${fieldName(l, MATRIX_AXES.x)} ${x}`, `${fieldName(l, MATRIX_AXES.y)} ${y}`];
+            if (c !== null) facts.push(`${fieldName(l, MATRIX_AXES.size)} ${c}`);
+            if (d !== null) facts.push(`${fieldName(l, MATRIX_AXES.tint)} ${d}`);
+            const el = h('button', { type: 'button', class: 'binder-dot', 'data-record': r.id, 'data-fresh': fresh(r) ? '' : null,
+                'data-done': done && r.state === done.id ? '' : null, title: `#${r.n} ${r.title} — ${facts.join(' · ')}`,
+                onclick: () => open(r) }, h('span', { class: 'binder-dot-n', 'aria-hidden': 'true' }, String(r.n)), h('span', { class: 'binder-sr' }, ` ${r.title}`));
+            el.style?.setProperty('left', `${x}%`);
+            el.style?.setProperty('bottom', `${y}%`);
+            el.style?.setProperty('--dot', `${(1.5 + (c ?? 20) / 100 * 2.2).toFixed(2)}rem`);
+            el.style?.setProperty('--tint-l', `${Math.round(34 + (d ?? 0) / 100 * 22)}%`); /* 34%..56%: white label stays legible */
+            return el;
+        };
+        const quad = (k, cls) => h('div', { class: `binder-quad ${cls}` }, h('span', {}, w(k)));
+        const plot = h('div', { class: 'binder-plot', role: 'group', 'aria-label': `${fieldName(l, MATRIX_AXES.x)} · ${fieldName(l, MATRIX_AXES.y)}` },
+            quad('q-plan', 'binder-q-tl'), quad('q-do', 'binder-q-tr'), quad('q-later', 'binder-q-bl'), quad('q-delegate', 'binder-q-br'),
+            h('div', { class: 'binder-axis binder-axis-x' }, `${fieldName(l, MATRIX_AXES.x)} →`),
+            h('div', { class: 'binder-axis binder-axis-y' }, fieldName(l, MATRIX_AXES.y)),
+            ...placed.map(dot));
+        const legend = h('div', { class: 'binder-legend' },
+            h('span', {}, `◍ ${w('legend-size')}: ${fieldName(l, MATRIX_AXES.size)}`),
+            h('span', {}, `● ${w('legend-colour')}: ${fieldName(l, MATRIX_AXES.tint)}`));
+        const unplaced = rest.length ? h('div', { class: 'binder-unplaced' },
+            h('h3', {}, `${w('to-place')} (${rest.length})`),
+            h('div', { class: 'binder-unplaced-row' }, rest.map((r) => h('button', { type: 'button', class: 'binder-chip binder-unplaced-chip', 'data-record': r.id, onclick: () => open(r) }, `#${r.n} ${r.title}`)))) : null;
+        return h('div', { class: 'binder-matrix' }, plot, legend, unplaced);
     }
 
     function newItem(l) {
@@ -622,7 +675,8 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 /* Empty: say why when a filter hides everything, not a bare "nothing here". */
                 const emptyWhy = ui.archived ? w('none-archived') : ui.mine ? w('none-mine') : w('no-records');
                 parts.push(records.length === 0 ? h('p', { class: 'binder-empty' }, emptyWhy)
-                    : view === 'columns' ? asColumns(l, records) : view === 'cards' ? asCards(l, records) : asList(l, records));
+                    : view === 'columns' ? asColumns(l, records) : view === 'cards' ? asCards(l, records)
+                        : view === 'matrix' && canMatrix(l) ? asMatrix(l, records) : asList(l, records));
             }
         }
         const s = scroller(); const was = s ? s.scrollTop : 0;

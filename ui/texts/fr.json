@@ -103,5 +103,13 @@
   "state:Closed": "Clos",
   "state:Idea": "Idée",
   "state:Planned": "Prévu",
-  "state:Shipped": "Livré"
+  "state:Shipped": "Livré",
+  "matrix": "Matrice",
+  "to-place": "À situer",
+  "q-do": "Faire",
+  "q-plan": "Planifier",
+  "q-delegate": "Déléguer",
+  "q-later": "Plus tard",
+  "legend-size": "Taille",
+  "legend-colour": "Couleur"
 }

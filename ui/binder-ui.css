@@ -238,3 +238,30 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-card.binder-drag-src { opacity: .35; }
 .binder-col[data-over] { outline: 2px dashed var(--binder-action); outline-offset: -2px; background: color-mix(in srgb, var(--binder-action) 10%, var(--binder-panel)); }
 .binder-cols .binder-card { touch-action: pan-y; }
+
+/* The matrix: a square plot of four quadrants, bubbles placed by two scores. */
+.binder-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.binder-matrix { display: flex; flex-direction: column; gap: var(--binder-gap); }
+.binder-plot { position: relative; aspect-ratio: 1 / 1; width: 100%; max-width: 42rem; margin-inline: auto; border: 1px solid var(--binder-line); border-radius: var(--binder-radius); background: var(--binder-panel); }
+.binder-quad { position: absolute; width: 50%; height: 50%; display: flex; align-items: flex-start; justify-content: center; pointer-events: none; }
+.binder-quad span { font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--binder-dim); padding: .5em; }
+.binder-q-tl { top: 0; left: 0; border-right: 1px dashed var(--binder-line); border-bottom: 1px dashed var(--binder-line); }
+.binder-q-tr { top: 0; right: 0; border-bottom: 1px dashed var(--binder-line); background: color-mix(in srgb, var(--binder-action) 7%, transparent); }
+.binder-q-tr span { color: var(--binder-action); }
+.binder-q-bl { bottom: 0; left: 0; }
+.binder-q-br { bottom: 0; right: 0; border-left: 1px dashed var(--binder-line); }
+.binder-axis { position: absolute; font-size: .72rem; color: var(--binder-dim); pointer-events: none; }
+.binder-axis-x { right: .6em; bottom: .35em; }
+.binder-axis-y { left: .35em; top: .6em; writing-mode: vertical-lr; }
+.binder-dot { position: absolute; width: var(--dot); height: var(--dot); margin-left: calc(var(--dot) / -2); margin-bottom: calc(var(--dot) / -2);
+  border-radius: 50%; border: 1px solid color-mix(in srgb, var(--binder-text) 28%, transparent);
+  background: hsl(214 62% var(--tint-l, 46%)); color: #fff; font-size: .72rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; transition: transform .1s; }
+.binder-dot:hover, .binder-dot:focus-visible { transform: scale(1.14); outline: 2px solid var(--binder-action); outline-offset: 1px; z-index: 3; }
+.binder-dot[data-fresh] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--binder-ask) 60%, transparent); }
+.binder-dot[data-done] { border-style: dashed; filter: grayscale(.55) opacity(.7); }
+.binder-legend { display: flex; gap: 1.4em; flex-wrap: wrap; justify-content: center; font-size: .8rem; color: var(--binder-dim); }
+.binder-unplaced { border-top: 1px solid var(--binder-line); padding-top: .6rem; }
+.binder-unplaced h3 { margin: 0 0 .45rem; font-size: .9rem; color: var(--binder-dim); }
+.binder-unplaced-row { display: flex; flex-wrap: wrap; gap: .4rem; }
+.binder-unplaced-chip { cursor: pointer; }

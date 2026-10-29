@@ -88,5 +88,13 @@
   "op-detach": "Detached",
   "op-archive": "Archived",
   "op-restore": "Restored",
-  "op-delete": "Deleted"
+  "op-delete": "Deleted",
+  "matrix": "Matrix",
+  "to-place": "To place",
+  "q-do": "Do",
+  "q-plan": "Plan",
+  "q-delegate": "Delegate",
+  "q-later": "Later",
+  "legend-size": "Size",
+  "legend-colour": "Colour"
 }

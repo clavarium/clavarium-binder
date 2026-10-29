@@ -8,7 +8,7 @@ import { seed } from '../server/templates.mjs';
 import { keeper } from '../host/binder-host.mjs';
 import { ask, asked, TOOLS } from '../server/binder.mjs';
 import { say } from '../host/binder-host.mjs';
-import { blocks, toggled, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, KEYS, mount } from '../ui/binder-ui.js';
+import { blocks, toggled, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, canMatrix, score, MATRIX_AXES, KEYS, mount } from '../ui/binder-ui.js';
 import { isPicture as storeIsPicture } from '../server/store.mjs';
 import { DESCRIPTION_MAX, AGENT_LISTS_MAX, AGENT_LISTS_DEFAULT } from '../server/store.mjs';
 import { run, read } from '../bin/binder.mjs';
@@ -495,6 +495,61 @@ test('the words: every key in both languages, none for an empty thing', () => {
         for (const k of ['nobody', 'no-due']) assert.equal(k in words, false, `${lang}: "${k}" says what is empty`);
         for (const op of ['add', 'edit', 'move', 'note', 'attach', 'detach', 'archive', 'restore']) assert.ok(words[`op-${op}`] && words[`op-${op}`] !== op, `${lang}: the history says ${op} in words`);
     }
+});
+
+test('the matrix: the priorities template seeds the four scores, canMatrix needs the two axes, score clamps to 0..100', () => {
+    const p = seed('priorities', 'fr');
+    assert.equal(p.view, 'matrix');
+    assert.deepEqual(p.fields.map((f) => f.id), ['urgence', 'importance', 'charge', 'delegabilite']);
+    assert.ok(p.fields.every((f) => f.type === 'number'), 'the four scores are numbers');
+    assert.equal(p.fields.find((f) => f.id === 'urgence').name, 'Urgence');
+    assert.deepEqual([MATRIX_AXES.x, MATRIX_AXES.y], ['urgence', 'importance']);
+    assert.equal(canMatrix(p), true);
+    assert.equal(canMatrix(seed('customers')), false, 'a list without the two number axes does not offer the matrix');
+    assert.equal(canMatrix({ fields: [{ id: 'urgence', type: 'text' }, { id: 'importance', type: 'number' }] }), false, 'an axis that is not a number does not count');
+    assert.equal(score({ fields: { urgence: 72 } }, 'urgence'), 72);
+    assert.equal(score({ fields: { urgence: '80' } }, 'urgence'), 80, 'a number written as text is read');
+    assert.equal(score({ fields: { urgence: 140 } }, 'urgence'), 100, 'clamped high');
+    assert.equal(score({ fields: { urgence: -5 } }, 'urgence'), 0, 'clamped low');
+    assert.equal(score({ fields: {} }, 'urgence'), null, 'not set is unplaced');
+    assert.equal(score({ fields: { urgence: 'soon' } }, 'urgence'), null, 'not a number is unplaced');
+});
+
+test('the matrix view: placed cards become bubbles at their scores, the rest wait to be placed, a bubble opens its card', async () => {
+    class Node { constructor() { this.childNodes = []; } append(...k) { for (const c of k) { c.parent = this; this.childNodes.push(c); } }
+        replaceChildren(...k) { this.childNodes = []; this.append(...k); } remove() { if (this.parent) this.parent.childNodes = this.parent.childNodes.filter((c) => c !== this); }
+        get textContent() { return this.childNodes.map((c) => c.textContent).join(''); } set textContent(t) { this.childNodes = [new Text(String(t))]; } }
+    class Text extends Node { constructor(t) { super(); this.data = t; } get textContent() { return this.data; } }
+    class El extends Node { constructor(tag) { super(); this.tag = tag; this.attrs = {}; this.on = {}; this.style = { props: {}, setProperty(k, v) { this.props[k] = String(v); } }; }
+        setAttribute(k, v) { this.attrs[k] = String(v); } set className(v) { this.attrs.class = String(v); } get className() { return this.attrs.class ?? ''; }
+        addEventListener(k, f) { this.on[k] = f; } focus() {} setSelectionRange() {} querySelector() { return null; } }
+    const all = (n, f, out = []) => { if (n instanceof El && f(n)) out.push(n); for (const c of n.childNodes ?? []) all(c, f, out); return out; };
+    const names = ['document', 'Node', 'window', 'requestAnimationFrame'];
+    const was = Object.fromEntries(names.map((n) => [n, globalThis[n]]));
+    Object.assign(globalThis, { Node, window: {}, requestAnimationFrame: () => 0,
+        document: { createElement: (t) => new El(t), createTextNode: (t) => new Text(t), addEventListener() {}, removeEventListener() {} } });
+    const settle = () => new Promise((r) => setTimeout(r, 20));
+    try {
+        const k = keeper(tmp());
+        const prio = k.act('create-list', { template: 'priorities', title: 'Priorités', lang: 'fr' }, ME).data;
+        const a = k.act('add', { list: prio.id, title: 'Ship billing', fields: { urgence: 80, importance: 70, charge: 40, delegabilite: 10 } }, ME).data;
+        k.act('add', { list: prio.id, title: 'Tidy docs', fields: { urgence: 20, importance: 30 } }, ME);
+        k.act('add', { list: prio.id, title: 'Someday idea' }, ME); // no axes -> to place
+        const root = new El('div');
+        const b = mount(root, { call: async (op, args) => k.act(op, args, ME), lang: 'fr' });
+        await settle();
+        const dots = all(root, (e) => e.attrs.class === 'binder-dot');
+        assert.equal(dots.length, 2, 'two cards carry both axes -> two bubbles');
+        const first = all(root, (e) => e.attrs.class === 'binder-dot' && e.attrs['data-record'] === a.id)[0];
+        assert.equal(first.style.props.left, '80%'); assert.equal(first.style.props.bottom, '70%');
+        const chips = all(root, (e) => (e.attrs.class ?? '').includes('binder-unplaced-chip'));
+        assert.equal(chips.length, 1, 'the card with no scores waits to be placed');
+        assert.ok(all(root, (e) => e.attrs['data-view'] === 'matrix').length, 'the matrix view is offered on a list that carries the axes');
+        first.on.click();
+        await settle();
+        assert.equal(b.state.mode, 'record', 'a bubble opens its card to score it');
+        b.destroy();
+    } finally { for (const n of names) globalThis[n] = was[n]; }
 });
 
 test('the cover: set by a person or an agent, a picture only, gone with its picture', () => {
