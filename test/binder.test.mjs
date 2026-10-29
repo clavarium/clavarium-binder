@@ -574,6 +574,21 @@ test('retype gives a list another type additively: a simple list becomes a prior
     assert.throws(() => s.retype(l.id, { template: 'nope' }, ME), /no template/);
 });
 
+test('binder field add/remove: a person adds fields to an existing list and removes one, keeping the others', () => {
+    const k = keeper(tmp());
+    const l = k.act('create-list', { template: 'simple', title: 'Suivi' }, ME).data;
+    k.act('field', { list: l.id, add: { name: 'Interlocuteurs', type: 'text' } }, ME);
+    const r1 = k.act('field', { list: l.id, add: { name: 'Prochaine étape', type: 'text' } }, ME);
+    assert.deepEqual(r1.data.fields.map((f) => f.name), ['Interlocuteurs', 'Prochaine étape']);
+    const r2 = k.act('field', { list: l.id, remove: 'Interlocuteurs' }, ME);
+    assert.deepEqual(r2.data.fields.map((f) => f.name), ['Prochaine étape']);
+    assert.equal(k.act('field', { list: l.id, remove: 'Nope' }, ME).ok, false, 'removing an absent field is refused');
+    /* the CLI parses name and optional type (text by default) */
+    assert.deepEqual(read(['field', 'L', 'add', 'Interlocuteurs'])[1], { list: 'L', add: { name: 'Interlocuteurs', type: 'text' } });
+    assert.deepEqual(read(['field', 'L', 'add', 'Born', 'date'])[1], { list: 'L', add: { name: 'Born', type: 'date' } });
+    assert.deepEqual(read(['field', 'L', 'remove', 'Born'])[1], { list: 'L', remove: 'Born' });
+});
+
 test('an agent reshapes a list (fields, view, type) only when a person turns agentFields on; even then it adds, never removes, retypes or renames away data', () => {
     const s = openStore(tmp());
     const l = s.createList({ template: 'simple', title: 'Suivi' }, BOT); // the agent's own list: it has write

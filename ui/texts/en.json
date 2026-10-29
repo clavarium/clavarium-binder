@@ -103,5 +103,7 @@
   "recurrent": "Recurrent (never closes)",
   "retype": "Change type",
   "retype-hint": "Apply another type's view and fields (e.g. the priorities matrix). Your records and what the list already has stay.",
-  "retype-apply": "Convert"
+  "retype-apply": "Convert",
+  "no-repeat": "Not recurrent",
+  "repeat-free": "no fixed rhythm"
 }

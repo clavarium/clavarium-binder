@@ -31,7 +31,7 @@ export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'n
     'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'none-archived', 'none-mine', 'search', 'description', 'edit', 'more', 'approve', 'add', 'ok',
     'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'agent-columns', 'agent-fields', 'remind-before', 'no-remind', 'days',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete',
-    'matrix', 'to-place', 'q-do', 'q-plan', 'q-delegate', 'q-later', 'legend-size', 'legend-colour', 'recurrent', 'retype', 'retype-hint', 'retype-apply']);
+    'matrix', 'to-place', 'q-do', 'q-plan', 'q-delegate', 'q-later', 'legend-size', 'legend-colour', 'recurrent', 'retype', 'retype-hint', 'retype-apply', 'no-repeat', 'repeat-free']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'commit', 'link', 'record', 'mail', 'event'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', commit: '◉', link: '🔗', record: '▣', mail: '📧', event: '📅' };
 const TYPES = ['text', 'number', 'date', 'link', 'photo'];
@@ -504,13 +504,21 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 onchange: () => void soft(ask('edit', { id: r.id, remindBefore: remind.value ? Number(remind.value) : 0 })).then(refresh) },
                 h('option', { value: '' }, w('no-remind')),
                 [1, 3, 7].map((n) => h('option', { value: String(n), selected: r.remindBefore === n ? true : null }, `−${n} ${w('days')}`))) : null;
+            /* Recurrence: not recurrent, every so many days, or recurrent with no fixed rhythm.
+               On (any rhythm) the card never closes -- a move to done reopens it at the next. */
+            const repeat = h('select', { class: 'binder-remind', 'aria-label': w('recurrent'),
+                onchange: () => void soft(ask('edit', { id: r.id, repeat: repeat.value })).then(refresh) },
+                h('option', { value: '', selected: !r.repeat ? true : null }, w('no-repeat')),
+                [7, 14, 30].map((n) => h('option', { value: String(n), selected: r.repeat === n ? true : null }, `↻ ${n} ${w('days')}`)),
+                h('option', { value: 'on', selected: r.repeat === true ? true : null }, `↻ ${w('repeat-free')}`));
             whoEdit = h('div', { class: 'binder-who-edit' },
                 people().length ? h('div', { class: 'binder-owners', role: 'group', 'aria-label': w('owners') }, people().map((p) => h('button', { type: 'button', class: 'binder-chip', 'data-owner': p.id,
                     'aria-pressed': String(r.owners.includes(p.id)),
                     onclick: () => void soft(ask('edit', { id: r.id, owners: r.owners.includes(p.id) ? r.owners.filter((x) => x !== p.id) : [...r.owners, p.id] })).then(refresh) }, p.name))) : null,
                 h('div', { class: 'binder-form' }, day, hour,
                     h('button', { type: 'button', class: 'binder-primary binder-small', 'data-act': 'save-due', onclick: () => done(ask('edit', { id: r.id, due: day.value ? (hour.value ? `${day.value} ${hour.value}` : day.value) : '' })) }, w('ok'))),
-                remind ? h('div', { class: 'binder-form binder-remind-row' }, h('span', { class: 'binder-dim' }, w('remind-before')), remind) : null);
+                remind ? h('div', { class: 'binder-form binder-remind-row' }, h('span', { class: 'binder-dim' }, w('remind-before')), remind) : null,
+                h('div', { class: 'binder-form binder-remind-row' }, h('span', { class: 'binder-dim' }, w('recurrent')), repeat));
         }
 
         /* What is attached: an icon and a name; a tap opens it. */

@@ -74,6 +74,7 @@ export function say(op, data, list) {
         case 'archive': return data.archived ? `Archived #${data.id}.` : `Restored #${data.id}.`;
         case 'settings': case 'edit-settings': return `Lists an agent may make: ${data.agentLists}. Columns an agent may change: ${data.agentColumns ? 'yes' : 'no'}. Fields/type an agent may change: ${data.agentFields ? 'yes' : 'no'}.`;
         case 'edit-list': case 'columns': return `The columns are set: ${(data.states ?? []).map((x) => x.name).join(', ')}.`;
+        case 'field': return `The fields are set: ${(data.fields ?? []).map((x) => x.name).join(', ') || 'none'}.`;
         case 'retype': return `${data.title} is now a ${data.template} list (view: ${data.view}); its fields: ${data.fields.map((f) => f.name).join(', ') || 'none'}.`;
         case 'create-list': return `Made the list ${data.title} [${data.id}], yours to change: binder add ${data.id} "title".`;
         case 'archive-list': return data.archived ? `Archived the list ${data.title} [${data.id}]. A person can restore or delete it.` : `Restored the list ${data.title} [${data.id}].`;
@@ -124,6 +125,18 @@ export function keeper(dir, { sides = () => [], now = () => Date.now() } = {}) {
                         states.splice(at, 0, { name });
                     }
                     data = store.editList(a.list, { states }, who);
+                    break;
+                }
+                case 'field': {
+                    /* Add or remove a field, keeping every other field, then edit the list with the whole set
+                       (so the store's rules -- a person's, or an agent's when allowed -- apply to the change). */
+                    const match = (ref) => (x) => x.id === ref || x.name.toLowerCase() === String(ref ?? '').toLowerCase();
+                    const l = store.lists(who).find(match(a.list));
+                    if (!l) throw new Refused(`no list ${oneLine(a.list, 100) || '(none given)'}`);
+                    const fields = l.fields.map((x) => ({ id: x.id, name: x.name, type: x.type }));
+                    if (a.add) { const name = oneLine(a.add.name, 60); if (!name) throw new Refused('a field needs a name'); fields.push({ name, type: a.add.type }); }
+                    if (a.remove) { const i = fields.findIndex(match(a.remove)); if (i < 0) throw new Refused(`no field "${a.remove}"`); fields.splice(i, 1); }
+                    data = store.editList(a.list, { fields }, who);
                     break;
                 }
                 case 'grant': data = store.grant(a.list, a.to, a.access ?? null, who); break;

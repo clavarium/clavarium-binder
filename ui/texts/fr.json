@@ -118,5 +118,7 @@
   "recurrent": "Récurrent (ne se clôt jamais)",
   "retype": "Changer le type",
   "retype-hint": "Appliquer la vue et les champs d'un autre type (ex. la matrice des priorités). Tes fiches et ce que le classeur a déjà sont gardés.",
-  "retype-apply": "Convertir"
+  "retype-apply": "Convertir",
+  "no-repeat": "Non récurrente",
+  "repeat-free": "sans rythme fixe"
 }

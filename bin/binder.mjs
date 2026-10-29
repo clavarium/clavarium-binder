@@ -26,6 +26,8 @@ export const HELP = `binder: the lists you were given, and their records.
   binder new TEMPLATE ["title"]        a list of your own, when none you were given fits
                                        TEMPLATE: batches, development, customers, people, priorities, roadmap, simple
   binder retype LIST TEMPLATE          give an existing list another type (its view + fields), keeping every record (a person only)
+  binder field LIST add NOM [TYPE]     add a field to a list (TYPE: text, number, date, link, photo; text by default)
+  binder field LIST remove NOM         remove a field (a person only)
   binder serve [--store DIR] [--port N] [--side FOLDER=NAME]
                                        keep a binder yourself, with its page (no application)
 
@@ -37,7 +39,7 @@ You never approve: a person ticks what may go on. Talking with them stays in the
 The folder used is --dir FOLDER, else $BINDER_DIR, else the nearest ${FOLDER} folder from here up.
 binder ${VERSION}`;
 
-const VERBS = ['lists', 'show', 'get', 'search', 'add', 'edit', 'move', 'note', 'attach', 'detach', 'archive', 'restore', 'new', 'retype', 'archive-list', 'restore-list', 'columns'];
+const VERBS = ['lists', 'show', 'get', 'search', 'add', 'edit', 'move', 'note', 'attach', 'detach', 'archive', 'restore', 'new', 'retype', 'archive-list', 'restore-list', 'columns', 'field'];
 
 /* A command line, read: [op, args] or a refusal. */
 export function read(argv) {
@@ -78,6 +80,20 @@ export function read(argv) {
             if (action === 'add') return more.length ? ['columns', { list, add: more.join(' '), ...(flags.after ? { after: flags.after } : {}), ...(flags.before ? { before: flags.before } : {}) }] : { refused: 'binder columns LIST add "Name"' };
             if (action === 'rename') return more.length >= 2 ? ['columns', { list, rename: { from: more[0], to: more.slice(1).join(' ') } }] : { refused: 'binder columns LIST rename "Old" "New"' };
             return { refused: 'binder columns LIST add "Name" | rename "Old" "New"' };
+        }
+        case 'field': {
+            const TYPES = ['text', 'number', 'date', 'link', 'photo'];
+            const [list, action, ...more] = rest;
+            if (!list || !action) return { refused: `binder field LIST add NOM [TYPE] | binder field LIST remove NOM  (TYPE: ${TYPES.join(', ')})` };
+            if (action === 'add') {
+                if (!more.length) return { refused: `binder field LIST add NOM [TYPE]  (TYPE: ${TYPES.join(', ')}, text by default)` };
+                const last = more[more.length - 1];
+                const type = TYPES.includes(last) ? last : 'text';
+                const name = (TYPES.includes(last) ? more.slice(0, -1) : more).join(' ');
+                return name ? ['field', { list, add: { name, type } }] : { refused: 'binder field LIST add NOM [TYPE]' };
+            }
+            if (action === 'remove') return more.length ? ['field', { list, remove: more.join(' ') }] : { refused: 'binder field LIST remove NOM' };
+            return { refused: 'binder field LIST add NOM [TYPE] | binder field LIST remove NOM' };
         }
         default: return { refused: 'not understood' };
     }
