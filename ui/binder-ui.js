@@ -578,7 +578,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     let matrixLeave = null; let matrixTrailClear = null;
     /* The matrix's own view state, kept across repaints (and reset when the binder changes):
        which owner categories are hidden, and whether the delegability arcs show. */
-    let mxFor = null; let mxHide = new Set(); let mxRings = true; let mxMove = false; let mxNote = null; let mxFs = false;
+    let mxFor = null; let mxHide = new Set(); let mxRings = true; let mxMove = false; let mxNote = null; let mxFs = false; let mxCarry = false;
     const s100 = (v) => Math.max(0, Math.min(100, Number(v) || 0));
     /* THE MATRIX: urgency across (→), importance up (↑); a point's HUE says who owns it
        (gold = me, one colour per person, grey = nobody), its SIZE says the charge, and a thin
@@ -597,10 +597,18 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         const meId = (people() || []).find((p) => p.me)?.id ?? null;
         /* Who it is with: mine, else its first other owner -- a person or a conversation (an
            agent it was handed to is delegated too) -- else nobody. */
-        const ownerCat = (r) => { const os = (r.owners ?? []).filter((id) => typeof id === 'string'); if (meId && os.includes(meId)) return 'me'; return os.find((id) => id !== meId) ?? 'none'; };
-        /* Who could take one of mine (#177): its first other owner. Its arc wears their colour; with
-           nobody named yet, the arc is grey and dashed -- a wish, still all mine. */
-        const helperOf = (r) => (ownerCat(r) === 'me' ? (r.owners ?? []).find((id) => typeof id === 'string' && id !== meId) ?? null : null);
+        /* Who carries it: its first owner (me, a person, a conversation), else nobody. */
+        const asCat = (id) => (meId && id === meId ? 'me' : id);
+        const ownerCat = (r) => { const os = (r.owners ?? []).filter((id) => typeof id === 'string'); return os.length ? asCat(os[0]) : 'none'; };
+        /* The other one on a card (#177), its second owner: who could take part of mine, or where
+           I come in on someone else's. Its arc wears their colour and runs over their share; on one
+           of mine with nobody named yet, the arc is grey and dashed -- a wish, still all mine. */
+        const helperOf = (r) => { const os = (r.owners ?? []).filter((id) => typeof id === 'string'); return os.length > 1 ? asCat(os[1]) : null; };
+        /* MY MATRIX: only what concerns me -- what I carry, and theirs where I come in. A card of
+           nobody's is no point: it waits below, to be given to someone. (Seen with no one known as
+           me -- a binder alone -- everything is shown, as before.) */
+        const unowned = meId ? placed.filter((r) => ownerCat(r) === 'none') : [];
+        if (meId) { const mineOnly = placed.filter((r) => ownerCat(r) === 'me' || helperOf(r) === 'me'); placed.length = 0; placed.push(...mineOnly); }
         const present = new Set([...placed.map(ownerCat), ...placed.map(helperOf).filter(Boolean)]);
         /* Each delegate its own colour, in the order people() gives them, then any other owner seen. */
         const known = (people() || []).map((p) => p.id);
@@ -609,19 +617,24 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         const colorOf = (cat) => (cat === 'me' ? 'var(--bm-me)' : cat === 'none' ? 'var(--bm-none)' : `var(--bm-${(personIndex.get(cat) ?? 0) % 6 + 1})`);
         const labelFor = (cat) => (cat === 'me' ? w('legend-me') : cat === 'none' ? w('legend-none') : nameOf(cat).replace(/^[a-z]+:/, ''));
         const cats = [...(present.has('me') ? ['me'] : []), ...delegates, ...(present.has('none') ? ['none'] : [])];
-        const anyGauge = placed.some((r) => ownerCat(r) === 'me' && s100(score(r, TINT)) > 0 && score(r, TINT) !== null);
+        const anyGauge = placed.some((r) => (ownerCat(r) === 'me' || helperOf(r)) && s100(score(r, TINT)) > 0 && score(r, TINT) !== null);
         /* Fresh binder: hide "nobody" by default (the least useful) — but only when there is
            something else to show, so a list where nobody is assigned is not an empty plot. */
-        if (mxFor !== l.id) { mxFor = l.id; mxHide = new Set(present.has('none') && present.size > 1 ? ['none'] : []); mxRings = true; }
+        /* First seen: what concerns me -- mine, and theirs where I come in (by their arc). The rest a
+           tap away (the legend, "All"). With nothing of mine, all is shown but nobody's. */
+        if (mxFor !== l.id) { mxFor = l.id; mxHide = new Set(!meId && present.has('none') && present.size > 1 ? ['none'] : []); mxRings = true; }
         const MINR = 0.6; const MAXR = 2.2;
         const dot = (r) => {
             const x = urgencyOf(r); const y = score(r, Y);
             const c = score(r, SIZE); const d = score(r, TINT);
             const cat = ownerCat(r); const mine = cat === 'me';
-            const hasGauge = mine && d !== null && d > 0;
-            const helper = mine ? helperOf(r) : null;
-            /* Its size is what it costs me: with someone named to take part of it, my share only. */
-            const share = helper && c !== null && d !== null ? Math.round(c * (100 - s100(d)) / 100) : null;
+            const helper = helperOf(r);
+            /* Theirs where I come in always shows my arc: at least 5 %, even with my share unsaid. */
+            const dd = helper === 'me' && !mine ? Math.max(5, d ?? 0) : d;
+            const hasGauge = (mine || helper !== null) && dd !== null && dd > 0;
+            /* Its size is what it costs me: mine with a helper, all but their share; someone else's
+               where I come in, my share of it. */
+            const share = c === null || dd === null ? null : mine && helper ? Math.round(c * (100 - s100(dd)) / 100) : helper === 'me' ? Math.round(c * s100(dd) / 100) : null;
             const dia = MINR + (s100(share ?? c ?? 20) / 100) * (MAXR - MINR);
             const facts = [`${fieldName(l, X)} ${x}${urgencyAuto(r) ? ` (${w('auto')})` : ''}`, `${fieldName(l, Y)} ${y}`];
             if (c !== null) facts.push(`${fieldName(l, SIZE)} ${c}${share !== null ? ` · ${w('my-share')} ${share}` : ''}`);
@@ -637,7 +650,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                     if (wrap && !was) { wrap.classList.add('open'); void showTrail(r); } else clearTrail();
                 } }, h('span', { class: 'binder-dot-fill' }));
             gauge.style?.setProperty('--c', colorOf(cat));
-            if (hasGauge) gauge.style?.setProperty('--pct', String(Math.round(s100(d))));
+            if (hasGauge) gauge.style?.setProperty('--pct', String(Math.round(s100(dd))));
             if (hasGauge && helper) gauge.style?.setProperty('--arc', colorOf(helper));
             const label = h('span', { class: 'binder-dot-label', lang, 'aria-hidden': 'true' }, r.title);
             const whoDot = h('span', { class: 'binder-who-dot' }); whoDot.style?.setProperty('background', colorOf(cat));
@@ -699,7 +712,8 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             /* The legend filters by colour (#177): a person shown brings along my cards they could
                take (mine faded, their arc plain); a person hidden takes their arc off mine. */
             const helped = (r) => { const hp = helperOf(r); return hp !== null && !mxHide.has(hp); };
-            const shown = placed.filter((r) => !mxHide.has(ownerCat(r)) || (ownerCat(r) === 'me' && helped(r)));
+            /* "Mine": what I carry only; else a card is shown when its carrier, or its helper, is. */
+            const shown = placed.filter((r) => (mxCarry ? ownerCat(r) === 'me' : !mxHide.has(ownerCat(r)) || helped(r)));
             plot.classList?.toggle?.('binder-is-empty', shown.length === 0);
             plot.classList?.toggle?.('binder-gauges-off', !mxRings);
             for (const r of shown) {
@@ -760,7 +774,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         for (const cat of cats) {
             const sw = h('span', { class: 'binder-leg-sw' }); sw.style?.setProperty('background', colorOf(cat));
             const b = h('button', { type: 'button', class: 'binder-leg' }, sw, document.createTextNode(labelFor(cat)));
-            b.addEventListener('click', () => { if (mxHide.has(cat)) mxHide.delete(cat); else mxHide.add(cat); sync(); });
+            b.addEventListener('click', () => { mxCarry = false; if (mxHide.has(cat)) mxHide.delete(cat); else mxHide.add(cat); sync(); });
             legBtns.set(cat, b); legend.append(b);
         }
         let ringBtn = null;
@@ -772,10 +786,10 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         }
         legend.append(h('span', { class: 'binder-size-key' }, h('span', { class: 'binder-sz binder-sz1' }), h('span', { class: 'binder-sz binder-sz2' }), h('span', { class: 'binder-sz binder-sz3' }), document.createTextNode(` ${w('legend-size')}`)));
         /* Quick chips set the whole legend at once. */
-        const chip = (key, apply) => { const b = h('button', { type: 'button', class: 'binder-chip' }, w(key)); b.addEventListener('click', () => { apply(); sync(); }); return b; };
+        const chip = (key, apply) => { const b = h('button', { type: 'button', class: 'binder-chip' }, w(key)); b.addEventListener('click', () => { mxCarry = false; apply(); sync(); }); return b; };
         const chips = h('div', { class: 'binder-mx-chips' }, h('span', { class: 'binder-mx-lab' }, w('shortcuts')),
-            chip('mx-all', () => { mxHide = new Set(); }),
-            chip('mx-mine', () => { mxHide = new Set(cats.filter((c) => c !== 'me')); }),
+            chip('mx-all', () => { mxHide = new Set(); mxCarry = false; }),
+            chip('mx-mine', () => { mxHide = new Set(cats.filter((c) => c !== 'me')); mxCarry = true; }),
             chip('mx-deleg', () => { mxHide = new Set(cats.filter((c) => c === 'me' || c === 'none')); }));
         /* Fullscreen, for reading on a tablet: the real Fullscreen API where it is granted, and in
            every case a CSS cover (position:fixed) so the button always works. Escape or the button
@@ -848,7 +862,10 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         const unplaced = rest.length ? h('div', { class: 'binder-unplaced' },
             h('h3', {}, `${w('to-place')} (${rest.length})`),
             h('div', { class: 'binder-unplaced-row' }, rest.map((r) => h('button', { type: 'button', class: 'binder-chip binder-unplaced-chip', 'data-record': r.id, onclick: () => open(r) }, `#${r.n} ${r.title}`)))) : null;
-        const root = h('div', { class: 'binder-matrix' }, bar, note, plot, legend, unplaced);
+        const nobodys = unowned.length ? h('div', { class: 'binder-unplaced' },
+            h('h3', {}, `${w('legend-none')} (${unowned.length})`),
+            h('div', { class: 'binder-unplaced-row' }, unowned.map((r) => h('button', { type: 'button', class: 'binder-chip binder-unplaced-chip', 'data-record': r.id, onclick: () => open(r) }, `#${r.n} ${r.title}`)))) : null;
+        const root = h('div', { class: 'binder-matrix' }, bar, note, plot, legend, unplaced, nobodys);
         setMove(mxMove);
         if (mxNote && mxNote.until > Date.now()) say(mxNote.text, mxNote.undo, mxNote.until);
         const setFs = () => { const on = root.classList?.contains?.('binder-matrix-max') ?? false; fsBtn.textContent = on ? '⤢' : '⛶'; fsBtn.title = on ? w('fullscreen-exit') : w('fullscreen'); fsBtn.setAttribute('aria-pressed', String(on)); if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => placeLabels()); };

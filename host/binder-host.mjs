@@ -61,7 +61,8 @@ export function ownerGuide(ids = [], people = []) {
         '  yourself, this conversation: --owner me',
         `  another conversation: --owner conversation:NAME${agents.length ? ` (${agents.slice(0, 6).join(', ')}${agents.length > 6 ? ', ...' : ''})` : ''}`,
         '  nobody yet: --owner none',
-        '  theirs, and who could take part of it (its delegabilite share): --owner <their id>,<the helper\'s id> -- the first carries it, the second could take it',
+        '  two people on one card: --owner <who carries it>,<who comes in> -- the second\'s share is delegabilite: on the person\'s card, what you (or someone) could take; on yours, how much you need the person (at least 5)',
+        '  the person sees on their matrix only what they carry or come in on; a card of nobody\'s waits below it',
         '  everyone who may carry one: binder people'];
 }
 /* What a card on a matrix still lacks to be placed and read: said after it is written. */

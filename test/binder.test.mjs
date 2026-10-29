@@ -1028,6 +1028,10 @@ test('the delegable share (#177): an arc in the colour of who could take it, das
         const prio = k.act('create-list', { template: 'priorities', title: 'Priorités', lang: 'fr' }, ME).data;
         const helped = k.act('add', { list: prio.id, title: 'Helped', fields: { urgence: 80, importance: 70, charge: 80, delegabilite: 90 }, owners: [ME.id, 'conversation:y'] }, ME).data;
         const wish = k.act('add', { list: prio.id, title: 'Wish', fields: { urgence: 30, importance: 60, charge: 80, delegabilite: 60 }, owners: [ME.id] }, ME).data;
+        const theirs = k.act('add', { list: prio.id, title: 'Theirs', fields: { urgence: 50, importance: 40, charge: 80, delegabilite: 10 }, owners: ['conversation:y', ME.id] }, ME).data;
+        const notMe = k.act('add', { list: prio.id, title: 'Not me', fields: { urgence: 60, importance: 20, charge: 30 }, owners: ['conversation:y'] }, ME).data;
+        const unsaid = k.act('add', { list: prio.id, title: 'Unsaid', fields: { urgence: 70, importance: 30, charge: 40 }, owners: ['conversation:y', ME.id] }, ME).data;
+        const nobodys = k.act('add', { list: prio.id, title: 'Nobodys', fields: { urgence: 40, importance: 50 } }, ME).data;
         const root = new El('div');
         const people = () => [{ id: ME.id, kind: 'person', name: 'Owner', me: true }, { id: 'conversation:y', kind: 'agent', name: 'y' }];
         const b = mount(root, { call: async (op, args) => k.act(op, args, ME), lang: 'fr', people });
@@ -1042,6 +1046,16 @@ test('the delegable share (#177): an arc in the colour of who could take it, das
         assert.ok(parseFloat(wrapOf(helped.id).style.props['--dot']) < parseFloat(wrapOf(wish.id).style.props['--dot']));
         assert.match(dotOf(helped.id).attrs['aria-label'], /(ma part|my-share) 8/);
         assert.ok(all(root, (e) => (e.attrs.class ?? '') === 'binder-leg' && e.textContent.includes('y')).length, 'who could take it is in the legend');
+        /* The other way round: theirs, where I come in for 10 %: their colour in the middle, my gold arc over 10 %, my share 8. */
+        assert.equal(dotOf(theirs.id).attrs['data-helper'], 'me');
+        assert.equal(dotOf(theirs.id).style.props['--arc'], 'var(--bm-me)');
+        assert.match(dotOf(theirs.id).attrs['aria-label'], /(ma part|my-share) 8/);
+        /* First seen: only what concerns me -- theirs where I come in, faded; theirs without me, not at all. */
+        assert.ok(wrapOf(theirs.id), 'theirs where I come in is shown');
+        assert.equal(wrapOf(notMe.id), undefined, 'a card I have no part in is no point of my matrix');
+        assert.equal(dotOf(unsaid.id).style.props['--pct'], '5', 'where I come in, my arc shows at least 5 %');
+        assert.equal(wrapOf(nobodys.id), undefined, 'a card of nobody\'s is no point...');
+        assert.ok(all(root, (e) => (e.attrs.class ?? '').includes('binder-unplaced-chip') && e.attrs['data-record'] === nobodys.id).length, '...it waits below, to be given');
         b.destroy();
     } finally { for (const n of names) globalThis[n] = was[n]; }
 });
