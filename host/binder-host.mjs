@@ -78,6 +78,7 @@ export function say(op, data, list) {
         case 'retype': return `${data.title} is now a ${data.template} list (view: ${data.view}); its fields: ${data.fields.map((f) => f.name).join(', ') || 'none'}.`;
         case 'create-list': return `Made the list ${data.title} [${data.id}], yours to change: binder add ${data.id} "title".`;
         case 'archive-list': return data.archived ? `Archived the list ${data.title} [${data.id}]. A person can restore or delete it.` : `Restored the list ${data.title} [${data.id}].`;
+        case 'order-lists': return 'The order of the binders is set.';
         default: return 'Done.';
     }
 }
@@ -141,6 +142,7 @@ export function keeper(dir, { sides = () => [], now = () => Date.now() } = {}) {
                 }
                 case 'grant': data = store.grant(a.list, a.to, a.access ?? null, who); break;
                 case 'archive-list': data = store.archiveList(a.list, a.archived !== false, who); break;
+                case 'order-lists': data = store.orderLists(a.order, who); break;
                 case 'delete-list': data = store.deleteList(a.list, who); break;
                 case 'settings': data = store.settings(who); break;
                 case 'edit-settings': data = store.editSettings({ agentLists: a.agentLists, agentColumns: a.agentColumns, agentFields: a.agentFields }, who); break;

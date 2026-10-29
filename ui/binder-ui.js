@@ -31,7 +31,8 @@ export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'n
     'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'none-archived', 'none-mine', 'search', 'description', 'edit', 'more', 'approve', 'add', 'ok',
     'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'agent-columns', 'agent-fields', 'remind-before', 'no-remind', 'days',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete',
-    'matrix', 'to-place', 'q-do', 'q-plan', 'q-delegate', 'q-later', 'legend-size', 'legend-colour', 'recurrent', 'retype', 'retype-hint', 'retype-apply', 'no-repeat', 'repeat-free']);
+    'matrix', 'to-place', 'q-do', 'q-plan', 'q-delegate', 'q-later', 'legend-size', 'legend-colour', 'recurrent', 'retype', 'retype-hint', 'retype-apply', 'no-repeat', 'repeat-free', 'open-card', 'fullscreen', 'fullscreen-exit',
+    'legend-me', 'legend-none', 'delegability', 'shortcuts', 'mx-all', 'mx-mine', 'mx-deleg', 'all-hidden']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'commit', 'link', 'record', 'mail', 'event'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', commit: '◉', link: '🔗', record: '▣', mail: '📧', event: '📅' };
 const TYPES = ['text', 'number', 'date', 'link', 'photo'];
@@ -223,9 +224,70 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
      * on a narrow screen, one picker ("Binder: Batches ▾"). One binder alone: its title says it. */
     const pick = (id) => { ui.at = id; ui.view = null; ui.mode = 'list'; ui.record = null; ui.open = null; ui.from = null; void refresh(); };
     const mark = () => h('span', { class: 'binder-mark', 'aria-hidden': 'true' });
+    /* Drag a tab to reorder the binders (a person's order, kept on the server). Works with a
+       finger (press and hold) and with a mouse; a plain tap/click still opens the binder. */
+    function tabsDnd(tabsEl) {
+        if (ui.lists.length < 2) return tabsEl;
+        let d = null; let swallow = false;
+        const tabs = () => [...tabsEl.querySelectorAll('[role="tab"]')];
+        const clear = () => {
+            if (!d) return;
+            clearTimeout(d.hold); d.clone?.remove(); d.tab?.classList.remove('binder-drag-src');
+            for (const t of tabs()) t.removeAttribute('data-over');
+            try { tabsEl.releasePointerCapture(d.id); } catch { /* gone */ }
+            d = null;
+        };
+        const start = (e) => {
+            const r = d.tab.getBoundingClientRect();
+            d.offX = e.clientX - r.left; d.offY = e.clientY - r.top; d.moved = true;
+            try { tabsEl.setPointerCapture(d.id); } catch { /* ok */ }
+            const clone = d.tab.cloneNode(true); clone.className = `${d.tab.className} binder-drag-clone`; clone.style.width = `${r.width}px`;
+            document.body.append(clone); d.clone = clone; d.tab.classList.add('binder-drag-src');
+        };
+        const over = (e) => {
+            d.clone.style.left = `${e.clientX - d.offX}px`; d.clone.style.top = `${e.clientY - d.offY}px`;
+            let before = null;
+            for (const t of tabs()) { if (t === d.tab) continue; const b = t.getBoundingClientRect(); if (e.clientX < b.left + b.width / 2) { before = t; break; } }
+            for (const t of tabs()) t.removeAttribute('data-over');
+            if (before) before.setAttribute('data-over', '');
+            d.before = before ? before.dataset.list : null;
+        };
+        tabsEl.addEventListener('click', (e) => { if (swallow) { e.stopPropagation(); e.preventDefault(); swallow = false; } }, true);
+        tabsEl.addEventListener('pointerdown', (e) => {
+            const tab = e.target instanceof Element ? e.target.closest('[role="tab"]') : null;
+            if (!tab) return;
+            d = { tab, list: tab.dataset.list, x: e.clientX, y: e.clientY, id: e.pointerId, moved: false, ready: e.pointerType === 'mouse', clone: null, hold: null, before: null };
+            if (e.pointerType !== 'mouse') d.hold = setTimeout(() => { if (d) d.ready = true; }, 220);
+        });
+        tabsEl.addEventListener('pointermove', (e) => {
+            if (!d || e.pointerId !== d.id) return;
+            const far = Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10;
+            if (!d.moved) {
+                if (!d.ready) { if (far) clear(); return; } // a finger that moved first is a scroll
+                if (!far && e.pointerType === 'mouse') return;
+                start(e);
+            }
+            e.preventDefault(); over(e);
+        });
+        const up = (e) => {
+            if (!d || e.pointerId !== d.id) return;
+            if (d.moved) {
+                swallow = true;
+                const ids = ui.lists.map((l) => l.id).filter((x) => x !== d.list);
+                const at = d.before ? ids.indexOf(d.before) : ids.length;
+                ids.splice(at < 0 ? ids.length : at, 0, d.list);
+                const same = ids.length === ui.lists.length && ids.every((x, i) => x === ui.lists[i].id);
+                clear();
+                if (!same) void soft(ask('order-lists', { order: ids })).then(refresh);
+            } else clear();
+        };
+        tabsEl.addEventListener('pointerup', up);
+        tabsEl.addEventListener('pointercancel', () => { if (d?.moved) swallow = true; clear(); });
+        return tabsEl;
+    }
     const top = () => h('div', { class: 'binder-top', 'data-one': ui.lists.length === 1 ? '' : null },
-        h('div', { class: 'binder-tabs', role: 'tablist', 'aria-label': w('lists') }, ui.lists.map((l) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(l.id === ui.at), 'data-list': l.id,
-            onclick: () => pick(l.id) }, mark(), h('span', { class: 'binder-tab-name' }, l.title), h('small', {}, String(l.count))))),
+        tabsDnd(h('div', { class: 'binder-tabs', role: 'tablist', 'aria-label': w('lists') }, ui.lists.map((l) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(l.id === ui.at), 'data-list': l.id,
+            onclick: () => pick(l.id) }, mark(), h('span', { class: 'binder-tab-name' }, l.title), h('small', {}, String(l.count)))))),
         h('label', { class: 'binder-picker' }, mark(), h('span', { class: 'binder-picker-word' }, w('binder')),
             h('select', { 'aria-label': w('binder'), onchange: (e) => pick(e.target.value) }, ui.lists.map((l) => h('option', { value: l.id, selected: l.id === ui.at }, `${l.title} (${l.count})`)))),
         h('button', { type: 'button', class: 'binder-new-list', onclick: () => { ui.mode = 'new-list'; paint(); } }, `+ ${w('new-list')}`));
@@ -289,9 +351,15 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     /* Its "‹": the page's own Back when it takes it, else one level up. */
     const up = () => { if (!onBack?.(here())) back(); };
 
+    /* A quick per-card archive for the person (write access): no menu, no opening the card.
+       Under the archived filter the same button restores. The drag and the card's own click
+       leave a button alone, and it stops its click from opening the card. */
+    const quickArchive = (l, r) => (l.access === 'write' ? h('button', { type: 'button', class: 'binder-arch', 'data-act': 'archive',
+        title: w('archive'), 'aria-label': `${w('archive')}: #${r.n} ${r.title}`,
+        onclick: (e) => { e.stopPropagation(); void soft(ask('archive', { id: r.id, restore: !!r.archived })).then(refresh); } }, r.archived ? '↺' : '⤓') : null);
     function asList(l, records) {
         return h('div', { class: 'binder-rows' }, records.map((r) => h('div', { class: 'binder-row', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } },
-            tick(l, r), h('div', { class: 'binder-what' }, h('b', {}, num(r), ' ', r.title), factLine(l, r), sub(r), meta(l, r)), pill(l, r) ?? h('span'))));
+            tick(l, r), h('div', { class: 'binder-what' }, h('b', {}, num(r), ' ', r.title), factLine(l, r), sub(r), meta(l, r)), pill(l, r) ?? h('span'), quickArchive(l, r))));
     }
     /* Drag a card from one column to another to change its state. Works with a finger (press and hold)
        and with a mouse; a plain tap/click still opens the card. The server still guards a gate. */
@@ -356,7 +424,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         return columnsDnd(h('div', { class: 'binder-cols' }, l.states.map((s) => {
             const here = records.filter((r) => r.state === s.id);
             return h('section', { class: 'binder-col', 'data-state': s.id }, h('h3', {}, sn(s), h('span', {}, String(here.length))),
-                here.map((r) => h('div', { class: 'binder-card', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } }, h('b', {}, num(r), ' ', r.title), factLine(l, r), sub(r), meta(l, r))));
+                here.map((r) => h('div', { class: 'binder-card', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } }, h('b', {}, num(r), ' ', r.title), factLine(l, r), sub(r), meta(l, r), quickArchive(l, r))));
         })), l);
     }
     /* A card without a picture: a band of a soft colour of its own (from its title), not a large letter alone. */
@@ -373,7 +441,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             return h('div', { class: 'binder-card binder-face', 'data-record': r.id, tabindex: '0', onclick: () => open(r), onkeydown: (e) => { if (e.key === 'Enter') open(r); } },
                 src ? h('img', { src, alt: r.title, loading: 'lazy' })
                     : band(r.title),
-                h('b', {}, num(r), ' ', r.title), src ? null : sub(r), factLine(l, r, 'binder-facts binder-facts-small'), pill(l, r));
+                h('b', {}, num(r), ' ', r.title), src ? null : sub(r), factLine(l, r, 'binder-facts binder-facts-small'), pill(l, r), quickArchive(l, r));
         }));
     }
     /* THE MATRIX: urgency across, importance up; effort sizes the bubble,
@@ -381,38 +449,133 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
        changed lately. A card with both axes is a bubble that opens on a tap; the
        rest wait below, "to place". Clicking a bubble opens the card to score it. */
     const fieldName = (l, id) => l.fields.find((f) => f.id === id)?.name ?? id;
+    /* Set by the matrix each time it is drawn: leaves its fullscreen cover (Escape calls it). */
+    let matrixLeave = null;
+    /* The matrix's own view state, kept across repaints (and reset when the binder changes):
+       which owner categories are hidden, and whether the delegability arcs show. */
+    let mxFor = null; let mxHide = new Set(); let mxRings = true;
+    const s100 = (v) => Math.max(0, Math.min(100, Number(v) || 0));
+    /* THE MATRIX: urgency across (→), importance up (↑); a point's HUE says who owns it
+       (gold = me, one colour per person, grey = nobody), its SIZE says the charge, and a thin
+       neutral ARC on my own points says how delegable each is. The legend is clickable: a tap
+       hides/shows a category (or the arcs); quick chips cadrent moi / délégué. A point opens a
+       short card with a tail; the rest wait below, "to place". */
     function asMatrix(l, records) {
         const done = l.states.find((s) => s.done);
         const placed = []; const rest = [];
         for (const r of records) (score(r, MATRIX_AXES.x) !== null && score(r, MATRIX_AXES.y) !== null ? placed : rest).push(r);
+        const X = MATRIX_AXES.x; const Y = MATRIX_AXES.y; const SIZE = MATRIX_AXES.size; const TINT = MATRIX_AXES.tint;
+        const stName = (r) => l.states.find((s) => s.id === r.state)?.name ?? r.state;
+        const snippet = (t) => { const s = String(t).replace(/\s+/g, ' ').trim(); return s.length > 160 ? `${s.slice(0, 159)}…` : s; };
+        /* Who owns a card: me when I am among its owners, else the first other person, else nobody.
+           Colour per category: me gold, each person a stable palette slot, nobody neutral grey. */
+        const meId = (people() || []).find((p) => p.me)?.id ?? null;
+        const persons = (people() || []).filter((p) => p.kind === 'person');
+        const personIndex = new Map(persons.filter((p) => p.id !== meId).map((p, i) => [p.id, i]));
+        const ownerCat = (r) => { const os = r.owners ?? []; if (meId && os.includes(meId)) return 'me'; const p = os.find((id) => typeof id === 'string' && id.startsWith('person:') && id !== meId); return p || 'none'; };
+        const colorOf = (cat) => (cat === 'me' ? 'var(--bm-me)' : cat === 'none' ? 'var(--bm-none)' : `var(--bm-${(personIndex.get(cat) ?? 0) % 6 + 1})`);
+        const labelFor = (cat) => (cat === 'me' ? w('legend-me') : cat === 'none' ? w('legend-none') : nameOf(cat));
+        const present = new Set(placed.map(ownerCat));
+        const cats = []; if (present.has('me')) cats.push('me'); for (const p of persons) { if (p.id !== meId && present.has(p.id)) cats.push(p.id); } if (present.has('none')) cats.push('none');
+        const anyGauge = placed.some((r) => ownerCat(r) === 'me' && s100(score(r, TINT)) > 0 && score(r, TINT) !== null);
+        /* Fresh binder: hide "nobody" by default (the least useful) — but only when there is
+           something else to show, so a list where nobody is assigned is not an empty plot. */
+        if (mxFor !== l.id) { mxFor = l.id; mxHide = new Set(present.has('none') && present.size > 1 ? ['none'] : []); mxRings = true; }
+        const MINR = 0.6; const MAXR = 2.2;
         const dot = (r) => {
-            const x = score(r, MATRIX_AXES.x); const y = score(r, MATRIX_AXES.y);
-            const c = score(r, MATRIX_AXES.size); const d = score(r, MATRIX_AXES.tint);
-            const facts = [`${fieldName(l, MATRIX_AXES.x)} ${x}`, `${fieldName(l, MATRIX_AXES.y)} ${y}`];
-            if (c !== null) facts.push(`${fieldName(l, MATRIX_AXES.size)} ${c}`);
-            if (d !== null) facts.push(`${fieldName(l, MATRIX_AXES.tint)} ${d}`);
-            const el = h('button', { type: 'button', class: 'binder-dot', 'data-record': r.id, 'data-fresh': fresh(r) ? '' : null,
-                'data-done': done && r.state === done.id ? '' : null, title: `#${r.n} ${r.title} — ${facts.join(' · ')}`,
-                onclick: () => open(r) }, h('span', { class: 'binder-dot-n', 'aria-hidden': 'true' }, String(r.n)), h('span', { class: 'binder-sr' }, ` ${r.title}`));
-            el.style?.setProperty('left', `${x}%`);
-            el.style?.setProperty('bottom', `${y}%`);
-            el.style?.setProperty('--dot', `${(1.5 + (c ?? 20) / 100 * 2.2).toFixed(2)}rem`);
-            el.style?.setProperty('--tint-l', `${Math.round(34 + (d ?? 0) / 100 * 22)}%`); /* 34%..56%: white label stays legible */
-            return el;
+            const x = score(r, X); const y = score(r, Y);
+            const c = score(r, SIZE); const d = score(r, TINT);
+            const cat = ownerCat(r); const mine = cat === 'me';
+            const hasGauge = mine && d !== null && d > 0;
+            const dia = MINR + (s100(c ?? 20) / 100) * (MAXR - MINR);
+            const facts = [`${fieldName(l, X)} ${x}`, `${fieldName(l, Y)} ${y}`];
+            if (c !== null) facts.push(`${fieldName(l, SIZE)} ${c}`);
+            if (d !== null) facts.push(`${fieldName(l, TINT)} ${d}`);
+            const gauge = h('button', { type: 'button', class: `binder-dot${hasGauge ? ' has-gauge' : ''}`, 'data-record': r.id, 'data-fresh': fresh(r) ? '' : null,
+                'data-done': done && r.state === done.id ? '' : null, 'aria-haspopup': 'true',
+                'aria-label': `${r.title} — ${facts.join(' · ')}`,
+                onclick: (e) => {
+                    e.stopPropagation();
+                    const wrap = e.currentTarget.closest('.binder-dot-wrap');
+                    const was = wrap?.classList.contains('open');
+                    for (const o of document.querySelectorAll('.binder-dot-wrap.open')) o.classList.remove('open');
+                    if (wrap && !was) wrap.classList.add('open');
+                } }, h('span', { class: 'binder-dot-fill' }));
+            gauge.style?.setProperty('--c', colorOf(cat));
+            if (hasGauge) gauge.style?.setProperty('--pct', String(Math.round(s100(d))));
+            const label = h('span', { class: `binder-dot-label${x >= 72 ? ' left' : ''}`, 'aria-hidden': 'true' }, r.title);
+            const whoDot = h('span', { class: 'binder-who-dot' }); whoDot.style?.setProperty('background', colorOf(cat));
+            const card = h('div', { class: `binder-dot-card${y >= 66 ? ' below' : ''}${x <= 26 ? ' aL' : x >= 74 ? ' aR' : ''}` },
+                h('div', { class: 'binder-pop-head' }, h('span', { class: 'binder-pop-id' }, `#${r.n}`), h('span', { class: 'binder-pop-t' }, r.title)),
+                h('div', { class: 'binder-pop-who' }, whoDot, document.createTextNode(`${labelFor(cat)} · ${stName(r)}`)),
+                h('div', { class: 'binder-pop-facts' }, facts.join(' · ')),
+                r.description ? h('p', { class: 'binder-pop-desc' }, snippet(r.description)) : null,
+                h('button', { type: 'button', class: 'binder-pop-open', onclick: () => open(r) }, w('open-card')));
+            const wrap = h('div', { class: 'binder-dot-wrap', 'data-record': r.id }, gauge, label, card);
+            wrap.style?.setProperty('left', `${x}%`);
+            wrap.style?.setProperty('bottom', `${y}%`);
+            wrap.style?.setProperty('--dot', `${dia.toFixed(2)}rem`);
+            wrap.style?.setProperty('--r', `${(dia / 2).toFixed(3)}rem`);
+            return wrap;
         };
         const quad = (k, cls) => h('div', { class: `binder-quad ${cls}` }, h('span', {}, w(k)));
-        const plot = h('div', { class: 'binder-plot', role: 'group', 'aria-label': `${fieldName(l, MATRIX_AXES.x)} · ${fieldName(l, MATRIX_AXES.y)}` },
+        const plot = h('div', { class: 'binder-plot', role: 'group', 'aria-label': `${fieldName(l, X)} · ${fieldName(l, Y)}` },
             quad('q-plan', 'binder-q-tl'), quad('q-do', 'binder-q-tr'), quad('q-later', 'binder-q-bl'), quad('q-delegate', 'binder-q-br'),
-            h('div', { class: 'binder-axis binder-axis-x' }, `${fieldName(l, MATRIX_AXES.x)} →`),
-            h('div', { class: 'binder-axis binder-axis-y' }, fieldName(l, MATRIX_AXES.y)),
-            ...placed.map(dot));
-        const legend = h('div', { class: 'binder-legend' },
-            h('span', {}, `◍ ${w('legend-size')}: ${fieldName(l, MATRIX_AXES.size)}`),
-            h('span', {}, `● ${w('legend-colour')}: ${fieldName(l, MATRIX_AXES.tint)}`));
+            h('div', { class: 'binder-mid-x' }), h('div', { class: 'binder-mid-y' }),
+            h('div', { class: 'binder-axis binder-axis-x' }, `${fieldName(l, X)} →`),
+            h('div', { class: 'binder-axis binder-axis-y' }, h('span', {}, `${fieldName(l, Y)} →`)),
+            h('div', { class: 'binder-plot-empty' }, w('all-hidden')));
+        let dotEls = [];
+        const renderDots = () => {
+            for (const n of dotEls) n.remove();
+            dotEls = [];
+            const shown = placed.filter((r) => !mxHide.has(ownerCat(r)));
+            plot.classList?.toggle?.('binder-is-empty', shown.length === 0);
+            plot.classList?.toggle?.('binder-gauges-off', !mxRings);
+            for (const r of shown) { const el = dot(r); dotEls.push(el); plot.append(el); }
+        };
+        /* The legend, built from the categories actually present, each a show/hide toggle; then
+           (where any exists) the delegability arcs toggle, and the size key. */
+        const legBtns = new Map();
+        const legend = h('div', { class: 'binder-legend' });
+        const sync = () => { for (const [cat, b] of legBtns) b.setAttribute('aria-pressed', String(!mxHide.has(cat))); if (ringBtn) ringBtn.setAttribute('aria-pressed', String(mxRings)); renderDots(); };
+        for (const cat of cats) {
+            const sw = h('span', { class: 'binder-leg-sw' }); sw.style?.setProperty('background', colorOf(cat));
+            const b = h('button', { type: 'button', class: 'binder-leg' }, sw, document.createTextNode(labelFor(cat)));
+            b.addEventListener('click', () => { if (mxHide.has(cat)) mxHide.delete(cat); else mxHide.add(cat); sync(); });
+            legBtns.set(cat, b); legend.append(b);
+        }
+        let ringBtn = null;
+        if (anyGauge) {
+            legend.append(h('span', { class: 'binder-leg-sep' }));
+            ringBtn = h('button', { type: 'button', class: 'binder-leg' }, h('span', { class: 'binder-ring-glyph' }), document.createTextNode(w('delegability')));
+            ringBtn.addEventListener('click', () => { mxRings = !mxRings; sync(); });
+            legend.append(ringBtn);
+        }
+        legend.append(h('span', { class: 'binder-size-key' }, h('span', { class: 'binder-sz binder-sz1' }), h('span', { class: 'binder-sz binder-sz2' }), h('span', { class: 'binder-sz binder-sz3' }), document.createTextNode(` ${w('legend-size')}`)));
+        /* Quick chips set the whole legend at once. */
+        const chip = (key, apply) => { const b = h('button', { type: 'button', class: 'binder-chip' }, w(key)); b.addEventListener('click', () => { apply(); sync(); }); return b; };
+        const chips = h('div', { class: 'binder-mx-chips' }, h('span', { class: 'binder-mx-lab' }, w('shortcuts')),
+            chip('mx-all', () => { mxHide = new Set(); }),
+            chip('mx-mine', () => { mxHide = new Set(cats.filter((c) => c !== 'me')); }),
+            chip('mx-deleg', () => { mxHide = new Set(cats.filter((c) => c === 'me' || c === 'none')); }));
+        /* Fullscreen, for reading on a tablet: the real Fullscreen API where it is granted, and in
+           every case a CSS cover (position:fixed) so the button always works. Escape or the button
+           leaves it (the key is caught below, next to the one that closes a menu). */
+        const fsBtn = h('button', { type: 'button', class: 'binder-ghost binder-small binder-fs', 'aria-pressed': 'false', 'aria-label': w('fullscreen'), title: w('fullscreen') }, '⛶');
+        const bar = h('div', { class: 'binder-matrix-bar' }, chips, h('span', { class: 'binder-mx-spacer' }), fsBtn);
         const unplaced = rest.length ? h('div', { class: 'binder-unplaced' },
             h('h3', {}, `${w('to-place')} (${rest.length})`),
             h('div', { class: 'binder-unplaced-row' }, rest.map((r) => h('button', { type: 'button', class: 'binder-chip binder-unplaced-chip', 'data-record': r.id, onclick: () => open(r) }, `#${r.n} ${r.title}`)))) : null;
-        return h('div', { class: 'binder-matrix' }, plot, legend, unplaced);
+        const root = h('div', { class: 'binder-matrix' }, bar, plot, legend, unplaced);
+        const setFs = () => { const on = root.classList?.contains?.('binder-matrix-max') ?? false; fsBtn.textContent = on ? '⤢' : '⛶'; fsBtn.title = on ? w('fullscreen-exit') : w('fullscreen'); fsBtn.setAttribute('aria-pressed', String(on)); };
+        const enter = () => { root.classList?.add?.('binder-matrix-max'); setFs(); try { root.requestFullscreen?.().catch(() => {}); } catch { /* not granted: the cover stands in */ } };
+        const leave = () => { root.classList?.remove?.('binder-matrix-max'); setFs(); try { if (document.fullscreenElement === root) document.exitFullscreen?.(); } catch { /* already out */ } };
+        fsBtn.addEventListener('click', () => ((root.classList?.contains?.('binder-matrix-max') ?? false) ? leave() : enter()));
+        root.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && root.classList.contains('binder-matrix-max')) { root.classList.remove('binder-matrix-max'); setFs(); } });
+        matrixLeave = leave;
+        sync();
+        return root;
     }
 
     function newItem(l) {
@@ -741,8 +904,9 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
 
     /* A menu closes on a tap elsewhere, or Escape. */
     const menus = ['states', 'tools'];
-    const away = (e) => { if (menus.includes(ui.open) && !e.target?.closest?.('.binder-pop')) { ui.open = null; paint(); } };
-    const escape = (e) => { if (e.key === 'Escape' && menus.includes(ui.open)) { ui.open = null; paint(); } };
+    const closeDots = () => { for (const o of document.querySelectorAll('.binder-dot-wrap.open')) o.classList.remove('open'); };
+    const away = (e) => { if (menus.includes(ui.open) && !e.target?.closest?.('.binder-pop')) { ui.open = null; paint(); } if (!e.target?.closest?.('.binder-dot-wrap')) closeDots(); };
+    const escape = (e) => { if (e.key === 'Escape') { if (menus.includes(ui.open)) { ui.open = null; paint(); } closeDots(); matrixLeave?.(); } };
     document.addEventListener('pointerdown', away);
     document.addEventListener('keydown', escape);
     /* Where it opens: the page's place (a reload), else its first binder. Said to the page once drawn. */

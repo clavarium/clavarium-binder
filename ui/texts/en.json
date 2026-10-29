@@ -105,5 +105,16 @@
   "retype-hint": "Apply another type's view and fields (e.g. the priorities matrix). Your records and what the list already has stay.",
   "retype-apply": "Convert",
   "no-repeat": "Not recurrent",
-  "repeat-free": "no fixed rhythm"
+  "repeat-free": "no fixed rhythm",
+  "open-card": "Open the card",
+  "fullscreen": "Fullscreen",
+  "fullscreen-exit": "Exit fullscreen",
+  "legend-me": "Mine",
+  "legend-none": "No owner",
+  "delegability": "Delegability",
+  "shortcuts": "Shortcuts",
+  "mx-all": "All",
+  "mx-mine": "Mine",
+  "mx-deleg": "Delegated",
+  "all-hidden": "Nothing to show (all hidden)."
 }

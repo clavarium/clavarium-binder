@@ -189,7 +189,18 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
         onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
         reload() { s = read(); },
         /* Every list `who` can see. */
-        lists(who) { const w = whoOf(who); return Object.values(s.lists).filter((l) => access(l, w)).map((l) => shownList(l, w)); },
+        lists(who) { const w = whoOf(who); return Object.values(s.lists).filter((l) => access(l, w)).sort((a, b) => (a.order ?? 1e9) - (b.order ?? 1e9)).map((l) => shownList(l, w)); },
+        /* A person sets the order of the binders (the tabs), by their ids; any not named keep
+           following, in their present order. Only a person: an agent does not reorder a page. */
+        orderLists(ids, who) {
+            const w = whoOf(who);
+            if (!isPerson(w)) no('only a person sets the order of the binders');
+            if (!Array.isArray(ids)) no('say the order, a list of binder ids');
+            let i = 0;
+            for (const id of ids) { const l = s.lists[String(id)]; if (l) l.order = i++; }
+            save();
+            return Object.values(s.lists).filter((l) => access(l, w)).sort((a, b) => (a.order ?? 1e9) - (b.order ?? 1e9)).map((l) => shownList(l, w));
+        },
         list(given, who, { state, mine, archived = false, text, changedSince, quietFor } = {}) {
             const w = whoOf(who);
             const list = listOf(given, w);

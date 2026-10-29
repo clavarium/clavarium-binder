@@ -120,5 +120,16 @@
   "retype-hint": "Appliquer la vue et les champs d'un autre type (ex. la matrice des priorités). Tes fiches et ce que le classeur a déjà sont gardés.",
   "retype-apply": "Convertir",
   "no-repeat": "Non récurrente",
-  "repeat-free": "sans rythme fixe"
+  "repeat-free": "sans rythme fixe",
+  "open-card": "Ouvrir la fiche",
+  "fullscreen": "Plein écran",
+  "fullscreen-exit": "Quitter le plein écran",
+  "legend-me": "À moi",
+  "legend-none": "Sans responsable",
+  "delegability": "Délégabilité",
+  "shortcuts": "Raccourcis",
+  "mx-all": "Tout",
+  "mx-mine": "À moi",
+  "mx-deleg": "Délégué",
+  "all-hidden": "Rien à afficher (tout est masqué)."
 }

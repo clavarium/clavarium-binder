@@ -654,16 +654,18 @@ test('the matrix view: placed cards become bubbles at their scores, the rest wai
         const root = new El('div');
         const b = mount(root, { call: async (op, args) => k.act(op, args, ME), lang: 'fr' });
         await settle();
-        const dots = all(root, (e) => e.attrs.class === 'binder-dot');
+        const dots = all(root, (e) => (e.attrs.class ?? '') === 'binder-dot' || (e.attrs.class ?? '') === 'binder-dot has-gauge');
         assert.equal(dots.length, 2, 'two cards carry both axes -> two bubbles');
-        const first = all(root, (e) => e.attrs.class === 'binder-dot' && e.attrs['data-record'] === a.id)[0];
-        assert.equal(first.style.props.left, '80%'); assert.equal(first.style.props.bottom, '70%');
+        const wrapA = all(root, (e) => (e.attrs.class ?? '') === 'binder-dot-wrap' && e.attrs['data-record'] === a.id)[0];
+        assert.ok(wrapA, 'the card with both axes is placed as a bubble');
+        assert.equal(wrapA.style.props.left, '80%'); assert.equal(wrapA.style.props.bottom, '70%');
         const chips = all(root, (e) => (e.attrs.class ?? '').includes('binder-unplaced-chip'));
         assert.equal(chips.length, 1, 'the card with no scores waits to be placed');
         assert.ok(all(root, (e) => e.attrs['data-view'] === 'matrix').length, 'the matrix view is offered on a list that carries the axes');
-        first.on.click();
+        const openBtn = all(wrapA, (e) => e.attrs.class === 'binder-pop-open')[0];
+        openBtn.on.click();
         await settle();
-        assert.equal(b.state.mode, 'record', 'a bubble opens its card to score it');
+        assert.equal(b.state.mode, 'record', 'the bubble\'s summary opens its card to score it');
         b.destroy();
     } finally { for (const n of names) globalThis[n] = was[n]; }
 });
