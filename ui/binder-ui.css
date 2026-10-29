@@ -272,7 +272,9 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
   padding: max(2.4vmin, env(safe-area-inset-top)) max(3vmin, env(safe-area-inset-right)) max(2.4vmin, env(safe-area-inset-bottom)) max(3vmin, env(safe-area-inset-left)); overflow: auto; }
 .binder-matrix-max .binder-plot, .binder-matrix:fullscreen .binder-plot { max-width: min(80vh, 96vw); margin-inline: auto; }
 .binder-matrix-max .binder-legend, .binder-matrix:fullscreen .binder-legend { font-size: .95rem; }
-.binder-plot { position: relative; aspect-ratio: 1 / 1; width: 100%; max-width: max(18rem, min(42rem, calc(100svh - 14rem))); margin-inline: auto; overflow: visible;
+/* The axis words sit outside the square (left and below), so no point can land on them;
+   the plot is nudged right by half the left word's room. */
+.binder-plot { position: relative; left: .8rem; aspect-ratio: 1 / 1; width: calc(100% - 1.6rem); max-width: max(18rem, min(42rem, calc(100svh - 17rem))); margin: 0 auto 1.1rem; overflow: visible;
   border: 1px solid var(--binder-line); border-radius: 16px; background: var(--binder-panel); }
 /* A card's path, when tapped (#167): faint, under the points, never in the way of a tap. */
 .binder-trail { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; color: var(--binder-text); }
@@ -289,8 +291,8 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-mid-x { position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid var(--binder-line); }
 .binder-mid-y { position: absolute; top: 0; bottom: 0; left: 50%; border-left: 1px solid var(--binder-line); }
 .binder-axis { position: absolute; font-size: .68rem; color: var(--binder-dim); pointer-events: none; font-weight: 600; letter-spacing: .02em; }
-.binder-axis-x { left: 50%; bottom: .55rem; transform: translateX(-50%); white-space: nowrap; }
-.binder-axis-y { left: 0; top: 0; bottom: 0; width: 1.5rem; display: flex; align-items: center; justify-content: center; overflow: visible; }
+.binder-axis-x { left: 50%; top: calc(100% + .3rem); transform: translateX(-50%); white-space: nowrap; }
+.binder-axis-y { right: calc(100% + .1rem); top: 0; bottom: 0; width: 1.5rem; display: flex; align-items: center; justify-content: center; overflow: visible; }
 .binder-axis-y span { transform: rotate(-90deg); white-space: nowrap; display: block; } /* "… →" now points up */
 /* A placed card: an anchor at (x,y); the bubble (a hue = owner) is centred on it, its name beside,
    a neutral arc = delegability, and a card with a tail on tap/hover. */
