@@ -22,6 +22,7 @@ export const HELP = `binder: the lists you were given, and their records.
   binder move ID STATE [--next DATE]   past a gate, only what a person approved; a recurrent record reopens on done
   binder note ID "text"                a short note: a decision, a fact, a result
   binder attach ID KIND REF ["title"]  KIND: message, file, asset, branch, commit, link, record, mail, event
+                                       attach the sources a card stands on, generously; never copy their text into it
   binder detach ID WHAT
   binder archive ID | binder restore ID
   binder new TEMPLATE ["title"]        a list of your own, when none you were given fits

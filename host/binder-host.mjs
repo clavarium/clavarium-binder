@@ -105,6 +105,7 @@ export function say(op, data, list, people = []) {
             if (r.urgencyFrom) out.push(`  urgency: automatic, rising from ${r.urgencyFrom} to its due date${r.due ? '' : ' (no due date yet: none until one is set)'}; --urgency-from none sets it by hand`);
             if (r.description) out.push('Description:', ...r.description.split('\n').map((x) => (x ? `  ${x}` : '')));
             else out.push('No description yet: give one (what it is and why, 1-3 lines for a person) with binder edit ID --description "...".');
+            if (!r.attached.length) out.push('Nothing attached yet: attach the sources it stands on (the message that asked, a mail, a file, a commit, a link) with binder attach ID KIND REF "title" -- rather than their text in the card.');
             for (const f of l.fields) if (r.fields[f.id] !== undefined) out.push(`  ${f.name}: ${r.fields[f.id]}${r.cover === `field:${f.id}` ? ' (cover)' : ''}`);
             { const lacks = matrixMissing(l, r); if (lacks) out.push(lacks); }
             if (r.notes.length) { out.push('Notes:'); for (const n of r.notes) out.push(`  ${day(n.at)} ${n.by.name}: ${n.text.replace(/\n/g, '\n    ')}${n.edited ? ' (edited)' : ''}`); }
