@@ -24,7 +24,8 @@ export const HELP = `binder: the lists you were given, and their records.
   binder detach ID WHAT
   binder archive ID | binder restore ID
   binder new TEMPLATE ["title"]        a list of your own, when none you were given fits
-                                       TEMPLATE: batches, development, customers, people, roadmap, simple
+                                       TEMPLATE: batches, development, customers, people, priorities, roadmap, simple
+  binder retype LIST TEMPLATE          give an existing list another type (its view + fields), keeping every record (a person only)
   binder serve [--store DIR] [--port N] [--side FOLDER=NAME]
                                        keep a binder yourself, with its page (no application)
 
@@ -36,7 +37,7 @@ You never approve: a person ticks what may go on. Talking with them stays in the
 The folder used is --dir FOLDER, else $BINDER_DIR, else the nearest ${FOLDER} folder from here up.
 binder ${VERSION}`;
 
-const VERBS = ['lists', 'show', 'get', 'search', 'add', 'edit', 'move', 'note', 'attach', 'detach', 'archive', 'restore', 'new', 'archive-list', 'restore-list', 'columns'];
+const VERBS = ['lists', 'show', 'get', 'search', 'add', 'edit', 'move', 'note', 'attach', 'detach', 'archive', 'restore', 'new', 'retype', 'archive-list', 'restore-list', 'columns'];
 
 /* A command line, read: [op, args] or a refusal. */
 export function read(argv) {
@@ -69,6 +70,7 @@ export function read(argv) {
         case 'archive': return rest[0] ? ['archive', { id: rest[0], restore: false }] : { refused: 'binder archive ID' };
         case 'restore': return rest[0] ? ['archive', { id: rest[0], restore: true }] : { refused: 'binder restore ID' };
         case 'new': return rest[0] ? ['create-list', { template: rest[0], title: rest.slice(1).join(' ') || undefined }] : { refused: 'binder new TEMPLATE ["title"]' };
+        case 'retype': return rest[0] && rest[1] ? ['retype', { list: rest[0], template: rest[1], ...(flags.lang ? { lang: flags.lang } : {}) }] : { refused: 'binder retype LIST TEMPLATE  (a person only; keeps every record)' };
         case 'archive-list': case 'restore-list': return rest[0] ? ['archive-list', { list: rest[0], archived: verb === 'archive-list' }] : { refused: `binder ${verb} LIST` };
         case 'columns': {
             const [list, action, ...more] = rest;

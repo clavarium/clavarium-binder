@@ -554,6 +554,26 @@ test('show filters by activity: what changed since a day, and what is open but q
     assert.deepEqual(titles({ quietFor: 99999 }), [], 'quiet for longer than anything has existed: none');
 });
 
+test('retype gives a list another type additively: a simple list becomes a priorities matrix, records and states kept, fields only added', () => {
+    const s = openStore(tmp());
+    const l = s.createList({ template: 'simple', title: 'Sujets', lang: 'fr' }, ME);
+    const a = s.add(l.id, { title: 'Facturation' }, ME);
+    const statesBefore = l.states.map((x) => x.id);
+    assert.equal(canMatrix(l), false, 'a plain list is not yet a matrix');
+    const out = s.retype(l.id, { template: 'priorities', lang: 'fr' }, ME);
+    assert.equal(out.view, 'matrix');
+    assert.deepEqual(out.fields.map((f) => f.id), ['urgence', 'importance', 'charge', 'delegabilite']);
+    assert.ok(out.fields.every((f) => f.type === 'number'), 'the four scores are numbers');
+    assert.equal(out.fields.find((f) => f.id === 'urgence').name, 'Urgence', 'in the page language');
+    assert.deepEqual(out.states.map((x) => x.id), statesBefore, 'states are left as they were');
+    assert.equal(s.record(a.id, ME).record.title, 'Facturation', 'every record is kept');
+    assert.equal(canMatrix(out), true, 'now it can be a matrix');
+    const again = s.retype(l.id, { template: 'priorities', lang: 'fr' }, ME);
+    assert.equal(again.fields.length, 4, 'a second convert adds no duplicate fields');
+    assert.throws(() => s.retype(l.id, { template: 'priorities' }, BOT), /only a person/, 'an agent cannot change a list type');
+    assert.throws(() => s.retype(l.id, { template: 'nope' }, ME), /no template/);
+});
+
 test('the matrix: the priorities template seeds the four scores, canMatrix needs the two axes, score clamps to 0..100', () => {
     const p = seed('priorities', 'fr');
     assert.equal(p.view, 'matrix');

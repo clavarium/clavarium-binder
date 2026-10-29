@@ -114,5 +114,8 @@
   "q-later": "Plus tard",
   "legend-size": "Taille",
   "legend-colour": "Couleur",
-  "recurrent": "Récurrent (ne se clôt jamais)"
+  "recurrent": "Récurrent (ne se clôt jamais)",
+  "retype": "Changer le type",
+  "retype-hint": "Appliquer la vue et les champs d'un autre type (ex. la matrice des priorités). Tes fiches et ce que le classeur a déjà sont gardés.",
+  "retype-apply": "Convertir"
 }

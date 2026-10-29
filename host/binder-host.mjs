@@ -74,6 +74,7 @@ export function say(op, data, list) {
         case 'archive': return data.archived ? `Archived #${data.id}.` : `Restored #${data.id}.`;
         case 'settings': case 'edit-settings': return `Lists an agent may make: ${data.agentLists}. Columns an agent may change: ${data.agentColumns ? 'yes' : 'no'}.`;
         case 'edit-list': case 'columns': return `The columns are set: ${(data.states ?? []).map((x) => x.name).join(', ')}.`;
+        case 'retype': return `${data.title} is now a ${data.template} list (view: ${data.view}); its fields: ${data.fields.map((f) => f.name).join(', ') || 'none'}.`;
         case 'create-list': return `Made the list ${data.title} [${data.id}], yours to change: binder add ${data.id} "title".`;
         case 'archive-list': return data.archived ? `Archived the list ${data.title} [${data.id}]. A person can restore or delete it.` : `Restored the list ${data.title} [${data.id}].`;
         default: return 'Done.';
@@ -106,6 +107,7 @@ export function keeper(dir, { sides = () => [], now = () => Date.now() } = {}) {
                 case 'edit-note': data = store.editNote(a.id, a.note, a.text, who); break;
                 case 'create-list': data = store.createList({ template: a.template, title: a.title, lang: a.lang }, who); break;
                 case 'edit-list': data = store.editList(a.list, { title: a.title, view: a.view, states: a.states, fields: a.fields }, who); break;
+                case 'retype': data = store.retype(a.list, { template: a.template, lang: a.lang }, who); break;
                 case 'columns': {
                     /* Add or rename a column, keeping every other column (its id, its gate, its "done") as it is,
                        then edit the list with the whole set -- so the gate is never worked around. */

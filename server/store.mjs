@@ -291,6 +291,26 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             save(); log(w, 'edit-list', { list: list.id, change });
             return list;
         },
+        /* Give an existing list another type's shape, keeping every record: take the
+         * template's view and add any of its fields the list does not already have
+         * (by id) -- e.g. make a list a "priorities" matrix by adding its four score
+         * fields and opening in the matrix. States, fields already there, and record
+         * data are left untouched; a person's, like any change to a list's shape. */
+        retype(given, { template, lang = 'en' } = {}, who) {
+            const w = whoOf(who);
+            if (!isPerson(w)) no('only a person changes a list type');
+            const list = listOf(given, w, 'write');
+            const base = seed(template, lang);
+            const have = new Set(list.fields.map((f) => f.id));
+            const added = base.fields.filter((f) => !have.has(f.id));
+            if (list.fields.length + added.length > FIELDS_MAX) no(`that would pass ${FIELDS_MAX} fields; remove some first`);
+            const change = { template, view: base.view };
+            list.view = base.view;
+            if (added.length) { list.fields = [...list.fields, ...added]; change.fields = list.fields; }
+            list.template = template;
+            save(); log(w, 'retype', { list: list.id, change });
+            return list;
+        },
         /* access: "read", "write", or null to take it back. */
         grant(given, whoId, level, who) {
             const w = whoOf(who);

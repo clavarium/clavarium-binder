@@ -31,7 +31,7 @@ export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'n
     'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'none-archived', 'none-mine', 'search', 'description', 'edit', 'more', 'approve', 'add', 'ok',
     'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'agent-columns', 'remind-before', 'no-remind', 'days',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete',
-    'matrix', 'to-place', 'q-do', 'q-plan', 'q-delegate', 'q-later', 'legend-size', 'legend-colour', 'recurrent']);
+    'matrix', 'to-place', 'q-do', 'q-plan', 'q-delegate', 'q-later', 'legend-size', 'legend-colour', 'recurrent', 'retype', 'retype-hint', 'retype-apply']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'commit', 'link', 'record', 'mail', 'event'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', commit: '◉', link: '🔗', record: '▣', mail: '📧', event: '📅' };
 const TYPES = ['text', 'number', 'date', 'link', 'photo'];
@@ -202,7 +202,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     /* A state's name as shown: a template's own name in the page's words (a list made in another language keeps its data). */
     const sn = (st) => (st ? words[`state:${st.name}`] ?? st.name : '');
     /* open: what of a record is being changed ('states', 'who', 'description', 'attach'); draft: what was typed, kept across a repaint. */
-    const ui = { lists: [], at: start?.list ?? null, data: null, view: null, record: null, mode: 'list', archived: false, mine: false, error: '', open: null, more: false, draft: {}, focus: false, settings: null, from: null };
+    const ui = { lists: [], at: start?.list ?? null, data: null, view: null, record: null, mode: 'list', archived: false, mine: false, error: '', open: null, more: false, draft: {}, focus: false, settings: null, templates: null, from: null };
     const box = h('div', { class: 'binder' });
     root.replaceChildren(box);
     let alive = true;
@@ -604,6 +604,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     /* The store's settings, read when its page opens; asked quietly (a keeper without them shows none). */
     async function readSettings() {
         try { const r = await call('settings', {}); ui.settings = r?.ok ? r.data : null; } catch { ui.settings = null; }
+        try { const r = await call('templates', {}); ui.templates = r?.ok ? r.data : null; } catch { ui.templates = null; }
         if (ui.mode === 'settings') paint();
     }
     function settings(l) {
@@ -642,11 +643,24 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             c.addEventListener('change', () => void soft(ask('edit-settings', { agentColumns: c.checked })).then((got) => { if (got) ui.settings = got; paint(); }));
             return h('label', { class: 'binder-toggle' }, c, h('span', {}, w('agent-columns')));
         }
+        /* Give the list another type's shape (its view and fields) in one step,
+           keeping every record -- e.g. make it a priorities matrix. Applies at once
+           and leaves the settings, so a stale save cannot undo the added fields. */
+        const convert = () => {
+            if (!ui.templates) return null;
+            const sel = h('select', { 'aria-label': w('retype') }, h('option', { value: '' }, '—'),
+                ...Object.entries(ui.templates).map(([k, n]) => h('option', { value: k }, n[lang] ?? n.en)));
+            const go = () => { const t = sel.value; if (!t) return; void soft(ask('retype', { list: l.id, template: t, lang })).then(() => { ui.mode = 'list'; ui.view = null; return refresh(); }); };
+            return h('section', { class: 'binder-box' }, h('h3', {}, w('retype')),
+                h('p', { class: 'binder-dim binder-small' }, w('retype-hint')),
+                h('div', { class: 'binder-row binder-edit' }, sel, h('button', { type: 'button', class: 'binder-ghost', 'data-act': 'retype', onclick: go }, w('retype-apply'))));
+        };
         return h('div', { class: 'binder-page binder-settings' },
             h('div', { class: 'binder-crumb' }, backButton(l.title)),
             h('section', { class: 'binder-box' }, h('h3', {}, w('title')), title),
             h('section', { class: 'binder-box' }, h('h3', {}, w('states')), stateRows),
             h('section', { class: 'binder-box' }, h('h3', {}, w('fields')), fieldRows),
+            convert(),
             grants.length ? h('section', { class: 'binder-box' }, h('h3', {}, w('access')), grants) : null,
             ui.settings ? h('section', { class: 'binder-box' }, h('h3', {}, w('agent-lists')), agentLists()) : null,
             ui.settings ? h('section', { class: 'binder-box' }, h('h3', {}, w('agent-columns')), agentColumns()) : null,
