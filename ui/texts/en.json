@@ -131,5 +131,6 @@
   "delegable-to": "Delegable share",
   "late": "Late",
   "due-soon": "Reminder",
-  "to-handle": "To handle"
+  "to-handle": "To handle",
+  "pick-point": "Touch a point to see its card here."
 }

@@ -32,7 +32,7 @@ export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'n
     'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'agent-columns', 'agent-fields', 'remind-before', 'no-remind', 'days',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete',
     'matrix', 'to-place', 'q-do', 'q-plan', 'q-delegate', 'q-later', 'legend-size', 'legend-colour', 'recurrent', 'retype', 'retype-hint', 'retype-apply', 'no-repeat', 'repeat-free', 'open-card', 'fullscreen', 'fullscreen-exit',
-    'legend-me', 'legend-none', 'delegability', 'shortcuts', 'mx-all', 'mx-mine', 'mx-deleg', 'all-hidden', 'urgency', 'urgency-hand', 'urgency-auto', 'urgency-from', 'auto', 'mx-move', 'mx-moved', 'mx-moved-hand', 'undo', 'my-share', 'nobody-yet', 'delegable-to', 'late', 'due-soon', 'to-handle']);
+    'legend-me', 'legend-none', 'delegability', 'shortcuts', 'mx-all', 'mx-mine', 'mx-deleg', 'all-hidden', 'urgency', 'urgency-hand', 'urgency-auto', 'urgency-from', 'auto', 'mx-move', 'mx-moved', 'mx-moved-hand', 'undo', 'my-share', 'nobody-yet', 'delegable-to', 'late', 'due-soon', 'to-handle', 'pick-point']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'commit', 'link', 'record', 'mail', 'event'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', commit: '◉', link: '🔗', record: '▣', mail: '📧', event: '📅' };
 const TYPES = ['text', 'number', 'date', 'link', 'photo'];
@@ -593,7 +593,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
        rest wait below, "to place". Clicking a bubble opens the card to score it. */
     const fieldName = (l, id) => l.fields.find((f) => f.id === id)?.name ?? id;
     /* Set by the matrix each time it is drawn: leaves its fullscreen cover (Escape calls it). */
-    let matrixLeave = null; let matrixTrailClear = null;
+    let matrixLeave = null; let matrixTrailClear = null; let matrixSideClear = null;
     /* The matrix's own view state, kept across repaints (and reset when the binder changes):
        which owner categories are hidden, and whether the delegability arcs show. */
     let mxFor = null; let mxHide = new Set(); let mxRings = true; let mxMove = false; let mxNote = null; let mxFs = false; let mxCarry = false; let mxLate = false;
@@ -665,16 +665,19 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 onclick: (e) => {
                     e.stopPropagation();
                     const wrap = e.currentTarget.closest('.binder-dot-wrap');
-                    const was = wrap?.classList.contains('open');
-                    for (const o of document.querySelectorAll('.binder-dot-wrap.open')) o.classList.remove('open');
-                    if (wrap && !was) { wrap.classList.add('open'); void showTrail(r); } else clearTrail();
-                } }, h('span', { class: 'binder-dot-fill' }));
+                    const was = wrap?.classList?.contains?.('open');
+                    for (const o of document.querySelectorAll?.('.binder-dot-wrap.open') ?? []) o.classList.remove('open');
+                    if (wrap && !was) { wrap.classList?.add?.('open'); pick(r, card); void showTrail(r); } else { clearTrail(); pick(null); }
+                },
+                /* A mouse over a point: its summary in the panel, for a moment; the one picked comes back after. */
+                onpointerenter: (e) => { if (e.pointerType === 'mouse') peek(card); },
+                onpointerleave: (e) => { if (e.pointerType === 'mouse') peek(null); } }, h('span', { class: 'binder-dot-fill' }));
             gauge.style?.setProperty('--c', colorOf(cat));
             if (hasGauge) gauge.style?.setProperty('--pct', String(Math.round(s100(dd))));
             if (hasGauge && helper) gauge.style?.setProperty('--arc', colorOf(helper));
             const label = h('span', { class: 'binder-dot-label', lang, 'aria-hidden': 'true' }, r.title);
             const whoDot = h('span', { class: 'binder-who-dot' }); whoDot.style?.setProperty('background', colorOf(cat));
-            const card = h('div', { class: `binder-dot-card${y >= 66 ? ' below' : ''}${x <= 26 ? ' aL' : x >= 74 ? ' aR' : ''}` },
+            const card = h('div', { class: 'binder-dot-card' },
                 h('div', { class: 'binder-pop-head' }, h('span', { class: 'binder-pop-id' }, `#${r.n}`), h('span', { class: 'binder-pop-t' }, r.title)),
                 h('div', { class: 'binder-pop-who' }, whoDot, document.createTextNode(`${labelFor(cat)} · ${stName(r)}`)),
                 h('div', { class: 'binder-pop-facts' }, facts.join(' · ')),
@@ -682,13 +685,22 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 h('button', { type: 'button', class: 'binder-pop-open', onclick: () => open(r) }, w('open-card')));
             /* Late: a soft halo further out than the arc, that calls a few times then stays; a "!" beside. */
             const wrap = h('div', { class: `binder-dot-wrap${calling ? ' binder-calling' : ''}${late ? ' binder-late' : ''}`, 'data-record': r.id, 'data-side': x >= 72 ? 'left' : null },
-                calling ? h('span', { class: 'binder-halo', 'aria-hidden': 'true' }) : null, gauge, late ? h('span', { class: 'binder-late-mark', 'aria-hidden': 'true' }, '!') : null, label, card);
+                calling ? h('span', { class: 'binder-halo', 'aria-hidden': 'true' }) : null, gauge, late ? h('span', { class: 'binder-late-mark', 'aria-hidden': 'true' }, '!') : null, label);
             wrap.style?.setProperty('left', `${x}%`);
             wrap.style?.setProperty('bottom', `${y}%`);
             wrap.style?.setProperty('--dot', `${dia.toFixed(2)}rem`);
             wrap.style?.setProperty('--r', `${(dia / 2).toFixed(3)}rem`);
             return wrap;
         };
+        /* THE SIDE PANEL: a point's summary beside the square (below it on a phone), never over the
+           points or their path. A mouse over a point shows it for a moment; a tap keeps it. */
+        const side = h('aside', { class: 'binder-side', 'aria-live': 'polite' });
+        const hint = () => h('p', { class: 'binder-side-hint' }, w('pick-point'));
+        let picked = null;
+        const pick = (r, el) => { picked = r ? el : null; side.replaceChildren(picked ?? hint()); side.classList?.toggle?.('binder-side-on', Boolean(picked)); };
+        const peek = (el) => { side.replaceChildren(el ?? picked ?? hint()); side.classList?.toggle?.('binder-side-on', Boolean(el ?? picked)); };
+        pick(null);
+        matrixSideClear = () => pick(null);
         const quad = (k, cls) => h('div', { class: `binder-quad ${cls}` }, h('span', {}, w(k)));
         const plot = h('div', { class: 'binder-plot', role: 'group', 'aria-label': `${fieldName(l, X)} · ${fieldName(l, Y)}` },
             quad('q-plan', 'binder-q-tl'), quad('q-do', 'binder-q-tr'), quad('q-later', 'binder-q-bl'), quad('q-delegate', 'binder-q-br'),
@@ -899,7 +911,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         const nobodys = unowned.length ? h('div', { class: 'binder-unplaced' },
             h('h3', {}, `${w('legend-none')} (${unowned.length})`),
             h('div', { class: 'binder-unplaced-row' }, unowned.map((r) => h('button', { type: 'button', class: 'binder-chip binder-unplaced-chip', 'data-record': r.id, onclick: () => open(r) }, `#${r.n} ${r.title}`)))) : null;
-        const root = h('div', { class: 'binder-matrix' }, bar, note, plot, legend, unplaced, nobodys);
+        const root = h('div', { class: 'binder-matrix' }, bar, note, h('div', { class: 'binder-stage' }, plot, side), legend, unplaced, nobodys);
         setMove(mxMove);
         if (mxNote && mxNote.until > Date.now()) say(mxNote.text, mxNote.undo, mxNote.until);
         const setFs = () => { const on = root.classList?.contains?.('binder-matrix-max') ?? false; fsBtn.textContent = on ? '⤢' : '⛶'; fsBtn.title = on ? w('fullscreen-exit') : w('fullscreen'); fsBtn.setAttribute('aria-pressed', String(on)); if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => placeLabels()); };
@@ -1262,8 +1274,8 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
 
     /* A menu closes on a tap elsewhere, or Escape. */
     const menus = ['states', 'tools'];
-    const closeDots = () => { for (const o of document.querySelectorAll('.binder-dot-wrap.open')) o.classList.remove('open'); matrixTrailClear?.(); };
-    const away = (e) => { if (menus.includes(ui.open) && !e.target?.closest?.('.binder-pop')) { ui.open = null; paint(); } if (!e.target?.closest?.('.binder-dot-wrap')) closeDots(); };
+    const closeDots = () => { for (const o of document.querySelectorAll('.binder-dot-wrap.open')) o.classList.remove('open'); matrixTrailClear?.(); matrixSideClear?.(); };
+    const away = (e) => { if (menus.includes(ui.open) && !e.target?.closest?.('.binder-pop')) { ui.open = null; paint(); } if (!e.target?.closest?.('.binder-dot-wrap, .binder-side')) closeDots(); };
     const escape = (e) => { if (e.key === 'Escape') { if (menus.includes(ui.open)) { ui.open = null; paint(); } closeDots(); matrixLeave?.(); } };
     document.addEventListener('pointerdown', away);
     document.addEventListener('keydown', escape);

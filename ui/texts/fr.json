@@ -146,5 +146,6 @@
   "delegable-to": "Part délégable",
   "late": "En retard",
   "due-soon": "Rappel",
-  "to-handle": "À traiter"
+  "to-handle": "À traiter",
+  "pick-point": "Touchez un point pour voir sa fiche ici."
 }

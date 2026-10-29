@@ -664,7 +664,11 @@ test('the matrix view: placed cards become bubbles at their scores, the rest wai
         assert.ok(all(root, (e) => e.attrs['data-view'] === 'matrix').length, 'the matrix view is offered on a list that carries the axes');
         const move = all(root, (e) => (e.attrs.class ?? '').includes('binder-move-btn'))[0];
         assert.ok(move && move.attrs['aria-pressed'] === 'false', 'points can be moved, in a mode that starts off (#174)');
-        const openBtn = all(wrapA, (e) => e.attrs.class === 'binder-pop-open')[0];
+        /* A tap on the point fills the side panel with its summary (not a box over the points). */
+        assert.ok(all(root, (e) => (e.attrs.class ?? '') === 'binder-side-hint').length, 'the panel invites a tap');
+        const dotA = all(wrapA, (e) => (e.attrs.class ?? '').split(' ')[0] === 'binder-dot')[0];
+        dotA.on.click({ stopPropagation() {}, currentTarget: { closest: () => wrapA } });
+        const openBtn = all(root, (e) => e.attrs.class === 'binder-pop-open')[0];
         openBtn.on.click();
         await settle();
         assert.equal(b.state.mode, 'record', 'the bubble\'s summary opens its card to score it');
