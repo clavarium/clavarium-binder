@@ -271,6 +271,10 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-matrix-max .binder-legend, .binder-matrix:fullscreen .binder-legend { font-size: .95rem; }
 .binder-plot { position: relative; aspect-ratio: 1 / 1; width: 100%; max-width: 42rem; margin-inline: auto; overflow: visible;
   border: 1px solid var(--binder-line); border-radius: 16px; background: var(--binder-panel); }
+/* A card's path, when tapped (#167): faint, under the points, never in the way of a tap. */
+.binder-trail { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; color: var(--binder-text); }
+.binder-trail line { stroke: currentColor; stroke-width: .45; stroke-linecap: round; }
+.binder-trail circle, .binder-trail marker path { fill: currentColor; }
 /* Quadrants: labels hug the outer corners (top two up, bottom two down); a faint wash on "Faire". */
 .binder-quad { position: absolute; width: 50%; height: 50%; display: flex; pointer-events: none; padding: .8rem .95rem; }
 .binder-quad span { font-size: .64rem; letter-spacing: .09em; text-transform: uppercase; color: var(--binder-dim); font-weight: 600; }

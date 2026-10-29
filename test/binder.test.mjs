@@ -8,7 +8,7 @@ import { seed } from '../server/templates.mjs';
 import { keeper } from '../host/binder-host.mjs';
 import { ask, asked, TOOLS } from '../server/binder.mjs';
 import { say } from '../host/binder-host.mjs';
-import { blocks, toggled, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, canMatrix, score, MATRIX_AXES, KEYS, mount } from '../ui/binder-ui.js';
+import { blocks, toggled, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, canMatrix, score, trailOf, MATRIX_AXES, KEYS, mount } from '../ui/binder-ui.js';
 import { isPicture as storeIsPicture } from '../server/store.mjs';
 import { DESCRIPTION_MAX, AGENT_LISTS_MAX, AGENT_LISTS_DEFAULT } from '../server/store.mjs';
 import { run, read } from '../bin/binder.mjs';
@@ -930,4 +930,19 @@ test('the columns op: an agent adds and renames columns, keeping the gate; a per
     r = k.act('columns', { list: l.id, add: 'Nope' }, BOT);
     assert.equal(r.ok, false);
     assert.match(r.text, /turned off/);
+});
+
+test('a card\'s path on the matrix: its first scores, each move, then where it stands (#167)', () => {
+    const s = openStore(tmp());
+    const l = s.createList({ template: 'priorities' }, ME);
+    const r = s.add(l.id, { title: 'Ship billing', fields: { urgence: 20, importance: 30 } }, ME);
+    assert.deepEqual(s.record(r.id, ME).history[0].change.fields, { urgence: 20, importance: 30 }, 'the first scores are in its history');
+    s.edit(r.id, { fields: { urgence: 50 } }, ME);
+    s.edit(r.id, { title: 'Ship the billing' }, ME); // not a move
+    s.edit(r.id, { fields: { urgence: 80, importance: 70 } }, ME);
+    const d = s.record(r.id, ME);
+    assert.deepEqual(trailOf(d.history, d.record), [{ x: 20, y: 30 }, { x: 50, y: 30 }, { x: 80, y: 70 }]);
+    /* A card scored only once, later: one place, no path. An old card with no first scores starts at its first move. */
+    assert.deepEqual(trailOf([], { fields: { urgence: 10, importance: 90 } }), [{ x: 10, y: 90 }]);
+    assert.deepEqual(trailOf([{ change: { fields: { urgence: 40 } } }, { change: { fields: { importance: 60 } } }], { fields: { urgence: 40, importance: 60 } }), [{ x: 40, y: 60 }]);
 });

@@ -424,12 +424,13 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             const d = descriptionOf(description);
             const r = { id, n: Number(id), list: list.id, title: t, ...(d ? { description: d } : {}), state: st.id, fields: {}, owners: [], notes: [], attached: [], created: stamp(), by: w.id, changed: stamp(), ...(approved ? { approved: true } : {}) };
             s.records[id] = r;
-            if (fields) setFields(list, r, fields);
+            const firstFields = fields ? setFields(list, r, fields) : null;
             if (owners) r.owners = ownersOf(owners);
             if (due) r.due = dueOf(due);
             if (remindBefore !== undefined && remindBefore !== null && remindBefore !== '') { const b = remindBeforeOf(remindBefore); if (b) r.remindBefore = b; }
             if (note) r.notes.push({ id: randomUUID(), at: stamp(), by: w, text: noteOf(note) });
-            save(); log(w, 'add', { record: id, list: list.id, change: { title: t, ...(d ? { description: d } : {}), state: st.id } });
+            /* Its first scores too: the history is where its path on a matrix starts (#167). */
+            save(); log(w, 'add', { record: id, list: list.id, change: { title: t, ...(d ? { description: d } : {}), state: st.id, ...(firstFields && Object.keys(firstFields).length ? { fields: firstFields } : {}) } });
             return r;
         },
         /* COVER: the one picture a card is shown by, when it has several. It is a

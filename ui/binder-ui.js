@@ -110,6 +110,23 @@ export function score(r, id) {
     const n = typeof v === 'number' ? v : parseFloat(v);
     return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null;
 }
+/* ITS PATH ON THE MATRIX (#167): the places a card stood, oldest first, rebuilt from its
+   history (each change of its scores is kept there, with the first ones), ending where it
+   stands now. A place is kept only once both axes are known, and only when it moved. */
+export function trailOf(history, r) {
+    const { x: X, y: Y } = MATRIX_AXES;
+    const pts = []; let px = null; let py = null;
+    const push = (x, y) => { const last = pts.at(-1); if (x !== null && y !== null && (!last || last.x !== x || last.y !== y)) pts.push({ x, y }); };
+    for (const e of history ?? []) {
+        const f = e?.change?.fields;
+        if (!f || typeof f !== 'object') continue;
+        if (Object.hasOwn(f, X)) px = f[X] === null ? null : score({ fields: f }, X);
+        if (Object.hasOwn(f, Y)) py = f[Y] === null ? null : score({ fields: f }, Y);
+        push(px, py);
+    }
+    push(score(r, X), score(r, Y));
+    return pts;
+}
 /* Changed in the last three days: a card wears a quiet halo, "something new". */
 const fresh = (r) => { const t = Date.parse(r.changed ?? ''); return Number.isFinite(t) && Date.now() - t < 3 * 864e5; };
 
@@ -450,7 +467,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
        rest wait below, "to place". Clicking a bubble opens the card to score it. */
     const fieldName = (l, id) => l.fields.find((f) => f.id === id)?.name ?? id;
     /* Set by the matrix each time it is drawn: leaves its fullscreen cover (Escape calls it). */
-    let matrixLeave = null;
+    let matrixLeave = null; let matrixTrailClear = null;
     /* The matrix's own view state, kept across repaints (and reset when the binder changes):
        which owner categories are hidden, and whether the delegability arcs show. */
     let mxFor = null; let mxHide = new Set(); let mxRings = true;
@@ -499,7 +516,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                     const wrap = e.currentTarget.closest('.binder-dot-wrap');
                     const was = wrap?.classList.contains('open');
                     for (const o of document.querySelectorAll('.binder-dot-wrap.open')) o.classList.remove('open');
-                    if (wrap && !was) wrap.classList.add('open');
+                    if (wrap && !was) { wrap.classList.add('open'); void showTrail(r); } else clearTrail();
                 } }, h('span', { class: 'binder-dot-fill' }));
             gauge.style?.setProperty('--c', colorOf(cat));
             if (hasGauge) gauge.style?.setProperty('--pct', String(Math.round(s100(d))));
@@ -525,6 +542,37 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             h('div', { class: 'binder-axis binder-axis-x' }, `${fieldName(l, X)} →`),
             h('div', { class: 'binder-axis binder-axis-y' }, h('span', {}, `${fieldName(l, Y)} →`)),
             h('div', { class: 'binder-plot-empty' }, w('all-hidden')));
+        /* Tapped, a card shows its path (#167): faint arrows from where it stood to where it
+           stands, the older the fainter. Drawn on the page only, the layer made on first use. */
+        const SVG = 'http://www.w3.org/2000/svg';
+        let trail = null; let trailFor = null;
+        const clearTrail = () => { trailFor = null; trail?.replaceChildren(); };
+        const showTrail = async (r) => {
+            trailFor = r.id;
+            const got = await ask('get', { id: r.id }).catch(() => null);
+            if (trailFor !== r.id || !got || !document.createElementNS) return;
+            const pts = trailOf(got.history, r);
+            const el = (tag, attrs) => { const n = document.createElementNS(SVG, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v)); return n; };
+            if (!trail) {
+                trail = el('svg', { class: 'binder-trail', viewBox: '0 0 100 100', 'aria-hidden': 'true' });
+                plot.insertBefore(trail, plot.querySelector?.('.binder-dot-wrap') ?? null);
+            }
+            const head = el('marker', { id: 'binder-trail-head', viewBox: '0 0 6 6', refX: 5, refY: 3, markerWidth: 2.2, markerHeight: 2.2, markerUnits: 'userSpaceOnUse', orient: 'auto' });
+            head.append(el('path', { d: 'M0,0 L6,3 L0,6 z' }));
+            const defs = el('defs', {}); defs.append(head);
+            const kids = [defs]; const n = pts.length;
+            for (let i = 1; i < n; i++) {
+                const a = { x: pts[i - 1].x, y: 100 - pts[i - 1].y }; const b = { x: pts[i].x, y: 100 - pts[i].y };
+                const len = Math.hypot(b.x - a.x, b.y - a.y);
+                if (len < 0.5) continue;
+                /* Stop short of the point it reaches, so the head is seen, not hidden under it. */
+                const ux = (b.x - a.x) / len; const uy = (b.y - a.y) / len; const cut = Math.min(3.2, len / 2); const back = Math.min(1, len / 4);
+                kids.push(el('line', { x1: a.x + ux * back, y1: a.y + uy * back, x2: b.x - ux * cut, y2: b.y - uy * cut, 'marker-end': 'url(#binder-trail-head)', opacity: (0.3 + 0.5 * (i / (n - 1))).toFixed(2) }));
+            }
+            for (let i = 0; i < n - 1; i++) kids.push(el('circle', { cx: pts[i].x, cy: 100 - pts[i].y, r: 0.7, opacity: (0.3 + 0.4 * (i / Math.max(1, n - 1))).toFixed(2) }));
+            trail.replaceChildren(...kids);
+        };
+        matrixTrailClear = clearTrail;
         let dotEls = [];
         const renderDots = () => {
             for (const n of dotEls) n.remove();
@@ -904,7 +952,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
 
     /* A menu closes on a tap elsewhere, or Escape. */
     const menus = ['states', 'tools'];
-    const closeDots = () => { for (const o of document.querySelectorAll('.binder-dot-wrap.open')) o.classList.remove('open'); };
+    const closeDots = () => { for (const o of document.querySelectorAll('.binder-dot-wrap.open')) o.classList.remove('open'); matrixTrailClear?.(); };
     const away = (e) => { if (menus.includes(ui.open) && !e.target?.closest?.('.binder-pop')) { ui.open = null; paint(); } if (!e.target?.closest?.('.binder-dot-wrap')) closeDots(); };
     const escape = (e) => { if (e.key === 'Escape') { if (menus.includes(ui.open)) { ui.open = null; paint(); } closeDots(); matrixLeave?.(); } };
     document.addEventListener('pointerdown', away);
