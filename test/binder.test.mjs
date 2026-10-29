@@ -85,6 +85,19 @@ test('fields, owners, due dates, notes and attachments are checked', () => {
     assert.equal(s.record(r.id, ME).record.attached.length, 3);
 });
 
+test('a mail and a calendar event attach by their Tether ref, each with a title the card shows', () => {
+    const s = openStore(tmp());
+    const l = s.createList({ template: 'simple', title: 'Sujets' }, ME);
+    const r = s.add(l.id, { title: 'Atelier datacraft' }, ME);
+    s.attach(r.id, { kind: 'mail', ref: 'AAMkAGI2', title: 'RE: datacraft — alice@example.org — 28 oct.' }, ME);
+    s.attach(r.id, { kind: 'event', ref: 'evt-9f3', title: 'Atelier datacraft — 10 nov. 14:00' }, ME);
+    const got = s.record(r.id, ME).record.attached;
+    assert.equal(got.find((a) => a.kind === 'mail').ref, 'AAMkAGI2', 'the mail keeps its Tether id');
+    assert.match(got.find((a) => a.kind === 'mail').title, /datacraft/, 'and the subject the card shows');
+    assert.equal(got.find((a) => a.kind === 'event').ref, 'evt-9f3');
+    assert.equal(got.length, 2);
+});
+
 test('a note is changed only by whoever wrote it, and the history says so', () => {
     const s = openStore(tmp());
     const l = s.createList({ template: 'simple' }, ME);

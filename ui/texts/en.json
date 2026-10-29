@@ -50,6 +50,8 @@
   "kind-commit": "Commit",
   "kind-link": "Link",
   "kind-record": "Card",
+  "kind-mail": "Mail",
+  "kind-event": "Event",
   "what": "What",
   "name": "Name",
   "type": "Type",

@@ -1,6 +1,6 @@
 {
   "name": "clavarium-binder",
-  "version": "0.1.11-next.1",
+  "version": "0.1.12-next.1",
   "description": "Clavarium Binder: lists of records kept together by people and AI agents, each with its id (a command and an MCP server for agents, a keeper and a screen for the application). No dependency.",
   "license": "MIT",
   "homepage": "https://github.com/clavarium/clavarium-binder#readme",

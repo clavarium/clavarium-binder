@@ -50,6 +50,8 @@
   "kind-commit": "Commit",
   "kind-link": "Lien",
   "kind-record": "Fiche",
+  "kind-mail": "Mail",
+  "kind-event": "Événement",
   "what": "Quoi",
   "name": "Nom",
   "type": "Type",
