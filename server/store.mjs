@@ -420,17 +420,19 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             const st = state ? stateOf(list, state) : list.states[0];
             const approved = isPerson(w) && past(list, st.id);
             if (!approved && past(list, st.id)) no(`only a person approves: add it as ${list.states[0].name}`);
+            if (owners) shareCheck(list, ownersOf(owners), fields);
             const id = String(s.next++);
             const d = descriptionOf(description);
             const r = { id, n: Number(id), list: list.id, title: t, ...(d ? { description: d } : {}), state: st.id, fields: {}, owners: [], notes: [], attached: [], created: stamp(), by: w.id, changed: stamp(), ...(approved ? { approved: true } : {}) };
             s.records[id] = r;
             const firstFields = fields ? setFields(list, r, fields) : null;
             if (owners) r.owners = ownersOf(owners);
+            const raised = shareRaise(list, r);
             if (due) r.due = dueOf(due);
             if (remindBefore !== undefined && remindBefore !== null && remindBefore !== '') { const b = remindBeforeOf(remindBefore); if (b) r.remindBefore = b; }
             if (note) r.notes.push({ id: randomUUID(), at: stamp(), by: w, text: noteOf(note) });
             /* Its first scores too: the history is where its path on a matrix starts (#167). */
-            save(); log(w, 'add', { record: id, list: list.id, change: { title: t, ...(d ? { description: d } : {}), state: st.id, ...(firstFields && Object.keys(firstFields).length ? { fields: firstFields } : {}) } });
+            save(); log(w, 'add', { record: id, list: list.id, change: { title: t, ...(d ? { description: d } : {}), state: st.id, ...(firstFields && Object.keys(firstFields).length || raised ? { fields: { ...firstFields, ...raised } } : {}) } });
             return r;
         },
         /* COVER: the one picture a card is shown by, when it has several. It is a
@@ -441,12 +443,14 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
         edit(given, { title, description, fields, owners, due, remindBefore, cover, repeat, urgencyFrom } = {}, who) {
             const w = whoOf(who);
             const { r, list } = recordOf(given, w, 'write');
+            shareCheck(list, owners !== undefined ? ownersOf(owners) : r.owners, fields);
             const change = {};
             if (repeat !== undefined) { if (repeat === null || repeat === '' || repeat === 'none' || repeat === false || repeat === 0) { delete r.repeat; change.repeat = null; } else r.repeat = change.repeat = repeatOf(repeat); }
             if (title !== undefined) { const t = whole(oneLine(title, Infinity), 'a title', TITLE_MAX); if (!t) no('a record needs a title'); r.title = change.title = t; }
             if (description !== undefined) { const d = descriptionOf(description); if (d) r.description = change.description = d; else { delete r.description; change.description = null; } }
             if (fields !== undefined) change.fields = setFields(list, r, fields);
             if (owners !== undefined) r.owners = change.owners = ownersOf(owners);
+            { const raised = shareRaise(list, r); if (raised) change.fields = { ...change.fields, ...raised }; }
             if (due !== undefined) { if (due === null || due === '') { delete r.due; change.due = null; } else r.due = change.due = dueOf(due); }
             if (remindBefore !== undefined) { if (remindBefore === null || remindBefore === '' || remindBefore === 0) { delete r.remindBefore; change.remindBefore = null; } else r.remindBefore = change.remindBefore = remindBeforeOf(remindBefore); }
             /* Its urgency, automatic (#168): rising on its own from this date to its due date, as a
@@ -593,6 +597,26 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
         const f = list.fields.find((x) => x.id === name) ?? list.fields.find((x) => x.name.toLowerCase() === name.toLowerCase());
         if (f) { if (f.type !== 'photo') no(`the cover is a picture: ${f.name} is not a photo field`); if (!r.fields[f.id]) no(`${f.name} is empty`); return `field:${f.id}`; }
         return no('the cover is a picture attached (its id, or what it is) or a photo field');
+    }
+    /* TWO ON A CARD (#177): the second owner's share -- the field "delegabilite", on a list that
+       has it -- is 5 at least: what they take of mine, or where I come in on theirs, is never
+       nothing. A lower one is refused (before anything changes); naming a second owner raises a
+       share left unsaid or lower to 5. */
+    const SHARE_MIN = 5;
+    function shareField(list) { return list.fields.find((f) => f.id === 'delegabilite' && f.type === 'number') ?? null; }
+    function shareGiven(list, fields) {
+        const f = shareField(list); if (!f || !fields || typeof fields !== 'object') return undefined;
+        const k = Object.keys(fields).find((x) => x === f.id || x.toLowerCase() === String(f.name).toLowerCase());
+        return k === undefined ? undefined : fields[k];
+    }
+    function shareCheck(list, owners, fields) {
+        const v = shareGiven(list, fields);
+        if (owners.length >= 2 && v !== undefined && v !== null && v !== '' && Number(v) < SHARE_MIN) no(`two on a card: the second's share (${shareField(list).name}) is ${SHARE_MIN} at least -- nothing was changed`);
+    }
+    function shareRaise(list, r) {
+        const f = shareField(list);
+        if (!f || r.owners.length < 2 || (typeof r.fields[f.id] === 'number' && r.fields[f.id] >= SHARE_MIN)) return null;
+        r.fields[f.id] = SHARE_MIN; return { [f.id]: SHARE_MIN };
     }
     function ownersOf(given) {
         const list = (Array.isArray(given) ? given : [given]).map((x) => oneLine(x, 100)).filter(Boolean);

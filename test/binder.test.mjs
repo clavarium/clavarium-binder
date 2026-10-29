@@ -1059,3 +1059,23 @@ test('the delegable share (#177): an arc in the colour of who could take it, das
         b.destroy();
     } finally { for (const n of names) globalThis[n] = was[n]; }
 });
+
+test('two on a card: the second owner\'s share is 5 at least, for an agent as for a person (#177)', () => {
+    const s = openStore(tmp());
+    const AGENT = { id: 'conversation:y', kind: 'agent', name: 'y' };
+    const l = s.createList({ template: 'priorities' }, ME);
+    s.grant(l.id, AGENT.id, 'write', ME);
+    /* Named second with no share said: raised to 5. */
+    const r = s.add(l.id, { title: 'Theirs', fields: { urgence: 50, importance: 50 }, owners: [AGENT.id, ME.id] }, AGENT);
+    assert.equal(s.record(r.id, ME).record.fields.delegabilite, 5);
+    /* Lower refused, for either, and nothing changed. */
+    for (const who of [AGENT, ME]) assert.throws(() => s.edit(r.id, { fields: { delegabilite: 2, urgence: 90 } }, who), /5 at least -- nothing was changed/);
+    assert.equal(s.record(r.id, ME).record.fields.urgence, 50);
+    /* A second owner added later, on a share of 0: raised. One owner alone: 0 is fine. */
+    const mine = s.add(l.id, { title: 'Mine', fields: { delegabilite: 0 }, owners: [ME.id] }, ME);
+    assert.equal(s.record(mine.id, ME).record.fields.delegabilite, 0);
+    s.edit(mine.id, { owners: [ME.id, AGENT.id] }, ME);
+    assert.equal(s.record(mine.id, ME).record.fields.delegabilite, 5);
+    s.edit(mine.id, { fields: { delegabilite: 40 } }, ME);
+    assert.equal(s.record(mine.id, ME).record.fields.delegabilite, 40);
+});
