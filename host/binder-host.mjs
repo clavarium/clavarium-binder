@@ -60,6 +60,7 @@ export function ownerGuide(ids = [], people = []) {
         ...persons.filter((p) => !(mine.length ? mine : persons.slice(0, 1)).includes(p)).slice(0, 6).map((p) => `  another person: --owner ${p.id} (${p.name})`),
         '  yourself, this conversation: --owner me',
         `  another conversation: --owner conversation:NAME${agents.length ? ` (${agents.slice(0, 6).join(', ')}${agents.length > 6 ? ', ...' : ''})` : ''}`,
+        '  someone outside, by name: --owner "Sébastien" (a name is kept as it is written)',
         '  nobody yet: --owner none',
         '  two people on one card: --owner <who carries it>,<who comes in> -- the second\'s share is delegabilite: on the person\'s card, what you (or someone) could take; on yours, how much you need the person (at least 5)',
         '  the person sees on their matrix only what they carry or come in on; a card of nobody\'s waits below it',
@@ -108,7 +109,7 @@ export function say(op, data, list, people = []) {
             if (!r.attached.length) out.push('Nothing attached yet: attach the sources it stands on (the message that asked, a mail, a file, a commit, a link) with binder attach ID KIND REF "title" -- rather than their text in the card.');
             for (const f of l.fields) if (r.fields[f.id] !== undefined) out.push(`  ${f.name}: ${r.fields[f.id]}${r.cover === `field:${f.id}` ? ' (cover)' : ''}`);
             { const lacks = matrixMissing(l, r); if (lacks) out.push(lacks); }
-            if (r.notes.length) { out.push('Notes:'); for (const n of r.notes) out.push(`  ${day(n.at)} ${n.by.name}: ${n.text.replace(/\n/g, '\n    ')}${n.edited ? ' (edited)' : ''}`); }
+            if (r.notes.length) { out.push('Notes:'); r.notes.forEach((n, i) => out.push(`  ${i + 1}. ${day(n.at)} ${n.by.name}: ${n.text.replace(/\n/g, '\n    ')}${n.edited ? ' (edited)' : ''}`)); }
             if (r.attached.length) { out.push('Attached:'); for (const a of r.attached) out.push(`  ${a.kind} ${a.kind === 'record' ? `#${a.ref}` : a.ref}${a.title ? ` "${a.title}"` : ''}${r.cover === a.id ? ' (cover)' : ''}`); }
             out.push(`History: ${history.length} change${history.length === 1 ? '' : 's'}, the last ${history.length ? `${day(history.at(-1).at)} by ${history.at(-1).by.name}` : 'none'}.`);
             return out.join('\n');
@@ -118,6 +119,7 @@ export function say(op, data, list, people = []) {
         case 'edit': return `Changed #${data.id}.`;
         case 'move': return `#${data.id} is now ${data.stateName}.`;
         case 'note': return 'Noted.';
+        case 'edit-note': return 'The note is changed.';
         case 'attach': return 'Attached.';
         case 'detach': return 'Taken off.';
         case 'archive': return data.archived ? `Archived #${data.id}.` : `Restored #${data.id}.`;
@@ -128,7 +130,7 @@ export function say(op, data, list, people = []) {
         case 'create-list': return `Made the list ${data.title} [${data.id}], yours to change: binder add ${data.id} "title".`;
         case 'archive-list': return data.archived ? `Archived the list ${data.title} [${data.id}]. A person can restore or delete it.` : `Restored the list ${data.title} [${data.id}].`;
         case 'order-lists': return 'The order of the binders is set.';
-        case 'people': return data.length ? ['Who may carry a card (binder edit ID --owner ID):', ...data.map((p) => `  ${p.id}  ${p.name}${p.me ? ' -- the person you work for' : p.you ? ' -- yourself ("me")' : ''}`), '  me  yourself; none  nobody'].join('\n')
+        case 'people': return data.length ? ['Who may carry a card (binder edit ID --owner ID):', ...data.map((p) => `  ${p.id}  ${p.name}${p.me ? ' -- the person you work for' : p.you ? ' -- yourself ("me")' : ''}`), '  me  yourself; none  nobody; or a name, for someone outside ("Sébastien")'].join('\n')
             : 'No roster here: "me" for yourself, "none" for nobody, or an id already on a card.';
         default: return 'Done.';
     }
@@ -157,7 +159,11 @@ export function keeper(dir, { sides = () => [], now = () => Date.now(), people =
                 /* A person's, from the page. */
                 case 'approve': data = store.approve(a.id, a.yes !== false, who); break;
                 case 'delete': data = store.delete(a.id, who); break;
-                case 'edit-note': data = store.editNote(a.id, a.note, a.text, who); break;
+                case 'edit-note': {
+                    /* A note by its number, as "get" shows it, or by its id. */
+                    const n = /^\d+$/.test(String(a.note ?? '')) ? store.record(a.id, who).record.notes[Number(a.note) - 1]?.id ?? `-${a.note}` : a.note;
+                    data = store.editNote(a.id, n, a.text, who); break;
+                }
                 case 'create-list': data = store.createList({ template: a.template, title: a.title, lang: a.lang }, who); break;
                 case 'edit-list': data = store.editList(a.list, { title: a.title, view: a.view, states: a.states, fields: a.fields }, who); break;
                 case 'retype': data = store.retype(a.list, { template: a.template, lang: a.lang }, who); break;
@@ -218,8 +224,13 @@ export function keeper(dir, { sides = () => [], now = () => Date.now(), people =
             for (const q of lines(join(side.dir, 'asks.jsonl'))) {
                 if (typeof q.id !== 'string' || answered.has(q.id)) continue;
                 const late = !(now() - Date.parse(q.at) < TOO_LATE_MS);
-                const answer = late ? { ok: false, text: 'too late: this ask waited too long and was not done' }
-                    : perform(oneLine(q.op, 40), q.args && typeof q.args === 'object' ? q.args : {}, side.who);
+                /* One ask that breaks is answered so, and never holds up the ones after it (nor the other
+                   folders): a stuck queue looked like "nobody keeps this binder". */
+                let answer;
+                try {
+                    answer = late ? { ok: false, text: 'too late: this ask waited too long and was not done' }
+                        : perform(oneLine(q.op, 40), q.args && typeof q.args === 'object' ? q.args : {}, side.who);
+                } catch (error) { answer = { ok: false, text: `this could not be done (${oneLine(error?.message ?? error, 160)}); nothing was changed` }; }
                 mkdirSync(side.dir, { recursive: true });
                 appendFileSync(join(side.dir, 'answers.jsonl'), `${JSON.stringify({ ask: q.id, at: new Date(now()).toISOString(), ok: answer.ok, text: answer.text })}\n`);
                 answered.add(q.id); n++;

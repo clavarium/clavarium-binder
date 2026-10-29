@@ -1099,3 +1099,15 @@ test('calling (#181): from its reminder, or from its due with none', () => {
     assert.equal(callingOf({ due: '2026-11-05' }, null, at('2026-11-05T08:00')), true, 'its day');
     assert.equal(lateOf({ due: '2026-11-05' }, null, at('2026-11-05T08:00')), false, 'calling, not late yet');
 });
+
+test('a note of one\'s own taken back by its number, as get shows it', () => {
+    const k = keeper(tmp());
+    const l = k.act('create-list', { template: 'simple', title: 'Sujets' }, ME).data;
+    const r = k.act('add', { list: l.id, title: 'Un sujet' }, ME).data;
+    k.act('note', { id: r.id, text: 'premier' }, ME); k.act('note', { id: r.id, text: 'doublon' }, ME); k.act('note', { id: r.id, text: 'doublon' }, ME);
+    assert.match(k.act('get', { id: r.id }, ME).text, /  2\. .*doublon/);
+    assert.equal(read(['note', r.id, '--delete', '3'])[0], 'edit-note');
+    assert.equal(k.act('edit-note', { id: r.id, note: '3', text: '' }, ME).ok, true);
+    assert.deepEqual(k.act('get', { id: r.id }, ME).data.record.notes.map((n) => n.text), ['premier', 'doublon']);
+    assert.match(k.act('edit-note', { id: r.id, note: '9', text: '' }, ME).text, /no such note/);
+});

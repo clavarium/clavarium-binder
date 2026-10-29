@@ -23,11 +23,11 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline';
 
-export const VERSION = '0.1.30-next.1';
+export const VERSION = '0.1.31-next.1';
 export const FOLDER = '.binder';
 /* How long an ask waits for its answer. The keeper answers within a second or two. */
-export const WAIT_MS = 20_000;
-export const NO_KEEPER = 'No answer: nobody keeps this binder right now (its application, or "binder serve", is not running). Nothing was changed.';
+export const WAIT_MS = 45_000;
+export const NO_KEEPER = 'No answer: nobody keeps this binder right now -- its application is restarting (try again in a minute) or not running. Nothing was changed.';
 
 const parsed = (line) => { try { const j = JSON.parse(line); return j && typeof j === 'object' && !Array.isArray(j) ? j : null; } catch { return null; } };
 export function lines(file) {

@@ -17,10 +17,11 @@ export const HELP = `binder: the lists you were given, and their records.
   binder search "text"                 in every list you can see
   binder people                        who may carry a record (--owner ID): the person you work for, others, conversations
   binder add LIST "title" [--description "text"] [--state S] [--due DATE] [--remind-before DAYS] [--owner me] [--note "text"] [--field name=value]
-  binder edit ID [--title "t"] [--description "text"] [--due DATE|none] [--remind-before DAYS|none] [--repeat on|DAYS|none] [--urgency-from DATE|none] [--owner me|ID|me,ID|none] [--field name=value]
+  binder edit ID [--title "t"] [--description "text"] [--due DATE|none] [--remind-before DAYS|none] [--repeat on|DAYS|none] [--urgency-from DATE|none] [--owner me|ID|me,ID|NAME|none] [--field name=value]
          [--cover PICTURE|none]          the picture the card is shown by: one attached (its ref), or a photo field
   binder move ID STATE [--next DATE]   past a gate, only what a person approved; a recurrent record reopens on done
   binder note ID "text"                a short note: a decision, a fact, a result
+  binder note ID --delete N            take back note N of yours (its number in binder get)
   binder attach ID KIND REF ["title"]  KIND: message, file, asset, branch, commit, link, record, mail, event
                                        attach the sources a card stands on, generously; never copy their text into it
   binder detach ID WHAT
@@ -70,7 +71,10 @@ export function read(argv) {
         case 'add': return rest.length >= 2 ? ['add', { list: rest[0], title: rest.slice(1).join(' '), state: flags.state, due, owners, note: flags.note, description: flags.description, ...remind, ...has }] : { refused: 'binder add LIST "title"' };
         case 'edit': return rest[0] ? ['edit', { id: rest[0], title: flags.title, description: flags.description, due, owners, ...remind, ...(flags.repeat === undefined ? {} : { repeat: flags.repeat }), ...(flags.cover === undefined ? {} : { cover: flags.cover === 'none' ? '' : flags.cover }), ...(flags['urgency-from'] === undefined ? {} : { urgencyFrom: flags['urgency-from'] === 'none' ? '' : flags['urgency-from'] }), ...has }] : { refused: 'say which record: binder edit ID' };
         case 'move': return rest.length === 2 ? ['move', { id: rest[0], state: rest[1], next: flags.next }] : { refused: 'binder move ID STATE' };
-        case 'note': return rest.length >= 2 ? ['note', { id: rest[0], text: rest.slice(1).join(' ') }] : { refused: 'binder note ID "text"' };
+        case 'note':
+            /* A note of one's own taken back, by its number as "binder get" shows it (a double, a mistake). */
+            if (flags.delete !== undefined) return rest[0] ? ['edit-note', { id: rest[0], note: flags.delete, text: '' }] : { refused: 'binder note ID --delete N' };
+            return rest.length >= 2 ? ['note', { id: rest[0], text: rest.slice(1).join(' ') }] : { refused: 'binder note ID "text"' };
         case 'attach': return rest.length >= 3 ? ['attach', { id: rest[0], kind: rest[1], ref: rest[2], title: rest.slice(3).join(' ') }] : { refused: 'binder attach ID KIND REF ["title"]' };
         case 'detach': return rest.length === 2 ? ['detach', { id: rest[0], what: rest[1] }] : { refused: 'binder detach ID WHAT' };
         case 'archive': return rest[0] ? ['archive', { id: rest[0], restore: false }] : { refused: 'binder archive ID' };

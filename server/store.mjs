@@ -300,7 +300,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
                    when agentFields is on (adds/renames fields, never removes one or changes a type). */
                 const set = settingsNow();
                 if (title !== undefined) no('an agent does not rename a list -- ask a person');
-                if ((fields !== undefined || view !== undefined) && !set.agentFields) no('a person has not allowed an agent to change the fields or the view');
+                if ((fields !== undefined || view !== undefined) && !set.agentFields) no('a person has not allowed an agent to change the fields or the view -- reserved to a person, who may allow it (Clavarium: Settings > Binders, "fields an agent may change"); ask them, or ask them to add it');
                 if (states !== undefined && !set.agentColumns) no('a person turned off the columns an agent may change');
                 if (title === undefined && view === undefined && fields === undefined && states === undefined) no('say what to change');
             }
