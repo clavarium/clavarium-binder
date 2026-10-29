@@ -143,6 +143,89 @@ export function trailOf(history, r) {
     push(urgencyOf(r), score(r, Y));
     return pts;
 }
+/* THE NAMES ON THE MATRIX, PLACED (point-feature labelling, as on a map): the points never
+   move; each name tries places around its own point -- its side, the other, the diagonals,
+   above, below -- then the same a little further out, where a hairline leads back to it. The
+   first place inside the square that touches no point, no name already placed, no word of
+   the square and whose line crosses none of them is kept; the bigger points choose first.
+   A name with no room anywhere tries again narrower (its narrow size, on more lines).
+   In pixels, y downwards: dots [{ x, y, r, w, h, left, narrow: { w, h } }] (centre, radius, its
+   name's size, whether it would rather sit on the left), area { w, h }, walls [{ left, top, right, bottom }].
+   Each answer: { x, y } (the name's top-left corner), lead (a line to draw), narrow, or null (no room). */
+export function placeNames(dots, area, walls = [], { pad = 2, step = 13, rings = 9 } = {}) {
+    const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const grow = (r, p) => ({ left: r.left - p, top: r.top - p, right: r.right + p, bottom: r.bottom + p });
+    const rect = (x, y, w, h) => ({ left: x, top: y, right: x + w, bottom: y + h });
+    /* A segment against a box (Liang-Barsky): does the line pass through it? */
+    const cross = (x1, y1, x2, y2, b) => {
+        let t0 = 0; let t1 = 1; const dx = x2 - x1; const dy = y2 - y1;
+        for (const [p, q] of [[-dx, x1 - b.left], [dx, b.right - x1], [-dy, y1 - b.top], [dy, b.bottom - y1]]) {
+            if (p === 0) { if (q < 0) return false; continue; }
+            const t = q / p;
+            if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; }
+        }
+        return true;
+    };
+    /* Two lines that cross (not merely touch at an end). */
+    const meet = (x1, y1, x2, y2, [x3, y3, x4, y4]) => {
+        const d = (x2 - x1) * (y4 - y3) - (y2 - y1) * (x4 - x3);
+        if (d === 0) return false;
+        const t = ((x3 - x1) * (y4 - y3) - (y3 - y1) * (x4 - x3)) / d; const u = ((x3 - x1) * (y2 - y1) - (y3 - y1) * (x2 - x1)) / d;
+        return t > 0.02 && t < 0.98 && u > 0.02 && u < 0.98;
+    };
+    const near = (r, px, py) => ({ x: Math.max(r.left, Math.min(px, r.right)), y: Math.max(r.top, Math.min(py, r.bottom)) });
+    const points = dots.map((d) => grow(rect(d.x - d.r, d.y - d.r, 2 * d.r, 2 * d.r), pad));
+    /* One greedy pass in a given order; the passes in several orders are compared, and the one
+       that leaves the fewest names out, then has them nearest their points, is kept. */
+    const run = (order) => {
+        const taken = [...walls]; const out = dots.map(() => null); const lines = []; let missing = 0; let total = 0;
+        for (const i of order) {
+            const d = dots[i]; let best = null;
+            const sides = d.left ? ['W', 'E'] : ['E', 'W'];
+            const diag = d.left ? ['NW', 'SW', 'NE', 'SE'] : ['NE', 'SE', 'NW', 'SW'];
+            for (const narrow of [false, true]) {
+                if (narrow && !d.narrow) continue;
+                const { w, h } = narrow ? d.narrow : d;
+                for (let k = 0; k < rings; k++) {
+                    const g = d.r + 5 + k * step; const c = g * 0.72; const lift = h / 2 + 1;
+                    /* Beside it (centred, then slid up or down), on the diagonals, then above and below
+                       (centred, then flush with the point on either side). */
+                    const at = { E: [d.x + g, d.y - h / 2], E1: [d.x + g, d.y - h / 2 - lift], E2: [d.x + g, d.y - h / 2 + lift],
+                        W: [d.x - g - w, d.y - h / 2], W1: [d.x - g - w, d.y - h / 2 - lift], W2: [d.x - g - w, d.y - h / 2 + lift],
+                        NE: [d.x + c, d.y - c - h], SE: [d.x + c, d.y + c], NW: [d.x - c - w, d.y - c - h], SW: [d.x - c - w, d.y + c],
+                        N: [d.x - w / 2, d.y - g - h], N1: [d.x - d.r, d.y - g - h], N2: [d.x + d.r - w, d.y - g - h],
+                        S: [d.x - w / 2, d.y + g], S1: [d.x - d.r, d.y + g], S2: [d.x + d.r - w, d.y + g] };
+                    const tries = [...sides.flatMap((x) => [x, `${x}1`, `${x}2`]), ...diag, 'N', 'S', 'N1', 'S1', 'N2', 'S2'];
+                    tries.forEach((s, n) => {
+                        const [x, y] = at[s]; const r = rect(x, y, w, h);
+                        if (r.left < pad || r.top < pad || r.right > area.w - pad || r.bottom > area.h - pad) return;
+                        const box = grow(r, pad);
+                        if (points.some((p) => hit(box, p)) || taken.some((t) => hit(box, t))) return;
+                        /* Nearer is better; narrower, or a line crossing a point or a name, costs. */
+                        let cost = k * 12 + n * 0.4 + (narrow ? 10 : 0);
+                        if (k > 0) {
+                            const e = near(r, d.x, d.y);
+                            if (points.some((p, j) => j !== i && cross(d.x, d.y, e.x, e.y, p))) cost += 60;
+                            if (taken.some((t) => cross(d.x, d.y, e.x, e.y, t))) cost += 35;
+                            if (lines.some((l) => meet(d.x, d.y, e.x, e.y, l))) cost += 45;
+                            cost += Math.hypot(e.x - d.x, e.y - d.y) * 0.1;
+                        }
+                        if (!best || cost < best.cost) best = { cost, box, x, y, lead: k > 0, narrow, line: k > 0 ? [d.x, d.y, near(r, d.x, d.y)] : null };
+                    });
+                }
+            }
+            if (best) { taken.push(best.box); total += best.cost; if (best.line) { const [x0, y0, e] = best.line; lines.push([x0, y0, e.x, e.y]); } out[i] = { x: best.x, y: best.y, lead: best.lead, narrow: best.narrow }; } else missing++;
+        }
+        return { out, score: missing * 1000 + total };
+    };
+    const ids = dots.map((_, i) => i);
+    const crowd = dots.map((d) => dots.filter((e) => Math.hypot(e.x - d.x, e.y - d.y) < 70).length);
+    const orders = [(a, b) => dots[b].r - dots[a].r, (a, b) => crowd[b] - crowd[a] || dots[b].r - dots[a].r, (a, b) => dots[a].x - dots[b].x,
+        (a, b) => dots[b].x - dots[a].x, (a, b) => dots[a].y - dots[b].y, (a, b) => dots[b].y - dots[a].y, (a, b) => crowd[a] - crowd[b]];
+    let best = null;
+    for (const by of orders) { const r = run([...ids].sort(by)); if (!best || r.score < best.score) best = r; }
+    return best.out;
+}
 /* Changed in the last three days: a card wears a quiet halo, "something new". */
 const fresh = (r) => { const t = Date.parse(r.changed ?? ''); return Number.isFinite(t) && Date.now() - t < 3 * 864e5; };
 
@@ -540,7 +623,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 } }, h('span', { class: 'binder-dot-fill' }));
             gauge.style?.setProperty('--c', colorOf(cat));
             if (hasGauge) gauge.style?.setProperty('--pct', String(Math.round(s100(d))));
-            const label = h('span', { class: `binder-dot-label${x >= 72 ? ' left' : ''}`, 'aria-hidden': 'true' }, r.title);
+            const label = h('span', { class: 'binder-dot-label', lang, 'aria-hidden': 'true' }, r.title);
             const whoDot = h('span', { class: 'binder-who-dot' }); whoDot.style?.setProperty('background', colorOf(cat));
             const card = h('div', { class: `binder-dot-card${y >= 66 ? ' below' : ''}${x <= 26 ? ' aL' : x >= 74 ? ' aR' : ''}` },
                 h('div', { class: 'binder-pop-head' }, h('span', { class: 'binder-pop-id' }, `#${r.n}`), h('span', { class: 'binder-pop-t' }, r.title)),
@@ -548,7 +631,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 h('div', { class: 'binder-pop-facts' }, facts.join(' · ')),
                 r.description ? h('p', { class: 'binder-pop-desc' }, snippet(r.description)) : null,
                 h('button', { type: 'button', class: 'binder-pop-open', onclick: () => open(r) }, w('open-card')));
-            const wrap = h('div', { class: 'binder-dot-wrap', 'data-record': r.id }, gauge, label, card);
+            const wrap = h('div', { class: 'binder-dot-wrap', 'data-record': r.id, 'data-side': x >= 72 ? 'left' : null }, gauge, label, card);
             wrap.style?.setProperty('left', `${x}%`);
             wrap.style?.setProperty('bottom', `${y}%`);
             wrap.style?.setProperty('--dot', `${dia.toFixed(2)}rem`);
@@ -603,31 +686,47 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             for (const r of shown) { const el = dot(r); dotEls.push(el); plot.append(el); }
             if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => placeLabels());
         };
-        /* Names never on top of one another, of a point, or of the corner and axis words: each
-           tries its own side, then the other, inside the square; one that fits nowhere is left
-           to its summary. The bigger points first: theirs are the most worth keeping. Measured
-           on the page, once drawn (and again when the square changes size). */
+        /* The names, placed around their points by placeNames (above): measured on the page once
+           drawn, and again when the square changes size. A name set a little away from its point
+           gets a hairline back to it; one with no room anywhere is left to its summary. */
+        let leaders = null;
         const placeLabels = () => {
             if (!plot.isConnected || !plot.getBoundingClientRect) return;
-            const box = (e) => e.getBoundingClientRect();
-            const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-            const grow = (r, p) => ({ left: r.left - p, right: r.right + p, top: r.top - p, bottom: r.bottom + p });
-            const area = box(plot);
-            const items = dotEls.map((wrap) => ({ point: wrap.querySelector('.binder-dot'), label: wrap.querySelector('.binder-dot-label') })).filter((d) => d.point && d.label);
-            const taken = [...items.map((d) => ({ of: d, r: grow(box(d.point), 2) })),
-                ...[...plot.querySelectorAll('.binder-quad span, .binder-axis')].map((e) => ({ of: null, r: grow(box(e), 3) }))];
-            for (const d of [...items].sort((a, b) => box(b.point).width - box(a.point).width)) {
-                d.label.classList.remove('binder-name-hidden');
-                const first = d.label.classList.contains('left');
-                let set = false;
-                for (const left of [first, !first]) {
-                    d.label.classList.toggle('left', left);
-                    const r = grow(box(d.label), 2);
-                    if (r.left >= area.left && r.right <= area.right && !taken.some((t) => t.of !== d && hit(r, t.r))) { taken.push({ of: d, r }); set = true; break; }
+            const area = plot.getBoundingClientRect();
+            const rel = (b) => ({ left: b.left - area.left, top: b.top - area.top, right: b.right - area.left, bottom: b.bottom - area.top });
+            const items = dotEls.map((wrap) => ({ point: wrap.querySelector('.binder-dot'), label: wrap.querySelector('.binder-dot-label'), left: wrap.dataset?.side === 'left' })).filter((d) => d.point && d.label);
+            for (const d of items) { d.label.classList.remove('binder-name-hidden', 'left', 'narrow'); d.label.style.transform = 'none'; }
+            const size = (e) => { const b = e.getBoundingClientRect(); return { w: Math.ceil(b.width), h: Math.ceil(b.height) }; };
+            const dots = items.map((d) => {
+                const p = d.point.getBoundingClientRect(); const wide = size(d.label);
+                d.label.classList.add('narrow'); const narrow = size(d.label); d.label.classList.remove('narrow');
+                return { x: p.left - area.left + p.width / 2, y: p.top - area.top + p.height / 2, r: p.width / 2, ...wide, narrow: narrow.w < wide.w ? narrow : null, left: d.left };
+            });
+            const walls = [...plot.querySelectorAll('.binder-quad span')].map((e) => rel(e.getBoundingClientRect()));
+            const spots = placeNames(dots, { w: area.width, h: area.height }, walls);
+            const SVGNS = 'http://www.w3.org/2000/svg';
+            if (!leaders && document.createElementNS) { leaders = document.createElementNS(SVGNS, 'svg'); leaders.setAttribute('class', 'binder-leaders'); leaders.setAttribute('aria-hidden', 'true'); plot.insertBefore(leaders, plot.querySelector('.binder-dot-wrap')); }
+            const lines = [];
+            items.forEach((d, i) => {
+                const s = spots[i]; const o = dots[i];
+                if (!s) { d.label.classList.add('binder-name-hidden'); return; }
+                const sz = s.narrow ? o.narrow : o;
+                d.label.classList.toggle('narrow', s.narrow);
+                d.label.style.transform = `translate(${(s.x - o.x).toFixed(1)}px, ${(s.y - o.y).toFixed(1)}px)`;
+                d.label.classList.toggle('left', s.x + sz.w / 2 < o.x);
+                if (s.lead && leaders) {
+                    const ex = Math.max(s.x, Math.min(o.x, s.x + sz.w)); const ey = Math.max(s.y, Math.min(o.y, s.y + sz.h));
+                    const len = Math.hypot(ex - o.x, ey - o.y) || 1;
+                    const ln = document.createElementNS(SVGNS, 'line');
+                    const from = o.r + 1.5; const back = 2;
+                    for (const [k, v] of Object.entries({ x1: o.x + (ex - o.x) / len * from, y1: o.y + (ey - o.y) / len * from, x2: ex - (ex - o.x) / len * back, y2: ey - (ey - o.y) / len * back })) ln.setAttribute(k, v.toFixed(1));
+                    ln.setAttribute('data-record', d.point.getAttribute('data-record'));
+                    lines.push(ln);
                 }
-                if (!set) { d.label.classList.toggle('left', first); d.label.classList.add('binder-name-hidden'); }
-            }
+            });
+            leaders?.replaceChildren(...lines);
         };
+        if (typeof ResizeObserver === 'function') { let was = 0; new ResizeObserver(([e]) => { const now = Math.round(e.contentRect.width); if (now !== was) { was = now; requestAnimationFrame(() => placeLabels()); } }).observe(plot); }
         /* The legend, built from the categories actually present, each a show/hide toggle; then
            (where any exists) the delegability arcs toggle, and the size key. */
         const legBtns = new Map();

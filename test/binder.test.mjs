@@ -8,7 +8,7 @@ import { seed } from '../server/templates.mjs';
 import { keeper } from '../host/binder-host.mjs';
 import { ask, asked, TOOLS } from '../server/binder.mjs';
 import { say } from '../host/binder-host.mjs';
-import { blocks, toggled, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, canMatrix, score, trailOf, MATRIX_AXES, KEYS, mount } from '../ui/binder-ui.js';
+import { blocks, toggled, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, canMatrix, score, trailOf, placeNames, MATRIX_AXES, KEYS, mount } from '../ui/binder-ui.js';
 import { isPicture as storeIsPicture } from '../server/store.mjs';
 import { DESCRIPTION_MAX, AGENT_LISTS_MAX, AGENT_LISTS_DEFAULT } from '../server/store.mjs';
 import { run, read } from '../bin/binder.mjs';
@@ -980,4 +980,26 @@ test('an agent is told who may carry a card, by id: the person it works for, its
     const theirs = k.act('add', { list: prio.id, title: 'La leur', fields: { urgence: 60, importance: 40 }, owners: ['person:owner'] }, SELF);
     assert.deepEqual(k.act('get', { id: theirs.data.id }, SELF).data.record.owners, ['person:owner']);
     assert.match(keeper(tmp()).act('people', {}, SELF).text, /No roster here/, 'a binder alone has no roster');
+});
+
+test('names on the matrix are placed around their points, never on one another, a hairline when set away', () => {
+    const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    /* Alone: right beside its point, no line. Near the right edge it would rather sit left. */
+    const [one] = placeNames([{ x: 100, y: 100, r: 8, w: 60, h: 14 }], { w: 400, h: 400 });
+    assert.deepEqual([one.x > 100, Math.abs(one.y + 7 - 100) < 1, one.lead], [true, true, false]);
+    const [edge] = placeNames([{ x: 380, y: 100, r: 8, w: 60, h: 14, left: true }], { w: 400, h: 400 });
+    assert.ok(edge.x + 60 < 380, 'on the left of a point at the right edge');
+    /* A cluster: every name placed, inside the square, on no point and no other name. */
+    const dots = Array.from({ length: 8 }, (_, i) => ({ x: 150 + (i % 4) * 22, y: 150 + Math.floor(i / 4) * 22, r: 7, w: 70, h: 28, narrow: { w: 45, h: 42 } }));
+    const got = placeNames(dots, { w: 400, h: 400 });
+    assert.ok(got.every(Boolean), 'room is found for each');
+    const boxes = got.map((s, i) => ({ x: s.x, y: s.y, ...(s.narrow ? dots[i].narrow : { w: dots[i].w, h: dots[i].h }) }));
+    for (const [i, b] of boxes.entries()) {
+        assert.ok(b.x >= 0 && b.y >= 0 && b.x + b.w <= 400 && b.y + b.h <= 400, 'inside');
+        for (const d of dots) assert.ok(!hit(b, { x: d.x - d.r, y: d.y - d.r, w: 2 * d.r, h: 2 * d.r }), 'on no point');
+        for (const [j, c] of boxes.entries()) if (j !== i) assert.ok(!hit(b, c), 'on no other name');
+    }
+    assert.ok(got.some((s) => s.lead), 'some set a little away, with a line');
+    /* No room at all: left to its summary. */
+    assert.deepEqual(placeNames([{ x: 10, y: 10, r: 8, w: 300, h: 14 }], { w: 40, h: 40 }), [null]);
 });
