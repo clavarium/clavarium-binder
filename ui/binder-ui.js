@@ -32,7 +32,7 @@ export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'n
     'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'agent-columns', 'agent-fields', 'remind-before', 'no-remind', 'days',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete',
     'matrix', 'to-place', 'q-do', 'q-plan', 'q-delegate', 'q-later', 'legend-size', 'legend-colour', 'recurrent', 'retype', 'retype-hint', 'retype-apply', 'no-repeat', 'repeat-free', 'open-card', 'fullscreen', 'fullscreen-exit',
-    'legend-me', 'legend-none', 'delegability', 'shortcuts', 'mx-all', 'mx-mine', 'mx-deleg', 'all-hidden', 'urgency', 'urgency-hand', 'urgency-auto', 'urgency-from', 'auto', 'mx-move', 'mx-moved', 'mx-moved-hand', 'undo']);
+    'legend-me', 'legend-none', 'delegability', 'shortcuts', 'mx-all', 'mx-mine', 'mx-deleg', 'all-hidden', 'urgency', 'urgency-hand', 'urgency-auto', 'urgency-from', 'auto', 'mx-move', 'mx-moved', 'mx-moved-hand', 'undo', 'my-share', 'nobody-yet', 'delegable-to']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'commit', 'link', 'record', 'mail', 'event'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', commit: '◉', link: '🔗', record: '▣', mail: '📧', event: '📅' };
 const TYPES = ['text', 'number', 'date', 'link', 'photo'];
@@ -597,7 +597,10 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         /* Who it is with: mine, else its first other owner -- a person or a conversation (an
            agent it was handed to is delegated too) -- else nobody. */
         const ownerCat = (r) => { const os = (r.owners ?? []).filter((id) => typeof id === 'string'); if (meId && os.includes(meId)) return 'me'; return os.find((id) => id !== meId) ?? 'none'; };
-        const present = new Set(placed.map(ownerCat));
+        /* Who could take one of mine (#177): its first other owner. Its arc wears their colour; with
+           nobody named yet, the arc is grey and dashed -- a wish, still all mine. */
+        const helperOf = (r) => (ownerCat(r) === 'me' ? (r.owners ?? []).find((id) => typeof id === 'string' && id !== meId) ?? null : null);
+        const present = new Set([...placed.map(ownerCat), ...placed.map(helperOf).filter(Boolean)]);
         /* Each delegate its own colour, in the order people() gives them, then any other owner seen. */
         const known = (people() || []).map((p) => p.id);
         const delegates = [...known.filter((id) => id !== meId && present.has(id)), ...[...present].filter((c) => c !== 'me' && c !== 'none' && !known.includes(c))];
@@ -615,11 +618,14 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             const c = score(r, SIZE); const d = score(r, TINT);
             const cat = ownerCat(r); const mine = cat === 'me';
             const hasGauge = mine && d !== null && d > 0;
-            const dia = MINR + (s100(c ?? 20) / 100) * (MAXR - MINR);
+            const helper = mine ? helperOf(r) : null;
+            /* Its size is what it costs me: with someone named to take part of it, my share only. */
+            const share = helper && c !== null && d !== null ? Math.round(c * (100 - s100(d)) / 100) : null;
+            const dia = MINR + (s100(share ?? c ?? 20) / 100) * (MAXR - MINR);
             const facts = [`${fieldName(l, X)} ${x}${urgencyAuto(r) ? ` (${w('auto')})` : ''}`, `${fieldName(l, Y)} ${y}`];
-            if (c !== null) facts.push(`${fieldName(l, SIZE)} ${c}`);
-            if (d !== null) facts.push(`${fieldName(l, TINT)} ${d}`);
-            const gauge = h('button', { type: 'button', class: `binder-dot${hasGauge ? ' has-gauge' : ''}`, 'data-record': r.id, 'data-fresh': fresh(r) ? '' : null,
+            if (c !== null) facts.push(`${fieldName(l, SIZE)} ${c}${share !== null ? ` · ${w('my-share')} ${share}` : ''}`);
+            if (d !== null) facts.push(`${fieldName(l, TINT)} ${d}${hasGauge ? ` → ${helper ? labelFor(helper) : w('nobody-yet')}` : ''}`);
+            const gauge = h('button', { type: 'button', class: `binder-dot${hasGauge ? ` has-gauge${helper ? '' : ' gauge-wish'}` : ''}`, 'data-helper': helper, 'data-record': r.id, 'data-fresh': fresh(r) ? '' : null,
                 'data-done': done && r.state === done.id ? '' : null, 'aria-haspopup': 'true',
                 'aria-label': `${r.title} — ${facts.join(' · ')}`,
                 onclick: (e) => {
@@ -631,6 +637,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 } }, h('span', { class: 'binder-dot-fill' }));
             gauge.style?.setProperty('--c', colorOf(cat));
             if (hasGauge) gauge.style?.setProperty('--pct', String(Math.round(s100(d))));
+            if (hasGauge && helper) gauge.style?.setProperty('--arc', colorOf(helper));
             const label = h('span', { class: 'binder-dot-label', lang, 'aria-hidden': 'true' }, r.title);
             const whoDot = h('span', { class: 'binder-who-dot' }); whoDot.style?.setProperty('background', colorOf(cat));
             const card = h('div', { class: `binder-dot-card${y >= 66 ? ' below' : ''}${x <= 26 ? ' aL' : x >= 74 ? ' aR' : ''}` },
@@ -688,10 +695,18 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         const renderDots = () => {
             for (const n of dotEls) n.remove();
             dotEls = [];
-            const shown = placed.filter((r) => !mxHide.has(ownerCat(r)));
+            /* The legend filters by colour (#177): a person shown brings along my cards they could
+               take (mine faded, their arc plain); a person hidden takes their arc off mine. */
+            const helped = (r) => { const hp = helperOf(r); return hp !== null && !mxHide.has(hp); };
+            const shown = placed.filter((r) => !mxHide.has(ownerCat(r)) || (ownerCat(r) === 'me' && helped(r)));
             plot.classList?.toggle?.('binder-is-empty', shown.length === 0);
             plot.classList?.toggle?.('binder-gauges-off', !mxRings);
-            for (const r of shown) { const el = dot(r); dotEls.push(el); plot.append(el); }
+            for (const r of shown) {
+                const el = dot(r); dotEls.push(el); plot.append(el);
+                const hp = helperOf(r);
+                if (mxHide.has(ownerCat(r))) el.classList?.add?.('binder-faint');
+                else if (hp !== null && mxHide.has(hp)) el.classList?.add?.('binder-arc-off');
+            }
             if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => placeLabels());
         };
         /* The names, placed around their points by placeNames (above): measured on the page once
@@ -708,7 +723,8 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             const dots = items.map((d) => {
                 const p = d.point.getBoundingClientRect(); const wide = size(d.label);
                 d.label.classList.add('narrow'); const narrow = size(d.label); d.label.classList.remove('narrow');
-                return { x: p.left - area.left + p.width / 2, y: p.top - area.top + p.height / 2, r: p.width / 2, ...wide, narrow: narrow.w < wide.w ? narrow : null, left: d.left };
+                /* A point with an arc reaches 6px further (its ring). */
+                return { x: p.left - area.left + p.width / 2, y: p.top - area.top + p.height / 2, r: p.width / 2 + (d.point.classList.contains('has-gauge') ? 6 : 0), ...wide, narrow: narrow.w < wide.w ? narrow : null, left: d.left };
             });
             const walls = [...plot.querySelectorAll('.binder-quad span')].map((e) => rel(e.getBoundingClientRect()));
             const spots = placeNames(dots, { w: area.width, h: area.height }, walls);

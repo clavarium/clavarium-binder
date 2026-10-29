@@ -1008,3 +1008,40 @@ test('names on the matrix are placed around their points, never on one another, 
     /* No room at all: left to its summary. */
     assert.deepEqual(placeNames([{ x: 10, y: 10, r: 8, w: 300, h: 14 }], { w: 40, h: 40 }), [null]);
 });
+
+test('the delegable share (#177): an arc in the colour of who could take it, dashed while nobody is named; the size is my share', async () => {
+    class Node { constructor() { this.childNodes = []; } append(...k) { for (const c of k) { c.parent = this; this.childNodes.push(c); } }
+        replaceChildren(...k) { this.childNodes = []; this.append(...k); } remove() { if (this.parent) this.parent.childNodes = this.parent.childNodes.filter((c) => c !== this); }
+        get textContent() { return this.childNodes.map((c) => c.textContent).join(''); } set textContent(t) { this.childNodes = [new Text(String(t))]; } }
+    class Text extends Node { constructor(t) { super(); this.data = t; } get textContent() { return this.data; } }
+    class El extends Node { constructor(tag) { super(); this.tag = tag; this.attrs = {}; this.on = {}; this.style = { props: {}, setProperty(k, v) { this.props[k] = String(v); } }; }
+        setAttribute(k, v) { this.attrs[k] = String(v); } set className(v) { this.attrs.class = String(v); } get className() { return this.attrs.class ?? ''; }
+        addEventListener(k, f) { this.on[k] = f; } focus() {} setSelectionRange() {} querySelector() { return null; } }
+    const all = (n, f, out = []) => { if (n instanceof El && f(n)) out.push(n); for (const c of n.childNodes ?? []) all(c, f, out); return out; };
+    const names = ['document', 'Node', 'window', 'requestAnimationFrame'];
+    const was = Object.fromEntries(names.map((n) => [n, globalThis[n]]));
+    Object.assign(globalThis, { Node, window: {}, requestAnimationFrame: () => 0,
+        document: { createElement: (t) => new El(t), createTextNode: (t) => new Text(t), addEventListener() {}, removeEventListener() {} } });
+    const settle = () => new Promise((r) => setTimeout(r, 20));
+    try {
+        const k = keeper(tmp());
+        const prio = k.act('create-list', { template: 'priorities', title: 'Priorités', lang: 'fr' }, ME).data;
+        const helped = k.act('add', { list: prio.id, title: 'Helped', fields: { urgence: 80, importance: 70, charge: 80, delegabilite: 90 }, owners: [ME.id, 'conversation:y'] }, ME).data;
+        const wish = k.act('add', { list: prio.id, title: 'Wish', fields: { urgence: 30, importance: 60, charge: 80, delegabilite: 60 }, owners: [ME.id] }, ME).data;
+        const root = new El('div');
+        const people = () => [{ id: ME.id, kind: 'person', name: 'Owner', me: true }, { id: 'conversation:y', kind: 'agent', name: 'y' }];
+        const b = mount(root, { call: async (op, args) => k.act(op, args, ME), lang: 'fr', people });
+        await settle();
+        const dotOf = (id) => all(root, (e) => (e.attrs.class ?? '').startsWith('binder-dot ') && e.attrs['data-record'] === id)[0];
+        const wrapOf = (id) => all(root, (e) => (e.attrs.class ?? '') === 'binder-dot-wrap' && e.attrs['data-record'] === id)[0];
+        assert.equal(dotOf(helped.id).attrs.class, 'binder-dot has-gauge');
+        assert.equal(dotOf(helped.id).attrs['data-helper'], 'conversation:y');
+        assert.ok(dotOf(helped.id).style.props['--arc'], 'the arc wears the helper\'s colour');
+        assert.equal(dotOf(wish.id).attrs.class, 'binder-dot has-gauge gauge-wish', 'nobody named: a dashed grey wish');
+        /* charge 80, 90 % delegable to someone named: it costs me 8 -- a smaller point than the wish at full charge. */
+        assert.ok(parseFloat(wrapOf(helped.id).style.props['--dot']) < parseFloat(wrapOf(wish.id).style.props['--dot']));
+        assert.match(dotOf(helped.id).attrs['aria-label'], /(ma part|my-share) 8/);
+        assert.ok(all(root, (e) => (e.attrs.class ?? '') === 'binder-leg' && e.textContent.includes('y')).length, 'who could take it is in the legend');
+        b.destroy();
+    } finally { for (const n of names) globalThis[n] = was[n]; }
+});

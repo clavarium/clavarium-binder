@@ -98,7 +98,7 @@
   "q-plan": "Plan",
   "q-delegate": "Delegate",
   "q-later": "Later",
-  "legend-size": "Size",
+  "legend-size": "My load",
   "legend-colour": "Colour",
   "recurrent": "Recurrent (never closes)",
   "retype": "Change type",
@@ -111,7 +111,7 @@
   "fullscreen-exit": "Exit fullscreen",
   "legend-me": "Mine",
   "legend-none": "No owner",
-  "delegability": "Delegability",
+  "delegability": "Delegable share",
   "shortcuts": "Shortcuts",
   "mx-all": "All",
   "mx-mine": "Mine",
@@ -125,5 +125,8 @@
   "mx-move": "Move",
   "mx-moved": "Moved:",
   "mx-moved-hand": "Moved, urgency now by hand:",
-  "undo": "Undo"
+  "undo": "Undo",
+  "my-share": "my share",
+  "nobody-yet": "nobody yet",
+  "delegable-to": "Delegable share"
 }

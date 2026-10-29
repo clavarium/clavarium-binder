@@ -17,7 +17,7 @@ export const HELP = `binder: the lists you were given, and their records.
   binder search "text"                 in every list you can see
   binder people                        who may carry a record (--owner ID): the person you work for, others, conversations
   binder add LIST "title" [--description "text"] [--state S] [--due DATE] [--remind-before DAYS] [--owner me] [--note "text"] [--field name=value]
-  binder edit ID [--title "t"] [--description "text"] [--due DATE|none] [--remind-before DAYS|none] [--repeat on|DAYS|none] [--urgency-from DATE|none] [--owner me|ID|none] [--field name=value]
+  binder edit ID [--title "t"] [--description "text"] [--due DATE|none] [--remind-before DAYS|none] [--repeat on|DAYS|none] [--urgency-from DATE|none] [--owner me|ID|me,ID|none] [--field name=value]
          [--cover PICTURE|none]          the picture the card is shown by: one attached (its ref), or a photo field
   binder move ID STATE [--next DATE]   past a gate, only what a person approved; a recurrent record reopens on done
   binder note ID "text"                a short note: a decision, a fact, a result
@@ -56,7 +56,7 @@ export function read(argv) {
     }
     const [verb = 'lists', ...rest] = words;
     if (!VERBS.includes(verb)) return { refused: `Unknown: ${verb}. Run "binder --help".` };
-    const owners = flags.owner === undefined ? undefined : flags.owner === 'none' ? [] : [flags.owner];
+    const owners = flags.owner === undefined ? undefined : flags.owner === 'none' ? [] : String(flags.owner).split(',').map((x) => x.trim()).filter(Boolean);
     const due = flags.due === 'none' ? '' : flags.due;
     const remind = flags['remind-before'] === undefined ? {} : { remindBefore: flags['remind-before'] === 'none' ? '' : flags['remind-before'] };
     const has = Object.keys(fields).length ? { fields } : {};

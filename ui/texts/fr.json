@@ -113,7 +113,7 @@
   "q-plan": "Planifier",
   "q-delegate": "Déléguer",
   "q-later": "Plus tard",
-  "legend-size": "Taille",
+  "legend-size": "Ma charge",
   "legend-colour": "Couleur",
   "recurrent": "Récurrent (ne se clôt jamais)",
   "retype": "Changer le type",
@@ -126,7 +126,7 @@
   "fullscreen-exit": "Quitter le plein écran",
   "legend-me": "À moi",
   "legend-none": "Sans responsable",
-  "delegability": "Délégabilité",
+  "delegability": "Part délégable",
   "shortcuts": "Raccourcis",
   "mx-all": "Tout",
   "mx-mine": "À moi",
@@ -140,5 +140,8 @@
   "mx-move": "Déplacer",
   "mx-moved": "Déplacée :",
   "mx-moved-hand": "Déplacée, urgence à la main :",
-  "undo": "Annuler"
+  "undo": "Annuler",
+  "my-share": "ma part",
+  "nobody-yet": "personne encore",
+  "delegable-to": "Part délégable"
 }
