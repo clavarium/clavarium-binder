@@ -147,5 +147,12 @@
   "late": "En retard",
   "due-soon": "Rappel",
   "to-handle": "À traiter",
-  "pick-point": "Touchez un point pour voir sa fiche ici."
+  "pick-point": "Touchez un point pour voir sa fiche ici.",
+  "lvl-low": "faible",
+  "lvl-mid": "moyenne",
+  "lvl-high": "forte",
+  "q-do-why": "important et urgent",
+  "q-plan-why": "important, pas urgent",
+  "q-delegate-why": "urgent, moins important",
+  "q-later-why": "ni urgent ni important"
 }

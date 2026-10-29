@@ -32,7 +32,7 @@ export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'n
     'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'agent-columns', 'agent-fields', 'remind-before', 'no-remind', 'days',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete',
     'matrix', 'to-place', 'q-do', 'q-plan', 'q-delegate', 'q-later', 'legend-size', 'legend-colour', 'recurrent', 'retype', 'retype-hint', 'retype-apply', 'no-repeat', 'repeat-free', 'open-card', 'fullscreen', 'fullscreen-exit',
-    'legend-me', 'legend-none', 'delegability', 'shortcuts', 'mx-all', 'mx-mine', 'mx-deleg', 'all-hidden', 'urgency', 'urgency-hand', 'urgency-auto', 'urgency-from', 'auto', 'mx-move', 'mx-moved', 'mx-moved-hand', 'undo', 'my-share', 'nobody-yet', 'delegable-to', 'late', 'due-soon', 'to-handle', 'pick-point']);
+    'legend-me', 'legend-none', 'delegability', 'shortcuts', 'mx-all', 'mx-mine', 'mx-deleg', 'all-hidden', 'urgency', 'urgency-hand', 'urgency-auto', 'urgency-from', 'auto', 'mx-move', 'mx-moved', 'mx-moved-hand', 'undo', 'my-share', 'nobody-yet', 'delegable-to', 'late', 'due-soon', 'to-handle', 'pick-point', 'lvl-low', 'lvl-mid', 'lvl-high', 'q-do-why', 'q-plan-why', 'q-delegate-why', 'q-later-why']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'commit', 'link', 'record', 'mail', 'event'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', commit: '◉', link: '🔗', record: '▣', mail: '📧', event: '📅' };
 const TYPES = ['text', 'number', 'date', 'link', 'photo'];
@@ -350,6 +350,49 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     root.replaceChildren(box);
     let alive = true;
     const nameOf = (id) => people().find((p) => p.id === id)?.name ?? id;
+    /* A card's SITUATION on a matrix list: a small square with its point and its quarter named,
+       and its four numbers as gauges -- instead of a line of numbers that says little.
+       compact: the side panel's form (a smaller square, thin bars). */
+    function situation(l, r, { compact = false } = {}) {
+        if (!canMatrix(l)) return null;
+        const { x: X, y: Y, size: SIZE, tint: TINT } = MATRIX_AXES;
+        const u = urgencyOf(r); const i = score(r, Y);
+        if (u === null || i === null) return null;
+        const c = score(r, SIZE); const d = score(r, TINT);
+        const me = (people() || []).find((p) => p.me)?.id ?? null;
+        const os = (r.owners ?? []).filter((o) => typeof o === 'string');
+        const mine = os[0] === me; const other = os.length > 1 ? (mine ? os[1] : os[0]) : null;
+        const helper = os.length > 1 ? os[1] : null;
+        const others = (people() || []).map((p) => p.id).filter((id) => id !== me);
+        const colorOf = (id) => (id === me ? 'var(--bm-me)' : id ? `var(--bm-${(Math.max(0, others.indexOf(id)) % 6) + 1})` : 'var(--bm-none)');
+        const q = i >= 50 ? (u >= 50 ? 'q-do' : 'q-plan') : (u >= 50 ? 'q-delegate' : 'q-later');
+        const level = (v) => w(v >= 67 ? 'lvl-high' : v >= 34 ? 'lvl-mid' : 'lvl-low');
+        const cell = (k) => h('span', { class: `binder-sit-q${k === q ? ' on' : ''}`, 'data-q': k }, compact ? '' : w(k));
+        const dot = h('span', { class: 'binder-sit-dot' });
+        dot.style?.setProperty('left', `${u}%`); dot.style?.setProperty('bottom', `${i}%`); dot.style?.setProperty('--c', colorOf(os[0] ?? null));
+        const square = h('div', { class: 'binder-sit-square', role: 'img', 'aria-label': `${w(q)} · ${fieldName(l, X)} ${u} · ${fieldName(l, Y)} ${i}` },
+            cell('q-plan'), cell('q-do'), cell('q-later'), cell('q-delegate'), dot);
+        const where = h('div', { class: 'binder-sit-where' }, h('b', {}, w(q)), compact ? null : document.createTextNode(` · ${w(`${q}-why`)}`));
+        const bar = (label, v, { word, fill, part, partColor, note } = {}) => {
+            const track = h('span', { class: 'binder-sit-track', role: 'img', 'aria-label': `${label} ${v} / 100` });
+            const f = h('span', { class: 'binder-sit-fill' }); f.style?.setProperty('width', `${v}%`); if (fill) f.style?.setProperty('background', fill);
+            track.append(f);
+            if (part) { const pf = h('span', { class: 'binder-sit-part' }); pf.style?.setProperty('width', `${part}%`); pf.style?.setProperty('--pc', partColor); track.append(pf); }
+            return h('div', { class: 'binder-sit-row' }, h('span', { class: 'binder-sit-label' }, label), track,
+                h('span', { class: 'binder-sit-num' }, String(v), word && !compact ? h('small', {}, ` ${word}`) : null), note ? h('span', { class: 'binder-sit-note' }, note) : null);
+        };
+        const rows = [bar(fieldName(l, X), u, { word: `${level(u)}${urgencyAuto(r) ? ` · ${w('auto')}` : ''}` }), bar(fieldName(l, Y), i, { word: level(i) })];
+        /* Its effort: mine solid, the other's share hatched in their colour. */
+        if (c !== null) {
+            const share = d === null || !other ? null : Math.round(c * s100(d) / 100);
+            rows.push(bar(fieldName(l, SIZE), c, { fill: 'var(--bm-me)', ...(share ? { part: share, partColor: colorOf(other) } : {}) }));
+        }
+        if (d !== null && (mine || helper === me)) {
+            const who = helper ? nameOf(helper).replace(/^[a-z]+:/, '') : null;
+            rows.push(bar(fieldName(l, TINT), d, { fill: helper ? colorOf(helper) : 'var(--bm-none)', note: who ? who : w('nobody-yet') }));
+        }
+        return h('div', { class: `binder-sit${compact ? ' compact' : ''}` }, h('div', { class: 'binder-sit-map' }, square, where), h('div', { class: 'binder-sit-bars' }, rows));
+    }
     const ask = async (op, args) => { const r = await call(op, args); if (!r.ok) { ui.error = r.text; paint(); throw new Error(r.text); } ui.error = ''; return r.data; };
     const soft = (p) => p.catch(() => {});
 
@@ -488,6 +531,8 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     /* Its number, so a person can name it: small and faint, before the title. */
     const num = (r) => h('span', { class: 'binder-num' }, `#${r.id}`);
     /* The fields set, on one line: "Naissance 12 avril 1931 · Saint-Aubin". */
+    /* The facts a situation strip does not already show (on a matrix list: its text, date, link fields). */
+    const otherFacts = (l, r) => { const f = facts(l, r, lang).filter((x) => !Object.values(MATRIX_AXES).includes(x.id)); return f.length ? h('span', { class: 'binder-facts' }, f.map((x) => x.text).join(' · ')) : null; };
     const factLine = (l, r, cls = 'binder-facts') => { const f = facts(l, r, lang); return f.length ? h('span', { class: cls }, f.map((x) => x.text).join(' · ')) : null; };
     const leave = () => { ui.open = null; ui.more = false; ui.draft = {}; };
     const open = (r) => { void soft(ask('get', { id: r.id }).then((d) => { leave(); ui.from = null; ui.record = d; ui.mode = 'record'; paint(); })); };
@@ -680,7 +725,8 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             const card = h('div', { class: 'binder-dot-card' },
                 h('div', { class: 'binder-pop-head' }, h('span', { class: 'binder-pop-id' }, `#${r.n}`), h('span', { class: 'binder-pop-t' }, r.title)),
                 h('div', { class: 'binder-pop-who' }, whoDot, document.createTextNode(`${labelFor(cat)} · ${stName(r)}`)),
-                h('div', { class: 'binder-pop-facts' }, facts.join(' · ')),
+                situation(l, r, { compact: true }) ?? h('div', { class: 'binder-pop-facts' }, facts.join(' · ')),
+                calling ? h('div', { class: 'binder-pop-facts' }, `${w(late ? 'late' : 'due-soon')} (${String(r.due).slice(0, 16)})`) : null,
                 r.description ? h('p', { class: 'binder-pop-desc' }, snippet(r.description)) : null,
                 h('button', { type: 'button', class: 'binder-pop-open', onclick: () => open(r) }, w('open-card')));
             /* Late: a soft halo further out than the arc, that calls a few times then stays; a "!" beside. */
@@ -911,7 +957,9 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         const nobodys = unowned.length ? h('div', { class: 'binder-unplaced' },
             h('h3', {}, `${w('legend-none')} (${unowned.length})`),
             h('div', { class: 'binder-unplaced-row' }, unowned.map((r) => h('button', { type: 'button', class: 'binder-chip binder-unplaced-chip', 'data-record': r.id, onclick: () => open(r) }, `#${r.n} ${r.title}`)))) : null;
-        const root = h('div', { class: 'binder-matrix' }, bar, note, h('div', { class: 'binder-stage' }, plot, side), legend, unplaced, nobodys);
+        /* One block, centred: the square with its legend under it, the panel beside (on a phone,
+           the panel right under the square, before the legend). */
+        const root = h('div', { class: 'binder-matrix' }, bar, note, h('div', { class: 'binder-stage' }, plot, side, legend), unplaced, nobodys);
         setMove(mxMove);
         if (mxNote && mxNote.until > Date.now()) say(mxNote.text, mxNote.undo, mxNote.until);
         const setFs = () => { const on = root.classList?.contains?.('binder-matrix-max') ?? false; fsBtn.textContent = on ? '⤢' : '⛶'; fsBtn.title = on ? w('fullscreen-exit') : w('fullscreen'); fsBtn.setAttribute('aria-pressed', String(on)); if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => placeLabels()); };
@@ -1131,7 +1179,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             h('div', { class: 'binder-crumb' }, backButton(ui.from ?? l.title),
                 h('span', { class: 'binder-dim binder-where' }, `${ui.from ? `${l.title} · ` : ''}#${r.id}${r.archived ? ` · ${w('archived')}` : ''}`)),
             hero,
-            h('header', { class: 'binder-head' }, title, factLine(l, r),
+            h('header', { class: 'binder-head' }, title, situation(l, r) ? otherFacts(l, r) : factLine(l, r), situation(l, r),
                 stateShown(l, r) || approve ? h('div', { class: 'binder-status' }, stateShown(l, r) ? h('div', { class: 'binder-state-wrap binder-pop' }, pillOf, menu) : null, approve) : null),
             about,
             whoLine || whoEdit ? h('div', { class: 'binder-who-wrap' }, whoLine, whoEdit) : null,

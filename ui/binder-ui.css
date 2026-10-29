@@ -321,15 +321,26 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-leaders line { stroke: var(--binder-dim); stroke-width: .8; opacity: .75; }
 .binder-dot-card { display: block; padding: .8rem .9rem .85rem; text-align: left; white-space: normal;
   background: var(--binder-panel); border: 1px solid var(--binder-line); border-radius: 13px; }
-/* The stage: the square, and the side panel beside it (below it on a narrow screen). */
-.binder-stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--binder-gap); align-items: start; }
+/* The stage: the square with its legend under it and the panel beside, as one block centred
+   on the page; on a narrow screen, the panel right under the square, then the legend. */
+.binder-stage { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "plot" "side" "legend"; gap: var(--binder-gap); align-items: start; }
+.binder-stage > .binder-plot { grid-area: plot; }
+.binder-stage > .binder-side { grid-area: side; }
+.binder-stage > .binder-legend { grid-area: legend; }
 .binder-side { min-height: 3.2rem; }
 .binder-side-hint { margin: 0; padding: .8rem .9rem; color: var(--binder-dim); font-size: .84rem; border: 1px dashed var(--binder-line); border-radius: 13px; }
+.binder-side .binder-pop-facts { font-size: .8rem; color: var(--binder-text); opacity: .85; line-height: 1.45; }
 @media (min-width: 900px) {
-  .binder-stage { grid-template-columns: minmax(0, 1fr) minmax(15rem, 19rem); }
-  .binder-side { position: sticky; top: .5rem; }
+  .binder-stage { grid-template-columns: minmax(0, 40rem) minmax(15rem, 18.75rem); grid-template-areas: "plot side" "legend side"; justify-content: center; column-gap: 1.5rem; }
+  .binder-side { position: sticky; top: 1rem; }
 }
-.binder-matrix-max .binder-stage { grid-template-columns: minmax(0, 1fr) minmax(15rem, 19rem); }
+.binder-matrix-max .binder-stage { grid-template-columns: minmax(0, 1fr) minmax(15rem, 18.75rem); grid-template-areas: "plot side" "legend side"; }
+/* A phone: the tools on one line that scrolls; no lone separators in the legend. */
+@media (max-width: 640px) {
+  .binder-matrix-bar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .binder-matrix-bar > * { flex: none; }
+  .binder-legend .binder-leg-sep { display: none; }
+}
 /* The point picked: a ring of the page's ink, so it is found again next to its summary. */
 .binder-dot-wrap.open { z-index: 14; }
 .binder-dot-wrap.open .binder-dot { box-shadow: 0 0 0 3px var(--binder-panel), 0 0 0 5px var(--binder-text); }
@@ -400,3 +411,38 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
   background: var(--bm-late); color: #fff; box-shadow: 0 0 0 2px var(--binder-panel); }
 .binder-late-glyph { width: 1em; height: 1em; border-radius: 50%; flex: none; background: radial-gradient(circle, transparent 38%, color-mix(in srgb, var(--bm-late) 70%, transparent) 46%, transparent 72%); }
 .binder-leg-late[data-on="true"] { border-color: var(--bm-late); box-shadow: inset 0 0 0 1px var(--bm-late); }
+/* A card's situation (the matrix in small, and its numbers as gauges): one card, the small
+   square on the left, the gauges on the right; on a phone the square above. The quarter it is in
+   is tinted and named; the point is where the big matrix has it. */
+.binder-sit { display: grid; grid-template-columns: 8rem minmax(0, 1fr); gap: .9rem 1.1rem; align-items: center; margin: .6rem auto 0; width: 100%; max-width: 36rem; box-sizing: border-box; text-align: left;
+  padding: .85rem 1rem; background: var(--binder-panel); border: 1px solid var(--binder-line); border-radius: 12px; }
+.binder-sit-map { display: grid; gap: .4rem; }
+.binder-sit-square { position: relative; width: 8rem; aspect-ratio: 1 / 1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+  border: 1px solid var(--binder-line); border-radius: 8px; overflow: hidden; }
+.binder-sit-q { display: flex; padding: .25rem .3rem; font-size: .56rem; letter-spacing: .06em; text-transform: uppercase; color: var(--binder-dim); }
+.binder-sit-q[data-q="q-plan"] { border-right: 1px solid var(--binder-line); border-bottom: 1px solid var(--binder-line); }
+.binder-sit-q[data-q="q-do"] { border-bottom: 1px solid var(--binder-line); justify-content: flex-end; }
+.binder-sit-q[data-q="q-later"] { border-right: 1px solid var(--binder-line); align-items: flex-end; }
+.binder-sit-q[data-q="q-delegate"] { justify-content: flex-end; align-items: flex-end; }
+.binder-sit-q.on { background: color-mix(in srgb, var(--bm-me) 13%, transparent); color: var(--binder-text); font-weight: 750; }
+.binder-sit-dot { position: absolute; width: .8rem; height: .8rem; border-radius: 50%; transform: translate(-50%, 50%); background: var(--c);
+  box-shadow: 0 0 0 2px var(--binder-panel), 0 1px 3px rgba(0, 0, 0, .3); }
+.binder-sit-where { font-size: .78rem; color: var(--binder-dim); line-height: 1.3; }
+.binder-sit-where b { color: var(--binder-text); }
+.binder-sit-bars { display: grid; gap: .5rem; min-width: 0; }
+.binder-sit-row { display: grid; grid-template-columns: 6.5rem minmax(4rem, 1fr) 5.5rem; gap: .2rem .6rem; align-items: center; }
+.binder-sit-label { font-size: .8rem; color: var(--binder-text); }
+.binder-sit-track { position: relative; height: .5rem; border-radius: 999px; background: color-mix(in srgb, var(--binder-dim) 18%, transparent); overflow: hidden; }
+.binder-sit-fill { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: color-mix(in srgb, var(--binder-text) 62%, transparent); }
+.binder-sit-part { position: absolute; inset: 0 0 0 auto; background: repeating-linear-gradient(45deg, var(--pc) 0 3px, transparent 3px 6px); }
+.binder-sit-num { font-size: .82rem; font-weight: 700; font-variant-numeric: tabular-nums; text-align: left; white-space: nowrap; }
+.binder-sit-num small { font-weight: 500; color: var(--binder-dim); }
+.binder-sit-note { grid-column: 2 / -1; font-size: .74rem; color: var(--binder-dim); margin-top: -.15rem; }
+@media (max-width: 640px) { .binder-sit { grid-template-columns: minmax(0, 1fr); } .binder-sit-map { grid-template-columns: 5rem minmax(0, 1fr); align-items: center; } .binder-sit-square { width: 5rem; } .binder-sit-q { font-size: 0; } .binder-sit-row { grid-template-columns: 6rem minmax(3rem, 1fr) 5.5rem; } }
+/* In the side panel: a smaller square with its quarter's name beside, thin bars. */
+.binder-sit.compact { grid-template-columns: minmax(0, 1fr); padding: 0; border: 0; background: none; gap: .6rem; margin-top: .5rem; max-width: none; }
+.binder-sit.compact .binder-sit-map { grid-template-columns: 4rem minmax(0, 1fr); align-items: center; }
+.binder-sit.compact .binder-sit-square { width: 4rem; border-radius: 6px; }
+.binder-sit.compact .binder-sit-row { grid-template-columns: 5.5rem minmax(0, 1fr) 2rem; }
+.binder-sit.compact .binder-sit-track { height: .32rem; }
+.binder-sit.compact .binder-sit-label { font-size: .74rem; }

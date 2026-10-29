@@ -132,5 +132,12 @@
   "late": "Late",
   "due-soon": "Reminder",
   "to-handle": "To handle",
-  "pick-point": "Touch a point to see its card here."
+  "pick-point": "Touch a point to see its card here.",
+  "lvl-low": "low",
+  "lvl-mid": "medium",
+  "lvl-high": "high",
+  "q-do-why": "important and urgent",
+  "q-plan-why": "important, not urgent",
+  "q-delegate-why": "urgent, less important",
+  "q-later-why": "neither urgent nor important"
 }
