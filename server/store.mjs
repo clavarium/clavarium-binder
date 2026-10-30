@@ -316,7 +316,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
                 if (!Array.isArray(states) || states.length < 1 || states.length > STATES_MAX) no(`a list has 1 to ${STATES_MAX} states`);
                 const next = []; const seen = new Set();
                 for (const st of states) {
-                    const name = oneLine(st?.name, 60); if (!name) no('a state needs a name');
+                    const name = whole(oneLine(st?.name, Infinity), 'a state name', 60); if (!name) no('a state needs a name');
                     let id = oneLine(st?.id, 40) || key(name) || 'state';
                     for (let i = 2; seen.has(id); i++) id = `${key(name)}-${i}`;
                     seen.add(id); next.push({ id, name, ...(st.gate ? { gate: true } : {}), ...(st.done ? { done: true } : {}) });
@@ -330,7 +330,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
                 if (!Array.isArray(fields) || fields.length > FIELDS_MAX) no(`${FIELDS_MAX} fields at most`);
                 const seen = new Set();
                 list.fields = change.fields = fields.map((f) => {
-                    const name = oneLine(f?.name, 60); if (!name) no('a field needs a name');
+                    const name = whole(oneLine(f?.name, Infinity), 'a field name', 60); if (!name) no('a field needs a name');
                     if (!FIELD_TYPES.includes(f.type)) no(`a field is one of: ${FIELD_TYPES.join(', ')}`);
                     let id = oneLine(f?.id, 40) || key(name) || 'field';
                     for (let i = 2; seen.has(id); i++) id = `${key(name)}-${i}`;
@@ -525,7 +525,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             const w = whoOf(who);
             const { r, list } = recordOf(given, w, 'write');
             if (!ATTACH_KINDS.includes(kind)) no(`attach one of: ${ATTACH_KINDS.join(', ')}`);
-            const what = oneLine(ref, REF_MAX); if (!what) no('say what to attach');
+            const what = whole(oneLine(ref, Infinity), 'what is attached (its ref)', REF_MAX); if (!what) no('say what to attach');
             if (kind === 'record') { const other = recordOf(what, w); if (other.r.id === r.id) no('a record is not attached to itself'); }
             if (kind === 'link' && !/^https?:\/\//i.test(what)) no('a link starts with http:// or https://');
             if (r.attached.length >= ATTACHED_MAX) no(`${ATTACHED_MAX} things attached at most`);

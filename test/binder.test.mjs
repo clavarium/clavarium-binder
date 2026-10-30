@@ -1116,3 +1116,13 @@ test('a note of one\'s own taken back by its number, as get shows it', () => {
     assert.deepEqual(k.act('get', { id: r.id }, ME).data.record.notes.map((n) => n.text), ['premier', 'doublon']);
     assert.match(k.act('edit-note', { id: r.id, note: '9', text: '' }, ME).text, /no such note/);
 });
+
+test('names of states and fields, and refs attached, too long are refused, never cut (#51)', () => {
+    const s = openStore(tmp());
+    const l = s.createList({ template: 'simple' }, ME);
+    const r = s.add(l.id, { title: 'Un sujet' }, ME);
+    assert.throws(() => s.editList(l.id, { fields: [{ name: 'x'.repeat(61), type: 'text' }] }, ME), /a field name is 61 characters; 60 at most -- nothing was changed/);
+    assert.throws(() => s.editList(l.id, { states: [...l.states, { name: 'y'.repeat(70) }] }, ME), /a state name is 70 characters/);
+    assert.throws(() => s.attach(r.id, { kind: 'link', ref: `https://example.org/${'z'.repeat(1200)}` }, ME), /what is attached \(its ref\) is \d+ characters/);
+    assert.equal(s.record(r.id, ME).record.attached.length, 0, 'nothing attached');
+});
