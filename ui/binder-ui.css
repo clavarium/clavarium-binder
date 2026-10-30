@@ -464,3 +464,5 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-sit-q { font-size: .6rem; letter-spacing: .03em; color: color-mix(in srgb, var(--binder-text) 72%, transparent); }
 .binder-head .binder-sit { align-self: flex-start; }
 @media (max-width: 640px) { .binder-sit-q { font-size: 0; } }
+.binder-leg-hide[aria-pressed="false"] { opacity: .75; text-decoration: none; }
+.binder-leg-hide[aria-pressed="true"] { background: color-mix(in srgb, var(--bm-me) 16%, transparent); }

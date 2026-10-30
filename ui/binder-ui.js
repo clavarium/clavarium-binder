@@ -643,7 +643,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     let matrixLeave = null; let matrixTrailClear = null; let matrixSideClear = null;
     /* The matrix's own view state, kept across repaints (and reset when the binder changes):
        which owner categories are hidden, and whether the delegability arcs show. */
-    let mxFor = null; let mxHide = new Set(); let mxRings = true; let mxMove = false; let mxNote = null; let mxFs = false; let mxFocus = 'all'; let mxLate = false; let mxTexts = true;
+    let mxFor = null; let mxHide = new Set(); let mxRings = true; let mxMove = false; let mxNote = null; let mxFs = false; let mxFocus = 'all'; let mxLate = false; let mxTexts = true; let mxHideOthers = false;
     const s100 = (v) => Math.max(0, Math.min(100, Number(v) || 0));
     /* THE MATRIX: urgency across (→), importance up (↑); a point's HUE says who owns it
        (gold = me, one colour per person, grey = nobody), its SIZE says the charge, and a thin
@@ -798,7 +798,9 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                take (mine faded, their arc plain); a person hidden takes their arc off mine. */
             const helped = (r) => { const hp = helperOf(r); return hp !== null && !mxHide.has(hp); };
             /* "Mine": what I carry only; else a card is shown when its carrier, or its helper, is. */
-            const shown = placed.filter((r) => (!mxHide.has(ownerCat(r)) || helped(r)) && (!mxLate || callingOf(r, done?.id)));
+            /* "I carry" / "Reinforcing": the rest faded -- or, if the person chose so in the legend, hidden. */
+            const outOfFocus = (r) => (mxFocus === 'carry' ? ownerCat(r) !== 'me' : mxFocus === 'help' ? helperOf(r) !== 'me' : false);
+            const shown = placed.filter((r) => (!mxHide.has(ownerCat(r)) || helped(r)) && (!mxLate || callingOf(r, done?.id)) && !(mxHideOthers && outOfFocus(r)));
             /* More than three calling: the halos stay still, or the whole square would blink. */
             plot.classList?.toggle?.('binder-late-many', shown.filter((r) => callingOf(r, done?.id)).length > 3);
             plot.classList?.toggle?.('binder-is-empty', shown.length === 0);
@@ -808,7 +810,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 const el = dot(r); dotEls.push(el); plot.append(el);
                 const hp = helperOf(r);
                 /* "I carry" / "Reinforcing": what is not so is faded, never hidden -- I am in on all. */
-                const off = mxFocus === 'carry' ? ownerCat(r) !== 'me' : mxFocus === 'help' ? hp !== 'me' : false;
+                const off = outOfFocus(r);
                 if (off || mxHide.has(ownerCat(r))) el.classList?.add?.('binder-faint');
                 else if (hp !== null && mxHide.has(hp)) el.classList?.add?.('binder-arc-off');
             }
@@ -861,7 +863,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
            (where any exists) the delegability arcs toggle, and the size key. */
         const legBtns = new Map();
         const legend = h('div', { class: 'binder-legend' });
-        const sync = () => { for (const [cat, b] of legBtns) b.setAttribute('aria-pressed', String(!mxHide.has(cat))); if (ringBtn) ringBtn.setAttribute('aria-pressed', String(mxRings)); textBtn.setAttribute('aria-pressed', String(mxTexts)); for (const [f, b] of focusBtns) b.setAttribute('aria-pressed', String(f === mxFocus)); renderDots(); };
+        const sync = () => { for (const [cat, b] of legBtns) b.setAttribute('aria-pressed', String(!mxHide.has(cat))); if (ringBtn) ringBtn.setAttribute('aria-pressed', String(mxRings)); textBtn.setAttribute('aria-pressed', String(mxTexts)); hideBtn.setAttribute('aria-pressed', String(mxHideOthers)); hideBtn.hidden = mxFocus === 'all'; for (const [f, b] of focusBtns) b.setAttribute('aria-pressed', String(f === mxFocus)); renderDots(); };
         for (const cat of cats) {
             const sw = h('span', { class: 'binder-leg-sw' }); sw.style?.setProperty('background', colorOf(cat));
             const b = h('button', { type: 'button', class: 'binder-leg' }, sw, document.createTextNode(labelFor(cat)));
@@ -880,6 +882,11 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         const textBtn = h('button', { type: 'button', class: 'binder-leg binder-leg-texts', 'aria-pressed': String(mxTexts) }, h('span', { class: 'binder-texts-glyph', 'aria-hidden': 'true' }, 'Aa'), document.createTextNode(w('mx-texts')));
         textBtn.addEventListener('click', () => { mxTexts = !mxTexts; sync(); });
         legend.append(textBtn);
+        /* With "I carry" or "Reinforcing": the others faded (the default), or hidden. */
+        const hideBtn = h('button', { type: 'button', class: 'binder-leg binder-leg-hide', 'aria-pressed': String(mxHideOthers) }, h('span', { class: 'binder-hide-glyph', 'aria-hidden': 'true' }, '◌'), document.createTextNode(w('mx-hide-others')));
+        hideBtn.hidden = mxFocus === 'all';
+        hideBtn.addEventListener('click', () => { mxHideOthers = !mxHideOthers; sync(); });
+        legend.append(hideBtn);
         /* Late ones (#181): counted; a tap shows only them, again shows all. */
         const lateCount = placed.filter((r) => callingOf(r, done?.id)).length;
         let lateBtn = null;
