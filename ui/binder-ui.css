@@ -470,3 +470,4 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-leg-meonly[aria-pressed="true"] { background: color-mix(in srgb, var(--bm-me) 16%, transparent); }
 .binder-meonly-glyph { width: .9em; height: .9em; border-radius: 50%; flex: none; background: linear-gradient(90deg, var(--bm-me) 50%, var(--bm-none) 50%); }
 .binder-leg.binder-leg-grey .binder-leg-sw { background: var(--bm-none) !important; }
+.binder-dot.binder-not-mine .binder-dot-fill { box-shadow: none; }

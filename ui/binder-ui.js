@@ -722,9 +722,11 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 /* A mouse over a point: its summary in the panel, for a moment; the one picked comes back after. */
                 onpointerenter: (e) => { if (e.pointerType === 'mouse') peek(card); },
                 onpointerleave: (e) => { if (e.pointerType === 'mouse') peek(null); } }, h('span', { class: 'binder-dot-fill' }));
-            /* "Only me": my part in gold, everyone else's in one neutral grey -- places and sizes kept. */
-            const paint = (k) => (mxMeOnly && k !== 'me' ? 'var(--bm-others, var(--bm-none))' : colorOf(k));
+            /* "Only my part": my part alone, in gold -- everyone else's is not drawn at all (a disc of
+               theirs leaves my ring around nothing; a ring of theirs leaves my disc alone). */
+            const paint = (k) => (mxMeOnly && k !== 'me' ? 'transparent' : colorOf(k));
             gauge.style?.setProperty('--c', paint(cat));
+            if (mxMeOnly && cat !== 'me') gauge.classList?.add?.('binder-not-mine');
             if (hasGauge) { gauge.style?.setProperty('--pct', String(Math.round(s100(dd)))); gauge.style?.setProperty('--k', `${(keep * 100).toFixed(1)}%`); }
             if (hasGauge && helper) gauge.style?.setProperty('--arc', paint(helper));
             const label = h('span', { class: 'binder-dot-label', lang, 'aria-hidden': 'true' }, r.title);
@@ -802,7 +804,8 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             /* "Mine": what I carry only; else a card is shown when its carrier, or its helper, is. */
             /* "I carry" / "Reinforcing": the rest faded -- or, if the person chose so in the legend, hidden. */
             const outOfFocus = (r) => (mxFocus === 'carry' ? ownerCat(r) !== 'me' : mxFocus === 'help' ? helperOf(r) !== 'me' : false);
-            const shown = placed.filter((r) => (!mxHide.has(ownerCat(r)) || helped(r)) && (!mxLate || callingOf(r, done?.id)) && !(mxHideOthers && outOfFocus(r)));
+            const shown = placed.filter((r) => (!mxHide.has(ownerCat(r)) || helped(r)) && (!mxLate || callingOf(r, done?.id)) && !(mxHideOthers && outOfFocus(r))
+                && !(mxMeOnly && ownerCat(r) !== 'me' && helperOf(r) !== 'me'));
             /* More than three calling: the halos stay still, or the whole square would blink. */
             plot.classList?.toggle?.('binder-late-many', shown.filter((r) => callingOf(r, done?.id)).length > 3);
             plot.classList?.toggle?.('binder-is-empty', shown.length === 0);
