@@ -446,3 +446,17 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-sit.compact .binder-sit-row { grid-template-columns: 5.5rem minmax(0, 1fr) 2rem; }
 .binder-sit.compact .binder-sit-track { height: .32rem; }
 .binder-sit.compact .binder-sit-label { font-size: .74rem; }
+/* Line icons in place of emojis (designer review, #184). */
+.binder-i { display: inline-block; width: 1em; height: 1em; margin-right: .3em; vertical-align: -.14em; background: currentColor; opacity: .75;
+  -webkit-mask: var(--i) center / contain no-repeat; mask: var(--i) center / contain no-repeat; }
+.binder-i-person { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 21a8 8 0 0 1 16 0'/%3E%3C/svg%3E"); }
+.binder-i-clock { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 2'/%3E%3C/svg%3E"); }
+.binder-i-bell { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9'/%3E%3Cpath d='M10.3 21a1.9 1.9 0 0 0 3.4 0'/%3E%3C/svg%3E"); }
+/* Side panel: the description set apart from the gauges; numbers to the right (#184). */
+.binder-side .binder-pop-desc { margin-top: .75rem; padding-top: .75rem; border-top: 1px solid var(--binder-line); }
+.binder-side .binder-sit-num { text-align: right; }
+/* A card's strip: on the title's line (left), its small square's words readable (#184). */
+.binder-head .binder-sit { margin-inline: 0; }
+.binder-sit-q { font-size: .6rem; letter-spacing: .03em; color: color-mix(in srgb, var(--binder-text) 72%, transparent); }
+.binder-head .binder-sit { align-self: flex-start; }
+@media (max-width: 640px) { .binder-sit-q { font-size: 0; } }

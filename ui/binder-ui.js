@@ -350,6 +350,8 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     root.replaceChildren(box);
     let alive = true;
     const nameOf = (id) => people().find((p) => p.id === id)?.name ?? id;
+    /* Small line icons (a person, a clock, a bell) in place of emojis: drawn by CSS, in the text's colour. */
+    const ico = (name) => h('span', { class: `binder-i binder-i-${name}`, 'aria-hidden': 'true' });
     /* A card's SITUATION on a matrix list: a small square with its point and its quarter named,
        and its four numbers as gauges -- instead of a line of numbers that says little.
        compact: the side panel's form (a smaller square, thin bars). */
@@ -508,7 +510,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     };
     const late = (l, r) => { const t = Date.parse(r.due.length === 10 ? `${r.due}T23:59:59` : r.due.replace(' ', 'T')); return t < Date.now() && !l.states.find((s) => s.id === r.state)?.done; };
     /* The lead reminder, where one is set: a quiet "−7 j" beside the due date. */
-    const lead = (r) => (r.due && r.remindBefore ? h('span', { class: 'binder-lead', title: w('remind-before') }, `🔔 −${r.remindBefore} ${w('days')}`) : null);
+    const lead = (r) => (r.due && r.remindBefore ? h('span', { class: 'binder-lead', title: w('remind-before') }, ico('bell'), `−${r.remindBefore} ${w('days')}`) : null);
     const stamp = (iso) => { try { return new Date(iso).toLocaleString(lang, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch { return String(iso).slice(0, 16).replace('T', ' '); } };
     const gateOf = (l) => l.states.findIndex((s) => s.gate);
     const doneOf = (l) => l.states.find((s) => s.done) ?? l.states.at(-1);
@@ -522,7 +524,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     const pill = (l, r) => { if (!stateShown(l, r)) return null; const st = l.states.find((s) => s.id === r.state); return h('span', { class: 'binder-pill', 'data-state': r.state, 'data-done': st?.done ? '' : null, 'data-gate': st?.gate ? '' : null }, st ? sn(st) : r.state); };
     const meta = (l, r) => h('span', { class: 'binder-meta' },
         r.owners.length ? r.owners.map(nameOf).join(', ') : null,
-        r.due ? h('span', { class: late(l, r) ? 'binder-late' : null }, `⏰ ${when(r.due)}`) : null,
+        r.due ? h('span', { class: late(l, r) ? 'binder-late' : null }, ico('clock'), when(r.due)) : null,
         lead(r),
         r.repeat ? h('span', { class: 'binder-repeat', title: w('recurrent') }, `↻${typeof r.repeat === 'number' ? ` ${r.repeat} ${w('days')}` : ''}`) : null,
         r.attached.length ? h('span', {}, `📎 ${r.attached.length}`) : null,
@@ -1051,7 +1053,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
 
         /* Who and when, on one line: only what is set. */
         const names = r.owners.map(nameOf).join(', ');
-        const whoParts = [names ? h('span', {}, `👤 ${names}`) : null, r.due ? h('span', { class: late(l, r) ? 'binder-late' : null }, `⏰ ${when(r.due)}`) : null, lead(r)].filter(Boolean);
+        const whoParts = [names ? h('span', {}, ico('person'), names) : null, r.due ? h('span', { class: late(l, r) ? 'binder-late' : null }, ico('clock'), when(r.due)) : null, lead(r)].filter(Boolean);
         const whoLine = whoParts.length ? h(can ? 'button' : 'div', { type: can ? 'button' : null, class: 'binder-who', 'data-act': 'who', 'aria-expanded': can ? String(ui.open === 'who') : null, onclick: can ? () => set(ui.open === 'who' ? null : 'who') : null },
             whoParts.flatMap((x, i) => (i ? [h('span', { class: 'binder-dot', 'aria-hidden': 'true' }, '·'), x] : [x]))) : null;
         let whoEdit = null;
