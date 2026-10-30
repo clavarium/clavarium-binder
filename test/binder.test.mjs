@@ -583,6 +583,11 @@ test('binder field add/remove: a person adds fields to an existing list and remo
     const r2 = k.act('field', { list: l.id, remove: 'Interlocuteurs' }, ME);
     assert.deepEqual(r2.data.fields.map((f) => f.name), ['Prochaine étape']);
     assert.equal(k.act('field', { list: l.id, remove: 'Nope' }, ME).ok, false, 'removing an absent field is refused');
+    /* The list named by its title, as the CLI is used ("binder field Lots add audit"): found, not a crash. */
+    const m = k.act('create-list', { template: 'simple', title: 'Mes lots' }, ME).data;
+    assert.notEqual(m.id, 'Mes lots');
+    assert.deepEqual(k.act('field', { list: 'Mes lots', add: { name: 'Audit', type: 'text' } }, ME).data.fields.map((f) => f.name), ['Audit']);
+    assert.equal(k.act('columns', { list: 'mes LOTS', add: 'Revue' }, ME).ok, true, 'the columns too');
     /* the CLI parses name and optional type (text by default) */
     assert.deepEqual(read(['field', 'L', 'add', 'Interlocuteurs'])[1], { list: 'L', add: { name: 'Interlocuteurs', type: 'text' } });
     assert.deepEqual(read(['field', 'L', 'add', 'Born', 'date'])[1], { list: 'L', add: { name: 'Born', type: 'date' } });

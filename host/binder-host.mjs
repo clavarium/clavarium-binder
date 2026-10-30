@@ -172,7 +172,7 @@ export function keeper(dir, { sides = () => [], now = () => Date.now(), people =
                 case 'columns': {
                     /* Add or rename a column, keeping every other column (its id, its gate, its "done") as it is,
                        then edit the list with the whole set -- so the gate is never worked around. */
-                    const match = (ref) => (x) => x.id === ref || x.name.toLowerCase() === String(ref ?? '').toLowerCase();
+                    const match = (ref) => (x) => x.id === ref || String(x.name ?? x.title ?? '').toLowerCase() === String(ref ?? '').toLowerCase();
                     const l = store.lists(who).find(match(a.list));
                     if (!l) throw new Refused(`no list ${oneLine(a.list, 100) || '(none given)'}`);
                     const states = l.states.map((x) => ({ id: x.id, name: x.name, ...(x.gate ? { gate: true } : {}), ...(x.done ? { done: true } : {}) }));
@@ -190,7 +190,7 @@ export function keeper(dir, { sides = () => [], now = () => Date.now(), people =
                 case 'field': {
                     /* Add or remove a field, keeping every other field, then edit the list with the whole set
                        (so the store's rules -- a person's, or an agent's when allowed -- apply to the change). */
-                    const match = (ref) => (x) => x.id === ref || x.name.toLowerCase() === String(ref ?? '').toLowerCase();
+                    const match = (ref) => (x) => x.id === ref || String(x.name ?? x.title ?? '').toLowerCase() === String(ref ?? '').toLowerCase();
                     const l = store.lists(who).find(match(a.list));
                     if (!l) throw new Refused(`no list ${oneLine(a.list, 100) || '(none given)'}`);
                     const fields = l.fields.map((x) => ({ id: x.id, name: x.name, type: x.type }));
