@@ -959,7 +959,7 @@ test('a priorities matrix explains itself to an agent: the fields and their scal
     const shown = k.act('show', { list: prio.id }, ME).text;
     assert.match(shown, /priorities matrix/);
     assert.match(shown, /urgence: how soon/);
-    assert.match(shown, /delegabilite: how readily/);
+    assert.match(shown, /delegabilite: the share of the second person on the card, its reinforcement/);
     const bare = k.act('add', { list: prio.id, title: 'Une fiche' }, ME);
     assert.match(bare.text, /Not on the matrix yet: it needs urgence and importance/);
     assert.match(bare.text, /Nobody carries it/);
@@ -1074,7 +1074,7 @@ test('two on a card: the second owner\'s share is 5 at least, for an agent as fo
     const r = s.add(l.id, { title: 'Theirs', fields: { urgence: 50, importance: 50 }, owners: [AGENT.id, ME.id] }, AGENT);
     assert.equal(s.record(r.id, ME).record.fields.delegabilite, 5);
     /* Lower refused, for either, and nothing changed. */
-    for (const who of [AGENT, ME]) assert.throws(() => s.edit(r.id, { fields: { delegabilite: 2, urgence: 90 } }, who), /5 at least -- nothing was changed/);
+    for (const who of [AGENT, ME]) assert.throws(() => s.edit(r.id, { fields: { delegabilite: 2, urgence: 90 } }, who), /5 at least .*-- nothing was changed/);
     assert.equal(s.record(r.id, ME).record.fields.urgence, 50);
     /* A second owner added later, on a share of 0: raised. One owner alone: 0 is fine. */
     const mine = s.add(l.id, { title: 'Mine', fields: { delegabilite: 0 }, owners: [ME.id] }, ME);

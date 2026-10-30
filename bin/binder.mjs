@@ -36,6 +36,7 @@ export const HELP = `binder: the lists you were given, and their records.
 
 ID: a record's number, 12 or #12. DATE: 2026-11-04, or "2026-11-04 09:00".
 --remind-before DAYS reminds the owners that many days before the due time (e.g. 1, 3, 7); none removes it.
+--owner A,B: A carries the card, B is its reinforcement; on a matrix, delegabilite is B's share (0-100, 5 at least).
 --urgency-from DATE makes its urgency automatic: rising from that date to its due date (a matrix shows it); none: set by hand.
 A description is for a person: short and clear, what it is and why, 1 to 3 lines
 (Markdown-ish: "- " lists, **bold**, links). --description "" removes it.

@@ -37,7 +37,7 @@ const MATRIX_FIELDS = [
     ['urgence', 'how soon it must be done (100: now)'],
     ['importance', 'how much it matters (100: essential)'],
     ['charge', 'the effort it takes (100: a lot)'],
-    ['delegabilite', 'how readily someone else could do it (0: only its owner; 100: anyone)'],
+    ['delegabilite', "the share of the second person on the card, its reinforcement (0: none; 100: they do it all); with nobody second yet, how much someone could take"],
 ];
 const ownerIds = (records) => [...new Set(records.flatMap((r) => r.owners ?? []))];
 export function matrixGuide(l, ids = [], people = []) {
@@ -62,7 +62,9 @@ export function ownerGuide(ids = [], people = []) {
         `  another conversation: --owner conversation:NAME${agents.length ? ` (${agents.slice(0, 6).join(', ')}${agents.length > 6 ? ', ...' : ''})` : ''}`,
         '  someone outside, by name: --owner "Sébastien" (a name is kept as it is written)',
         '  nobody yet: --owner none',
-        '  two people on one card: --owner <who carries it>,<who comes in> -- the second\'s share is delegabilite: on the person\'s card, what you (or someone) could take; on yours, how much you need the person (at least 5)',
+        '  two people on one card: the first carries it, the second comes in as reinforcement: --owner <who carries it>,<the reinforcement>',
+        '    delegabilite is the reinforcement\'s share of the work (0: none, 100: they do it all) -- the same meaning whoever carries it',
+        '    with a reinforcement named it is 5 at least: a second person with no share would not be on the card',
         '  the person sees on their matrix only what they carry or come in on; a card of nobody\'s waits below it',
         '  everyone who may carry one: binder people'];
 }

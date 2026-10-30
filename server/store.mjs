@@ -611,7 +611,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
     }
     function shareCheck(list, owners, fields) {
         const v = shareGiven(list, fields);
-        if (owners.length >= 2 && v !== undefined && v !== null && v !== '' && Number(v) < SHARE_MIN) no(`two on a card: the second's share (${shareField(list).name}) is ${SHARE_MIN} at least -- nothing was changed`);
+        if (owners.length >= 2 && v !== undefined && v !== null && v !== '' && Number(v) < SHARE_MIN) no(`two on a card: the first carries it, the second is its reinforcement; ${shareField(list).name} is the reinforcement's share, ${SHARE_MIN} at least (a reinforcement with no share would not be on the card) -- nothing was changed`);
     }
     function shareRaise(list, r) {
         const f = shareField(list);
