@@ -643,7 +643,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     let matrixLeave = null; let matrixTrailClear = null; let matrixSideClear = null;
     /* The matrix's own view state, kept across repaints (and reset when the binder changes):
        which owner categories are hidden, and whether the delegability arcs show. */
-    let mxFor = null; let mxHide = new Set(); let mxRings = true; let mxMove = false; let mxNote = null; let mxFs = false; let mxFocus = 'all'; let mxLate = false; let mxTexts = true; let mxHideOthers = false;
+    let mxFor = null; let mxHide = new Set(); let mxRings = true; let mxMove = false; let mxNote = null; let mxFs = false; let mxFocus = 'all'; let mxLate = false; let mxTexts = true; let mxHideOthers = false; let mxMeOnly = false;
     const s100 = (v) => Math.max(0, Math.min(100, Number(v) || 0));
     /* THE MATRIX: urgency across (→), importance up (↑); a point's HUE says who owns it
        (gold = me, one colour per person, grey = nobody), its SIZE says the charge, and a thin
@@ -722,9 +722,11 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 /* A mouse over a point: its summary in the panel, for a moment; the one picked comes back after. */
                 onpointerenter: (e) => { if (e.pointerType === 'mouse') peek(card); },
                 onpointerleave: (e) => { if (e.pointerType === 'mouse') peek(null); } }, h('span', { class: 'binder-dot-fill' }));
-            gauge.style?.setProperty('--c', colorOf(cat));
+            /* "Only me": my part in gold, everyone else's in one neutral grey -- places and sizes kept. */
+            const paint = (k) => (mxMeOnly && k !== 'me' ? 'var(--bm-others, var(--bm-none))' : colorOf(k));
+            gauge.style?.setProperty('--c', paint(cat));
             if (hasGauge) { gauge.style?.setProperty('--pct', String(Math.round(s100(dd)))); gauge.style?.setProperty('--k', `${(keep * 100).toFixed(1)}%`); }
-            if (hasGauge && helper) gauge.style?.setProperty('--arc', colorOf(helper));
+            if (hasGauge && helper) gauge.style?.setProperty('--arc', paint(helper));
             const label = h('span', { class: 'binder-dot-label', lang, 'aria-hidden': 'true' }, r.title);
             const whoDot = h('span', { class: 'binder-who-dot' }); whoDot.style?.setProperty('background', colorOf(cat));
             const card = h('div', { class: 'binder-dot-card' },
@@ -863,7 +865,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
            (where any exists) the delegability arcs toggle, and the size key. */
         const legBtns = new Map();
         const legend = h('div', { class: 'binder-legend' });
-        const sync = () => { for (const [cat, b] of legBtns) b.setAttribute('aria-pressed', String(!mxHide.has(cat))); if (ringBtn) ringBtn.setAttribute('aria-pressed', String(mxRings)); textBtn.setAttribute('aria-pressed', String(mxTexts)); hideBtn.setAttribute('aria-pressed', String(mxHideOthers)); hideBtn.hidden = mxFocus === 'all'; for (const [f, b] of focusBtns) b.setAttribute('aria-pressed', String(f === mxFocus)); renderDots(); };
+        const sync = () => { for (const [cat, b] of legBtns) b.setAttribute('aria-pressed', String(!mxHide.has(cat))); if (ringBtn) ringBtn.setAttribute('aria-pressed', String(mxRings)); textBtn.setAttribute('aria-pressed', String(mxTexts)); meOnlyBtn?.setAttribute('aria-pressed', String(mxMeOnly)); for (const [cat, b] of legBtns) b.classList?.toggle?.('binder-leg-grey', mxMeOnly && cat !== 'me'); hideBtn.setAttribute('aria-pressed', String(mxHideOthers)); hideBtn.hidden = mxFocus === 'all'; for (const [f, b] of focusBtns) b.setAttribute('aria-pressed', String(f === mxFocus)); renderDots(); };
         for (const cat of cats) {
             const sw = h('span', { class: 'binder-leg-sw' }); sw.style?.setProperty('background', colorOf(cat));
             const b = h('button', { type: 'button', class: 'binder-leg' }, sw, document.createTextNode(labelFor(cat)));
@@ -882,6 +884,11 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         const textBtn = h('button', { type: 'button', class: 'binder-leg binder-leg-texts', 'aria-pressed': String(mxTexts) }, h('span', { class: 'binder-texts-glyph', 'aria-hidden': 'true' }, 'Aa'), document.createTextNode(w('mx-texts')));
         textBtn.addEventListener('click', () => { mxTexts = !mxTexts; sync(); });
         legend.append(textBtn);
+        /* "Only me": what is mine in gold, the rest in one grey; with "I carry" the discs read, with
+           "Reinforcing" the rings. Only where I am among the points. */
+        const meOnlyBtn = meId ? h('button', { type: 'button', class: 'binder-leg binder-leg-meonly', 'aria-pressed': String(mxMeOnly) }, h('span', { class: 'binder-meonly-glyph', 'aria-hidden': 'true' }), document.createTextNode(w('mx-me-only'))) : null;
+        meOnlyBtn?.addEventListener('click', () => { mxMeOnly = !mxMeOnly; sync(); });
+        if (meOnlyBtn) legend.append(meOnlyBtn);
         /* With "I carry" or "Reinforcing": the others faded (the default), or hidden. */
         const hideBtn = h('button', { type: 'button', class: 'binder-leg binder-leg-hide', 'aria-pressed': String(mxHideOthers) }, h('span', { class: 'binder-hide-glyph', 'aria-hidden': 'true' }, '◌'), document.createTextNode(w('mx-hide-others')));
         hideBtn.hidden = mxFocus === 'all';
