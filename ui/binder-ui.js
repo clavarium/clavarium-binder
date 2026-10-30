@@ -643,7 +643,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     let matrixLeave = null; let matrixTrailClear = null; let matrixSideClear = null;
     /* The matrix's own view state, kept across repaints (and reset when the binder changes):
        which owner categories are hidden, and whether the delegability arcs show. */
-    let mxFor = null; let mxHide = new Set(); let mxRings = true; let mxMove = false; let mxNote = null; let mxFs = false; let mxCarry = false; let mxLate = false;
+    let mxFor = null; let mxHide = new Set(); let mxRings = true; let mxMove = false; let mxNote = null; let mxFs = false; let mxFocus = 'all'; let mxLate = false; let mxTexts = true;
     const s100 = (v) => Math.max(0, Math.min(100, Number(v) || 0));
     /* THE MATRIX: urgency across (→), importance up (↑); a point's HUE says who owns it
        (gold = me, one colour per person, grey = nobody), its SIZE says the charge, and a thin
@@ -697,10 +697,13 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             /* Theirs where I come in always shows my arc: at least 5 %, even with my share unsaid. */
             const dd = helper === 'me' && !mine ? Math.max(5, d ?? 0) : d;
             const hasGauge = (mine || helper !== null) && dd !== null && dd > 0;
-            /* Its size is what it costs me: mine with a helper, all but their share; someone else's
-               where I come in, my share of it. */
+            /* Its size is its whole charge, the same for everyone who looks at it. Inside, a disc in
+               the carrier's colour is what they do; the ring around it, in the reinforcement's colour,
+               is the reinforcement's share -- by AREA: the disc's radius is the whole radius times
+               the square root of what the carrier keeps. A ring stays 2.5 px at least, to be seen. */
             const share = c === null || dd === null ? null : mine && helper ? Math.round(c * (100 - s100(dd)) / 100) : helper === 'me' ? Math.round(c * s100(dd) / 100) : null;
-            const dia = MINR + (s100(share ?? c ?? 20) / 100) * (MAXR - MINR);
+            const dia = MINR + (s100(c ?? 20) / 100) * (MAXR - MINR);
+            const keep = hasGauge ? Math.min(Math.sqrt(1 - s100(dd) / 100), 1 - 2.5 / (dia * 8)) : 1;
             const facts = [`${fieldName(l, X)} ${x}${urgencyAuto(r) ? ` (${w('auto')})` : ''}`, `${fieldName(l, Y)} ${y}`];
             if (c !== null) facts.push(`${fieldName(l, SIZE)} ${c}${share !== null ? ` · ${w('my-share')} ${share}` : ''}`);
             if (d !== null) facts.push(`${fieldName(l, TINT)} ${d}${hasGauge ? ` → ${helper ? labelFor(helper) : w('nobody-yet')}` : ''}`);
@@ -720,7 +723,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 onpointerenter: (e) => { if (e.pointerType === 'mouse') peek(card); },
                 onpointerleave: (e) => { if (e.pointerType === 'mouse') peek(null); } }, h('span', { class: 'binder-dot-fill' }));
             gauge.style?.setProperty('--c', colorOf(cat));
-            if (hasGauge) gauge.style?.setProperty('--pct', String(Math.round(s100(dd))));
+            if (hasGauge) { gauge.style?.setProperty('--pct', String(Math.round(s100(dd)))); gauge.style?.setProperty('--k', `${(keep * 100).toFixed(1)}%`); }
             if (hasGauge && helper) gauge.style?.setProperty('--arc', colorOf(helper));
             const label = h('span', { class: 'binder-dot-label', lang, 'aria-hidden': 'true' }, r.title);
             const whoDot = h('span', { class: 'binder-who-dot' }); whoDot.style?.setProperty('background', colorOf(cat));
@@ -795,15 +798,18 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                take (mine faded, their arc plain); a person hidden takes their arc off mine. */
             const helped = (r) => { const hp = helperOf(r); return hp !== null && !mxHide.has(hp); };
             /* "Mine": what I carry only; else a card is shown when its carrier, or its helper, is. */
-            const shown = placed.filter((r) => (mxCarry ? ownerCat(r) === 'me' : !mxHide.has(ownerCat(r)) || helped(r)) && (!mxLate || callingOf(r, done?.id)));
+            const shown = placed.filter((r) => (!mxHide.has(ownerCat(r)) || helped(r)) && (!mxLate || callingOf(r, done?.id)));
             /* More than three calling: the halos stay still, or the whole square would blink. */
             plot.classList?.toggle?.('binder-late-many', shown.filter((r) => callingOf(r, done?.id)).length > 3);
             plot.classList?.toggle?.('binder-is-empty', shown.length === 0);
             plot.classList?.toggle?.('binder-gauges-off', !mxRings);
+            plot.classList?.toggle?.('binder-names-off', !mxTexts);
             for (const r of shown) {
                 const el = dot(r); dotEls.push(el); plot.append(el);
                 const hp = helperOf(r);
-                if (mxHide.has(ownerCat(r))) el.classList?.add?.('binder-faint');
+                /* "I carry" / "Reinforcing": what is not so is faded, never hidden -- I am in on all. */
+                const off = mxFocus === 'carry' ? ownerCat(r) !== 'me' : mxFocus === 'help' ? hp !== 'me' : false;
+                if (off || mxHide.has(ownerCat(r))) el.classList?.add?.('binder-faint');
                 else if (hp !== null && mxHide.has(hp)) el.classList?.add?.('binder-arc-off');
             }
             if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => placeLabels());
@@ -823,7 +829,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 const p = d.point.getBoundingClientRect(); const wide = size(d.label);
                 d.label.classList.add('narrow'); const narrow = size(d.label); d.label.classList.remove('narrow');
                 /* A point with an arc reaches 6px further (its ring). */
-                return { x: p.left - area.left + p.width / 2, y: p.top - area.top + p.height / 2, r: p.width / 2 + (d.point.classList.contains('has-gauge') ? 6 : 0) + (d.point.closest('.binder-calling') ? 5 : 0), ...wide, narrow: narrow.w < wide.w ? narrow : null, left: d.left };
+                return { x: p.left - area.left + p.width / 2, y: p.top - area.top + p.height / 2, r: p.width / 2 + (d.point.closest('.binder-calling') ? 5 : 0), ...wide, narrow: narrow.w < wide.w ? narrow : null, left: d.left };
             });
             const walls = [...plot.querySelectorAll('.binder-quad span')].map((e) => rel(e.getBoundingClientRect()));
             const spots = placeNames(dots, { w: area.width, h: area.height }, walls);
@@ -854,11 +860,11 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
            (where any exists) the delegability arcs toggle, and the size key. */
         const legBtns = new Map();
         const legend = h('div', { class: 'binder-legend' });
-        const sync = () => { for (const [cat, b] of legBtns) b.setAttribute('aria-pressed', String(!mxHide.has(cat))); if (ringBtn) ringBtn.setAttribute('aria-pressed', String(mxRings)); renderDots(); };
+        const sync = () => { for (const [cat, b] of legBtns) b.setAttribute('aria-pressed', String(!mxHide.has(cat))); if (ringBtn) ringBtn.setAttribute('aria-pressed', String(mxRings)); textBtn.setAttribute('aria-pressed', String(mxTexts)); for (const [f, b] of focusBtns) b.setAttribute('aria-pressed', String(f === mxFocus)); renderDots(); };
         for (const cat of cats) {
             const sw = h('span', { class: 'binder-leg-sw' }); sw.style?.setProperty('background', colorOf(cat));
             const b = h('button', { type: 'button', class: 'binder-leg' }, sw, document.createTextNode(labelFor(cat)));
-            b.addEventListener('click', () => { mxCarry = false; if (mxHide.has(cat)) mxHide.delete(cat); else mxHide.add(cat); sync(); });
+            b.addEventListener('click', () => { if (mxHide.has(cat)) mxHide.delete(cat); else mxHide.add(cat); sync(); });
             legBtns.set(cat, b); legend.append(b);
         }
         let ringBtn = null;
@@ -868,6 +874,11 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             ringBtn.addEventListener('click', () => { mxRings = !mxRings; sync(); });
             legend.append(ringBtn);
         }
+        /* The names on or off: the square alone, to read the points. */
+        legend.append(h('span', { class: 'binder-leg-sep' }));
+        const textBtn = h('button', { type: 'button', class: 'binder-leg binder-leg-texts', 'aria-pressed': String(mxTexts) }, h('span', { class: 'binder-texts-glyph', 'aria-hidden': 'true' }, 'Aa'), document.createTextNode(w('mx-texts')));
+        textBtn.addEventListener('click', () => { mxTexts = !mxTexts; sync(); });
+        legend.append(textBtn);
         /* Late ones (#181): counted; a tap shows only them, again shows all. */
         const lateCount = placed.filter((r) => callingOf(r, done?.id)).length;
         let lateBtn = null;
@@ -879,12 +890,12 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             legend.append(lateBtn);
         } else mxLate = false;
         legend.append(h('span', { class: 'binder-size-key' }, h('span', { class: 'binder-sz binder-sz1' }), h('span', { class: 'binder-sz binder-sz2' }), h('span', { class: 'binder-sz binder-sz3' }), document.createTextNode(` ${w('legend-size')}`)));
-        /* Quick chips set the whole legend at once. */
-        const chip = (key, apply) => { const b = h('button', { type: 'button', class: 'binder-chip' }, w(key)); b.addEventListener('click', () => { mxCarry = false; apply(); sync(); }); return b; };
-        const chips = h('div', { class: 'binder-mx-chips' }, h('span', { class: 'binder-mx-lab' }, w('shortcuts')),
-            chip('mx-all', () => { mxHide = new Set(); mxCarry = false; }),
-            chip('mx-mine', () => { mxHide = new Set(cats.filter((c) => c !== 'me')); mxCarry = true; }),
-            chip('mx-deleg', () => { mxHide = new Set(cats.filter((c) => c === 'me' || c === 'none')); }));
+        /* What to bring forward: all, what I carry, where I am the reinforcement. The rest is
+           faded, never hidden -- I am in on every card, and the square says so. */
+        const focusBtns = new Map();
+        const focusChip = (key, focus) => { const b = h('button', { type: 'button', class: 'binder-chip', 'data-focus': focus, 'aria-pressed': String(mxFocus === focus) }, w(key)); b.addEventListener('click', () => { mxFocus = focus; if (focus === 'all') mxHide = new Set(); sync(); }); focusBtns.set(focus, b); return b; };
+        const chips = h('div', { class: 'binder-mx-chips', role: 'group', 'aria-label': w('shortcuts') }, h('span', { class: 'binder-mx-lab' }, w('shortcuts')),
+            focusChip('mx-all', 'all'), ...(meId ? [focusChip('mx-carry', 'carry'), focusChip('mx-help', 'help')] : []));
         /* Fullscreen, for reading on a tablet: the real Fullscreen API where it is granted, and in
            every case a CSS cover (position:fixed) so the button always works. Escape or the button
            leaves it (the key is caught below, next to the one that closes a menu). */

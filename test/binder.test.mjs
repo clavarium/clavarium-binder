@@ -1013,7 +1013,7 @@ test('names on the matrix are placed around their points, never on one another, 
     assert.deepEqual(placeNames([{ x: 10, y: 10, r: 8, w: 300, h: 14 }], { w: 40, h: 40 }), [null]);
 });
 
-test('the delegable share (#177): an arc in the colour of who could take it, dashed while nobody is named; the size is my share', async () => {
+test('two on a card (#177): the carrier\'s disc in a ring of the reinforcement\'s colour, its area their share, dashed while nobody is named; the size is the whole charge', async () => {
     class Node { constructor() { this.childNodes = []; } append(...k) { for (const c of k) { c.parent = this; this.childNodes.push(c); } }
         replaceChildren(...k) { this.childNodes = []; this.append(...k); } remove() { if (this.parent) this.parent.childNodes = this.parent.childNodes.filter((c) => c !== this); }
         get textContent() { return this.childNodes.map((c) => c.textContent).join(''); } set textContent(t) { this.childNodes = [new Text(String(t))]; } }
@@ -1046,8 +1046,11 @@ test('the delegable share (#177): an arc in the colour of who could take it, das
         assert.equal(dotOf(helped.id).attrs['data-helper'], 'conversation:y');
         assert.ok(dotOf(helped.id).style.props['--arc'], 'the arc wears the helper\'s colour');
         assert.equal(dotOf(wish.id).attrs.class, 'binder-dot has-gauge gauge-wish', 'nobody named: a dashed grey wish');
-        /* charge 80, 90 % delegable to someone named: it costs me 8 -- a smaller point than the wish at full charge. */
-        assert.ok(parseFloat(wrapOf(helped.id).style.props['--dot']) < parseFloat(wrapOf(wish.id).style.props['--dot']));
+        /* The point is the whole charge, whoever looks; inside, my disc is what I keep: 90 % to the
+           reinforcement leaves a disc of radius sqrt(10 %) -- the ring's AREA is their share. */
+        assert.equal(wrapOf(helped.id).style.props['--dot'], wrapOf(wish.id).style.props['--dot'], 'same charge, same size');
+        assert.equal(dotOf(helped.id).style.props['--k'], '31.6%');
+        assert.equal(dotOf(wish.id).style.props['--k'], '63.2%', '60 % that could be handed: a disc of sqrt(40 %)');
         assert.match(dotOf(helped.id).attrs['aria-label'], /(ma part|my-share) 8/);
         assert.ok(all(root, (e) => (e.attrs.class ?? '') === 'binder-leg' && e.textContent.includes('y')).length, 'who could take it is in the legend');
         /* The other way round: theirs, where I come in for 10 %: their colour in the middle, my gold arc over 10 %, my share 8. */

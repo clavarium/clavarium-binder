@@ -303,12 +303,17 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-dot-fill { position: absolute; inset: 0; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .18), 0 1px 2px rgba(23, 32, 43, .22); }
 .binder:not([data-theme="light"]) .binder-dot-fill, .binder[data-theme="dark"] .binder-dot-fill { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16), 0 1px 3px rgba(0, 0, 0, .5); }
 .binder-dot[data-done] .binder-dot-fill { filter: grayscale(.5) opacity(.72); }
-/* The delegable share (#177): an arc from noon, clockwise, in the colour of who could take it;
-   the rest of the ring barely there. Nobody named yet: grey and dashed, a wish. */
-.binder-dot.has-gauge::before { content: ""; position: absolute; inset: -6px; border-radius: 50%;
-  background: conic-gradient(from 0deg, var(--arc, var(--bm-gauge)) calc(var(--pct, 0) * 1%), var(--bm-gauge-faint) 0);
-  -webkit-mask: radial-gradient(circle, transparent calc(50% - 3px), #000 calc(50% - 3px)); mask: radial-gradient(circle, transparent calc(50% - 3px), #000 calc(50% - 3px)); transition: opacity .2s; }
-.binder-plot.binder-gauges-off .binder-dot.has-gauge::before { opacity: 0; }
+/* Two on a card (#177): the carrier's disc inside, the reinforcement's ring around it, its AREA
+   the reinforcement's share (--k: the disc's radius, set by the script); a hairline of the
+   panel's colour between them. Nobody chosen yet: a faint grey ring, dashed at its edge. */
+.binder-dot.has-gauge .binder-dot-fill { background: radial-gradient(circle closest-side, var(--c) calc(var(--k, 100%) - 1px), var(--binder-panel) calc(var(--k, 100%) - 1px) calc(var(--k, 100%) + .5px), var(--arc, var(--bm-gauge)) calc(var(--k, 100%) + .5px)); }
+.binder-dot.has-gauge.gauge-wish .binder-dot-fill { background: radial-gradient(circle closest-side, var(--c) var(--k, 100%), color-mix(in srgb, var(--bm-none) 22%, transparent) var(--k, 100%)); box-shadow: none; }
+.binder-dot.has-gauge.gauge-wish::before { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 1.5px dashed var(--bm-none); pointer-events: none; }
+.binder-plot.binder-gauges-off .binder-dot.has-gauge .binder-dot-fill, .binder-dot-wrap.binder-arc-off .binder-dot.has-gauge .binder-dot-fill { background: var(--c); }
+.binder-plot.binder-gauges-off .binder-dot.gauge-wish::before, .binder-dot-wrap.binder-arc-off .binder-dot.gauge-wish::before { opacity: 0; }
+/* The names off: the square alone. */
+.binder-plot.binder-names-off .binder-dot-label, .binder-plot.binder-names-off .binder-leaders { visibility: hidden; }
+.binder-texts-glyph { font-size: .72rem; font-weight: 700; letter-spacing: -.02em; }
 .binder-dot:focus-visible { outline: 2px solid var(--binder-action); outline-offset: 4px; }
 .binder-dot-label { position: absolute; left: 0; top: 0; transform: translate(calc(var(--r) + .4rem), -50%); width: max-content; max-width: 11em;
   font-size: .72rem; font-weight: 550; line-height: 1.2; color: var(--binder-text); white-space: normal; overflow-wrap: break-word; pointer-events: none;
@@ -360,8 +365,7 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-leg[aria-pressed="false"] { opacity: .4; text-decoration: line-through; }
 .binder-leg-sw { width: .8em; height: .8em; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .2); }
 .binder-ring-glyph { width: .95em; height: .95em; border-radius: 50%; flex: none;
-  background: conic-gradient(from 0deg, var(--bm-gauge) 68%, var(--bm-gauge-faint) 0);
-  -webkit-mask: radial-gradient(circle, transparent 34%, #000 34%); mask: radial-gradient(circle, transparent 34%, #000 34%); }
+  background: radial-gradient(circle closest-side, var(--bm-me) 62%, var(--binder-panel) 62% 68%, var(--bm-gauge) 68%); }
 .binder-leg-sep { width: 1px; height: 1.2em; background: var(--binder-line); margin: 0 .15rem; }
 .binder-size-key { font-size: .74rem; color: var(--binder-dim); display: inline-flex; align-items: center; gap: .4em; padding: .2em; }
 .binder-sz { display: inline-block; border-radius: 50%; background: var(--binder-dim); opacity: .85; flex: none; }
@@ -392,12 +396,8 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-move-note { position: fixed; left: 50%; bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 70;
   display: flex; align-items: center; gap: .7rem; max-width: calc(100vw - 2rem); padding: .5rem .6rem .5rem .9rem; font-size: .84rem; color: var(--binder-text);
   background: var(--binder-panel); border: 1px solid var(--binder-line); border-radius: 12px; box-shadow: 0 10px 30px -8px rgba(0, 0, 0, .45); }
-.binder-dot.has-gauge.gauge-wish::before { background: repeating-conic-gradient(from 0deg, var(--bm-none) 0 20deg, transparent 20deg 30deg);
-  -webkit-mask: conic-gradient(#000 calc(var(--pct, 0) * 1%), transparent 0), radial-gradient(circle, transparent calc(50% - 3px), #000 calc(50% - 3px));
-  -webkit-mask-composite: source-in; mask: conic-gradient(#000 calc(var(--pct, 0) * 1%), transparent 0), radial-gradient(circle, transparent calc(50% - 3px), #000 calc(50% - 3px)); mask-composite: intersect; }
 /* Filtered on a person: my cards they could take, faded, their arc kept; a person hidden: no arc of theirs. */
 .binder-dot-wrap.binder-faint .binder-dot-fill { opacity: .35; }
-.binder-dot-wrap.binder-arc-off .binder-dot.has-gauge::before { opacity: 0; }
 /* Late (#181): a soft halo beyond the arc, slow (2.6 s), four calls then still; still at once when
    more than three are late, or when the device asks for less motion. A "!" says it without colour. */
 .binder-halo { position: absolute; left: 0; bottom: 0; width: calc(var(--dot) + 22px); height: calc(var(--dot) + 22px); transform: translate(-50%, 50%);
