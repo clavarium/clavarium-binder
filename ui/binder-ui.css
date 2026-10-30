@@ -397,7 +397,11 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
   display: flex; align-items: center; gap: .7rem; max-width: calc(100vw - 2rem); padding: .5rem .6rem .5rem .9rem; font-size: .84rem; color: var(--binder-text);
   background: var(--binder-panel); border: 1px solid var(--binder-line); border-radius: 12px; box-shadow: 0 10px 30px -8px rgba(0, 0, 0, .45); }
 /* Filtered on a person: my cards they could take, faded, their arc kept; a person hidden: no arc of theirs. */
-.binder-dot-wrap.binder-faint .binder-dot-fill { opacity: .35; }
+.binder-dot-wrap.binder-faint .binder-dot-fill { opacity: .22; filter: grayscale(1); }
+/* Not concerned: its name fades with it, and so does its hairline. */
+.binder-dot-wrap.binder-faint .binder-dot-label { opacity: .28; }
+.binder-dot-wrap.binder-faint .binder-dot.gauge-wish::before, .binder-dot-wrap.binder-faint .binder-late-mark, .binder-dot-wrap.binder-faint .binder-halo { opacity: .25; }
+.binder-leaders line.binder-faint { opacity: .25; }
 /* Late (#181): a soft halo beyond the arc, slow (2.6 s), four calls then still; still at once when
    more than three are late, or when the device asks for less motion. A "!" says it without colour. */
 .binder-halo { position: absolute; left: 0; bottom: 0; width: calc(var(--dot) + 22px); height: calc(var(--dot) + 22px); transform: translate(-50%, 50%);

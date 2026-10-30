@@ -850,6 +850,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                     const from = o.r + 1.5; const back = 2;
                     for (const [k, v] of Object.entries({ x1: o.x + (ex - o.x) / len * from, y1: o.y + (ey - o.y) / len * from, x2: ex - (ex - o.x) / len * back, y2: ey - (ey - o.y) / len * back })) ln.setAttribute(k, v.toFixed(1));
                     ln.setAttribute('data-record', d.point.getAttribute('data-record'));
+                    if (d.point.closest?.('.binder-dot-wrap')?.classList?.contains?.('binder-faint')) ln.setAttribute('class', 'binder-faint');
                     lines.push(ln);
                 }
             });
