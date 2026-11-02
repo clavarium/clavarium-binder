@@ -474,3 +474,13 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 
 /* Points that sat on top of each other, fanned out: a small mark where they really are. */
 .binder-stack { position: absolute; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: var(--binder-dim, currentColor); opacity: .6; pointer-events: none; }
+
+/* Act: a few quick actions, one look -- the plain button; a suggestion is marked by a small brass ✦ (02-11). */
+.binder-acts { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
+.binder-acts-row { flex-direction: row; flex-wrap: wrap; }
+.binder-act { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: 8px; text-align: left; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--binder-line); background: var(--binder-panel); color: var(--binder-text); font: inherit; font-weight: 600; font-size: .82rem; cursor: pointer; }
+.binder-acts-row .binder-act { grid-template-columns: 18px auto; }
+.binder-act:hover { border-color: var(--binder-action); }
+.binder-act:disabled { opacity: .6; cursor: progress; }
+.binder-act-ic { color: var(--binder-action); text-align: center; }
+.binder-act-why { display: block; color: var(--binder-dim); font-weight: 400; font-size: .74rem; }

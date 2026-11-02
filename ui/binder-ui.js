@@ -25,7 +25,7 @@
  */
 
 export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'no-lists', 'template', 'create', 'cancel', 'title', 'list', 'columns', 'cards', 'back',
-    'state', 'owners', 'due', 'notes', 'add-note', 'attached', 'attach', 'history', 'archive', 'restore', 'delete', 'delete-sure', 'approved', 'settings',
+    'state', 'owners', 'due', 'notes', 'add-note', 'discuss', 'comment', 'suggested', 'attached', 'attach', 'history', 'archive', 'restore', 'delete', 'delete-sure', 'approved', 'settings',
     'states', 'fields', 'access', 'read', 'write', 'none', 'save', 'empty', 'archived', 'show-archived', 'gate', 'done', 'add-state', 'add-field',
     'kind-message', 'kind-file', 'kind-asset', 'kind-branch', 'kind-commit', 'kind-link', 'kind-record', 'kind-mail', 'kind-event', 'what', 'name', 'type', 'saved', 'edited', 'by', 'mine', 'all',
     'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'none-archived', 'none-mine', 'search', 'description', 'edit', 'more', 'approve', 'add', 'ok',
@@ -370,7 +370,7 @@ export function rich(text, tick = null) {
         : h('p', {}, b.lines.flatMap((l, i) => (i ? [h('br'), ...parts(l)] : parts(l)))))));
 }
 
-export function mount(root, { call, words = {}, lang = 'en', people = () => [], picture = () => null, openAttached = null, place: start = null, onPlace = null, onBack = null } = {}) {
+export function mount(root, { call, words = {}, lang = 'en', people = () => [], picture = () => null, openAttached = null, place: start = null, onPlace = null, onBack = null, actions = null, discuss = null } = {}) {
     const w = (k) => words[k] ?? k;
     /* A state's name as shown: a template's own name in the page's words (a list made in another language keeps its data). */
     const sn = (st) => (st ? words[`state:${st.name}`] ?? st.name : '');
@@ -568,6 +568,32 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     const factLine = (l, r, cls = 'binder-facts') => { const f = facts(l, r, lang); return f.length ? h('span', { class: cls }, f.map((x) => x.text).join(' · ')) : null; };
     const leave = () => { ui.open = null; ui.more = false; ui.draft = {}; };
     const open = (r) => { void soft(ask('get', { id: r.id }).then((d) => { leave(); ui.from = null; ui.record = d; ui.mode = 'record'; paint(); })); };
+    /* ACT (02-11): a few quick actions on a card -- at most three the host suggests (an AI, or rules), each
+       marked ✦ with its reason; then two always there: discuss it (with an assistant), comment it. One look:
+       the plain button. `actions(record, list)` -> [{ label, why, run }], `discuss(record, list)`. */
+    const quickActs = (r, l, { row = false, comment } = {}) => {
+        const box = h('div', { class: `binder-acts${row ? ' binder-acts-row' : ''}` });
+        const button = (icon, label, why, run) => {
+            const b = h('button', { type: 'button', class: 'binder-act', title: why ?? null },
+                h('span', { class: 'binder-act-ic', 'aria-hidden': 'true' }, icon),
+                h('span', { class: 'binder-act-t' }, label, why && !row ? h('span', { class: 'binder-act-why' }, `${w('suggested')} ${why}`) : null));
+            b.addEventListener('click', async () => { b.disabled = true; try { await run(); } finally { b.disabled = false; } });
+            return b;
+        };
+        const fixed = [
+            discuss ? button('💬', w('discuss'), null, () => discuss(r, l)) : null,
+            comment ? button('✎', w('comment'), null, comment) : null,
+        ].filter(Boolean);
+        box.append(...fixed);
+        if (actions) {
+            void Promise.resolve(actions(r, l)).then((list) => {
+                const made = (Array.isArray(list) ? list : []).slice(0, 3).map((a) => button('✦', a.label, a.why, async () => { await a.run(); refresh?.(); }));
+                box.prepend(...made);
+            }).catch(() => {});
+        }
+        return box;
+    };
+
     /* Its "‹": the page's own Back when it takes it, else one level up. */
     const up = () => { if (!onBack?.(here())) back(); };
 
@@ -767,6 +793,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 situation(l, r, { compact: true }) ?? h('div', { class: 'binder-pop-facts' }, facts.join(' · ')),
                 calling ? h('div', { class: 'binder-pop-facts' }, `${w(late ? 'late' : 'due-soon')} (${String(r.due).slice(0, 16)})`) : null,
                 r.description ? h('p', { class: 'binder-pop-desc' }, snippet(r.description)) : null,
+                quickActs(r, l, { comment: () => { open(r); ui.focusNote = true; } }),
                 h('button', { type: 'button', class: 'binder-pop-open', onclick: () => open(r) }, w('open-card')));
             /* Late: a soft halo further out than the arc, that calls a few times then stays; a "!" beside. */
             const wrap = h('div', { class: `binder-dot-wrap${calling ? ' binder-calling' : ''}${late ? ' binder-late' : ''}`, 'data-record': r.id, 'data-side': x >= 72 ? 'left' : null },
@@ -1079,6 +1106,8 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     function record() {
         const { record: r, list: l, history } = ui.record;
         const can = l.access === 'write';
+        /* Asked to comment from the matrix: the note field, once drawn. */
+        if (ui.focusNote) { ui.focusNote = false; setTimeout(() => { const n = root.querySelector('.binder-record textarea[maxlength="2000"]'); n?.scrollIntoView?.({ block: 'center' }); n?.focus?.(); }, 60); }
         const st = l.states.find((s) => s.id === r.state);
         const g = gateOf(l);
         const set = (what) => { ui.open = what; ui.focus = !!what; paint(); };
@@ -1256,6 +1285,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             hero,
             h('header', { class: 'binder-head' }, title, situation(l, r) ? otherFacts(l, r) : factLine(l, r), situation(l, r),
                 stateShown(l, r) || approve ? h('div', { class: 'binder-status' }, stateShown(l, r) ? h('div', { class: 'binder-state-wrap binder-pop' }, pillOf, menu) : null, approve) : null),
+            quickActs(r, l, { row: true, comment: () => { const n = root.querySelector('.binder-record textarea[maxlength="2000"]'); n?.scrollIntoView?.({ block: 'center' }); n?.focus?.(); } }),
             about,
             whoLine || whoEdit ? h('div', { class: 'binder-who-wrap' }, whoLine, whoEdit) : null,
             attached, addRow, notes, more);

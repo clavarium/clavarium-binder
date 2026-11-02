@@ -159,5 +159,8 @@
   "q-do-why": "important et urgent",
   "q-plan-why": "important, pas urgent",
   "q-delegate-why": "urgent, moins important",
-  "q-later-why": "ni urgent ni important"
+  "q-later-why": "ni urgent ni important",
+  "discuss": "En discuter",
+  "comment": "Commenter",
+  "suggested": "Suggéré :"
 }

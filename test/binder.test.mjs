@@ -1146,3 +1146,35 @@ test('points on top of each other are fanned out around where they sit; a point 
     assert.ok(Math.abs((10 + two[0].dx) - (10 + two[1].dx)) >= 10, 'two: side by side');
     assert.deepEqual(spreadOf([{ x: 0, y: 0, r: 5 }, { x: 20, y: 0, r: 5 }]).centres, [], 'apart: nothing to do');
 });
+
+test('a card offers to act: at most three suggestions marked ✦, then Discuss and Comment; each does its part (02-11)', async () => {
+    class Node { constructor() { this.childNodes = []; } append(...k) { for (const c of k) { c.parent = this; this.childNodes.push(c); } }
+        prepend(...k) { for (const c of k) c.parent = this; this.childNodes = [...k, ...this.childNodes]; } replaceChildren(...k) { this.childNodes = []; this.append(...k); } remove() { if (this.parent) this.parent.childNodes = this.parent.childNodes.filter((c) => c !== this); }
+        get textContent() { return this.childNodes.map((c) => c.textContent).join(''); } set textContent(t) { this.childNodes = [new Text(String(t))]; } }
+    class Text extends Node { constructor(t) { super(); this.data = t; } get textContent() { return this.data; } }
+    class El extends Node { constructor(tag) { super(); this.tag = tag; this.attrs = {}; this.on = {}; } setAttribute(k, v) { this.attrs[k] = String(v); } addEventListener(k, f) { this.on[k] = f; } focus() {} setSelectionRange() {} querySelector() { return null; } }
+    const find = (n, f) => { if (n instanceof El && f(n)) return n; for (const c of n.childNodes ?? []) { const x = find(c, f); if (x) return x; } return null; };
+    const names = ['document', 'Node', 'window', 'requestAnimationFrame'];
+    const was = Object.fromEntries(names.map((n) => [n, globalThis[n]]));
+    Object.assign(globalThis, { Node, window: {}, requestAnimationFrame: () => 0,
+        document: { createElement: (t) => new El(t), createTextNode: (t) => new Text(t), addEventListener() {}, removeEventListener() {} } });
+    const settle = () => new Promise((r) => setTimeout(r, 20));
+    try {
+        const k = keeper(tmp());
+        const batches = k.act('create-list', { template: 'batches' }, ME).data;
+        const one = k.act('add', { list: batches.id, title: 'Devis cuisine' }, ME).data;
+        const root = new El('div'); const ran = []; const talked = [];
+        const four = ['A', 'B', 'C', 'D'].map((x) => ({ label: `Do ${x}`, why: `because ${x}`, run: async () => { ran.push(x); } }));
+        const b = mount(root, { call: async (op, args) => k.act(op, args, ME), place: { list: batches.id, card: one.id },
+            actions: async (r) => (r.id === one.id ? four : []), discuss: (r) => talked.push(r.title) });
+        await settle(); await settle();
+        const text = root.textContent;
+        assert.match(text, /Do A/); assert.match(text, /Do C/); assert.doesNotMatch(text, /Do D/, 'three at most');
+        assert.match(text, /discuss/); assert.match(text, /comment/);
+        find(root, (e) => e.attrs.class === 'binder-act' && /Do B/.test(e.textContent)).on.click(); await settle();
+        assert.deepEqual(ran, ['B']);
+        find(root, (e) => e.attrs.class === 'binder-act' && /discuss/.test(e.textContent)).on.click(); await settle();
+        assert.deepEqual(talked, ['Devis cuisine']);
+        b.destroy();
+    } finally { for (const n of names) globalThis[n] = was[n]; }
+});

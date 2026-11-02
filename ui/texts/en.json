@@ -144,5 +144,8 @@
   "q-do-why": "important and urgent",
   "q-plan-why": "important, not urgent",
   "q-delegate-why": "urgent, less important",
-  "q-later-why": "neither urgent nor important"
+  "q-later-why": "neither urgent nor important",
+  "discuss": "Discuss",
+  "comment": "Comment",
+  "suggested": "Suggested:"
 }
