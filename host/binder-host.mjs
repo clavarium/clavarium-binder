@@ -47,7 +47,7 @@ export function matrixGuide(l, ids = [], people = []) {
         `  binder edit ID --field urgence=80 --field importance=70${has('charge') ? ' --field charge=40' : ''}${has('delegabilite') ? ' --field delegabilite=20' : ''}`,
         ...ownerGuide(ids, people),
         'Its urgency may instead rise on its own up to its due date: binder edit ID --due DATE --urgency-from DATE.',
-        'Or give it a course: urgency and importance at 2 to 4 dates, either or both changing, and the card moves between them by itself each day: binder edit ID --course "2026-11-10 40 60 linear; 2026-11-20 80 70 ease-in; 2026-11-30 95 90 linear" (day, urgency, importance, how it goes to the next: linear, ease-in, ease-out, ease-in-out, steps). A day is fixed (2026-11-20) or tied to the due date (due, due-7, due+3: days before or after it, following it when the due date moves); mix both as fits. Use it when you know how a card will evolve; --course none removes it.'].join('\n');
+        'Or give it a course: urgency and importance at 2 to 4 dates, either or both changing, and the card moves between them by itself each day: binder edit ID --course "2026-11-10 40 60 linear; 2026-11-20 80 70 ease-in; 2026-11-30 95 90 linear" (day, urgency, importance, how it goes to the next: linear, ease-in, ease-out, ease-in-out, steps). A day is fixed (2026-11-20) or tied to the due date (due, due-7, due+3: days before or after it, following it when the due date moves); mix both as fits. Use it when you know how a card will evolve; --course none removes it. A card for later (in six months) gets a start: binder edit ID --start 2027-05-12; before that day the matrix does not show it.'].join('\n');
 }
 /* Who may carry a card, by id: the person you work for first, then yourself ("me"), the other
    conversations, nobody. Without a roster, the ids already on the binder. */
@@ -106,6 +106,7 @@ export function say(op, data, list, people = []) {
             const st = l.states.find((x) => x.id === r.state);
             const out = [`#${r.id} ${r.title}`, `  list: ${l.title}; state: ${st?.name ?? r.state}${r.approved ? ' (approved)' : ''}${r.archived ? '; archived' : ''}${owners(r) ? `; owners:${owners(r)}` : ''}${due(r)}`];
             if (r.repeat) out.push(`  recurrent ↻: ${typeof r.repeat === 'number' ? `every ${r.repeat} days` : 'no fixed rhythm'} (a move to done reopens it, shifting its due)`);
+            if (r.start) out.push(`  start: ${r.start} -- before it, a matrix does not show it; --start none removes it`);
             if (r.course) out.push(`  course: ${r.course.map((p) => `${p.at} ${p.u} ${p.i} ${p.ease}`).join('; ')} -- urgency and importance move between these days by themselves; --course none removes it`);
             if (r.urgencyFrom) out.push(`  urgency: automatic, rising from ${r.urgencyFrom} to its due date${r.due ? '' : ' (no due date yet: none until one is set)'}; --urgency-from none sets it by hand`);
             if (r.description) out.push('Description:', ...r.description.split('\n').map((x) => (x ? `  ${x}` : '')));
@@ -154,7 +155,7 @@ export function keeper(dir, { sides = () => [], now = () => Date.now(), people =
                 case 'get': data = store.record(a.id, who); break;
                 case 'search': data = store.search(a.text, who); break;
                 case 'add': data = store.add(a.list, { title: a.title, description: a.description, state: a.state, fields: a.fields, owners: me(a.owners), due: a.due, remindBefore: a.remindBefore, note: a.note }, who); break;
-                case 'edit': data = store.edit(a.id, { title: a.title, description: a.description, fields: a.fields, owners: me(a.owners), due: a.due, remindBefore: a.remindBefore, repeat: a.repeat, cover: a.cover, urgencyFrom: a.urgencyFrom, course: a.course }, who); break;
+                case 'edit': data = store.edit(a.id, { title: a.title, description: a.description, fields: a.fields, owners: me(a.owners), due: a.due, remindBefore: a.remindBefore, repeat: a.repeat, cover: a.cover, urgencyFrom: a.urgencyFrom, course: a.course, start: a.start }, who); break;
                 case 'move': { const r = store.move(a.id, a.state, who, { next: a.next }); data = { ...r, stateName: store.record(r.id, who).list.states.find((x) => x.id === r.state)?.name }; break; }
                 case 'note': data = store.note(a.id, a.text, who); break;
                 case 'attach': data = store.attach(a.id, { kind: a.kind, ref: a.ref, title: a.title }, who); break;

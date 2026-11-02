@@ -167,5 +167,7 @@
   "done-archive": "Terminé, archiver",
   "drop-archive": "Plus d'intérêt, archiver",
   "courseTie": "Suivre l'échéance",
-  "daysShort": "j"
+  "daysShort": "j",
+  "start": "Début",
+  "soon": "À venir"
 }

@@ -492,7 +492,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
          * photo field set ("field:ID"; given by the field's id or name). Empty
          * clears it. Without one, a card is shown by its photo field set, else by
          * its only picture attached. */
-        edit(given, { title, description, fields, owners, due, remindBefore, cover, repeat, urgencyFrom, course } = {}, who) {
+        edit(given, { title, description, fields, owners, due, remindBefore, cover, repeat, urgencyFrom, course, start } = {}, who) {
             const w = whoOf(who);
             const { r, list } = recordOf(given, w, 'write');
             shareCheck(list, owners !== undefined ? ownersOf(owners) : r.owners, fields);
@@ -512,6 +512,12 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             if (urgencyFrom !== undefined) {
                 if (urgencyFrom === null || urgencyFrom === '' || urgencyFrom === 'none') { delete r.urgencyFrom; change.urgencyFrom = null; }
                 else { const day = oneLine(urgencyFrom, 20); if (!DUE.test(day) || dueAt(day) === null) no('urgency from: a date, 2026-11-04 (or 2026-11-04 09:00)'); r.urgencyFrom = change.urgencyFrom = day; }
+            }
+            /* ITS START (02-11): a day before which a matrix does not show it (a card for in six months); absent,
+               shown at once. */
+            if (start !== undefined) {
+                if (start === null || start === '' || start === 'none') { delete r.start; change.start = null; }
+                else { const day = oneLine(start, 20).slice(0, 10); if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isFinite(Date.parse(day))) no('start: a day, 2027-05-12'); r.start = change.start = day; }
             }
             /* ITS COURSE (#267): urgency and importance at a few dates, the matrix moving it between them
                (CSS easing names). Empty or one point: no course, its fields as set. */

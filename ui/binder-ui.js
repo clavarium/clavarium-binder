@@ -32,7 +32,7 @@ export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'n
     'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'agent-columns', 'agent-fields', 'remind-before', 'no-remind', 'days',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete',
     'matrix', 'to-place', 'q-do', 'q-plan', 'q-delegate', 'q-later', 'legend-size', 'legend-colour', 'recurrent', 'retype', 'retype-hint', 'retype-apply', 'no-repeat', 'repeat-free', 'open-card', 'fullscreen', 'fullscreen-exit',
-    'legend-me', 'legend-none', 'delegability', 'shortcuts', 'mx-all', 'mx-mine', 'mx-deleg', 'all-hidden', 'urgency', 'urgency-hand', 'urgency-auto', 'urgency-from', 'auto', 'mx-move', 'mx-moved', 'mx-moved-hand', 'undo', 'my-share', 'nobody-yet', 'delegable-to', 'late', 'due-soon', 'to-handle', 'pick-point', 'lvl-low', 'lvl-mid', 'lvl-high', 'q-do-why', 'q-plan-why', 'q-delegate-why', 'q-later-why']);
+    'legend-me', 'legend-none', 'delegability', 'shortcuts', 'mx-all', 'mx-mine', 'mx-deleg', 'all-hidden', 'urgency', 'urgency-hand', 'urgency-auto', 'urgency-from', 'auto', 'mx-move', 'mx-moved', 'mx-moved-hand', 'undo', 'my-share', 'nobody-yet', 'delegable-to', 'late', 'due-soon', 'to-handle', 'pick-point', 'lvl-low', 'lvl-mid', 'lvl-high', 'q-do-why', 'q-plan-why', 'q-delegate-why', 'q-later-why', 'start', 'soon']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'commit', 'link', 'record', 'mail', 'event'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', commit: '◉', link: '🔗', record: '▣', mail: '📧', event: '📅' };
 const TYPES = ['text', 'number', 'date', 'link', 'photo'];
@@ -140,6 +140,8 @@ export function courseAt(course, now = Date.now(), due = null) {
     }
     return null;
 }
+/* ITS START (02-11): before that day, a matrix does not show it (a card for later). */
+export const notYet = (r, now = Date.now()) => Boolean(r?.start) && Date.parse(`${String(r.start).slice(0, 10)}T00:00:00`) > now;
 export function importanceOf(r, now = Date.now()) { const c = courseAt(r?.course, now, r?.due); return c ? c.i : score(r, MATRIX_AXES.y); }
 export function urgencyOf(r, now = Date.now()) {
     { const c = courseAt(r?.course, now, r?.due); if (c) return c.u; }
@@ -584,6 +586,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         r.owners.length ? r.owners.map(nameOf).join(', ') : null,
         r.due ? h('span', { class: late(l, r) ? 'binder-late' : null }, ico('clock'), when(r.due)) : null,
         lead(r),
+        notYet(r) ? h('span', { class: 'binder-soon', title: w('start') }, `▷ ${when(r.start)}`) : null,
         r.repeat ? h('span', { class: 'binder-repeat', title: w('recurrent') }, `↻${typeof r.repeat === 'number' ? ` ${r.repeat} ${w('days')}` : ''}`) : null,
         r.attached.length ? h('span', {}, `📎 ${r.attached.length}`) : null,
         r.notes.length ? h('span', {}, `✎ ${r.notes.length}`) : null);
@@ -616,9 +619,18 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             const p = sorted.length >= 2 ? ask('edit', { id: r.id, course: sorted }) : ask('edit', { id: r.id, course: 'none', fields: { [MATRIX_AXES.x]: sorted[0].u, [MATRIX_AXES.y]: sorted[0].i } });
             void soft(p).then(refresh);
         };
+        /* Its start, on the left (02-11): optional; set, the card is not on the matrix before it. */
+        const startCol = () => {
+            if (!r.start && !can) return null;
+            if (!r.start) return h('button', { type: 'button', class: 'binder-course-start-add', title: w('start'), onclick: () => void soft(ask('edit', { id: r.id, start: day() })).then(refresh) }, `+ ${w('start')}`);
+            const d = h('input', { type: 'date', class: 'binder-course-day', value: r.start, disabled: can ? null : true, 'aria-label': w('start') });
+            d.addEventListener('change', () => void soft(ask('edit', { id: r.id, start: d.value || 'none' })).then(refresh));
+            return h('div', { class: 'binder-course-col binder-course-start' }, h('span', { class: 'binder-dim' }, w('start')), d);
+        };
         const paintIt = () => {
             const sorted = inTime();
             box.replaceChildren();
+            { const sc = startCol(); if (sc) box.append(sc, h('div', { class: 'binder-course-gap', 'aria-hidden': 'true' })); }
             sorted.forEach((c, k) => {
                 const col = h('div', { class: 'binder-course-col' });
                 /* Its day: fixed, or tied to the due date (so many days before or after it), following it. */
@@ -801,7 +813,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     let matrixLeave = null; let matrixTrailClear = null; let matrixSideClear = null;
     /* The matrix's own view state, kept across repaints (and reset when the binder changes):
        which owner categories are hidden, and whether the delegability arcs show. */
-    let mxFor = null; let mxHide = new Set(); let mxRings = true; let mxMove = false; let mxNote = null; let mxFs = false; let mxFocus = 'all'; let mxLate = false; let mxTexts = true; let mxHideOthers = false; let mxMeOnly = false;
+    let mxFor = null; let mxHide = new Set(); let mxRings = true; let mxMove = false; let mxNote = null; let mxFs = false; let mxFocus = 'all'; let mxLate = false; let mxTexts = true; let mxHideOthers = false; let mxMeOnly = false; let mxSoon = false;
     const s100 = (v) => Math.max(0, Math.min(100, Number(v) || 0));
     /* THE MATRIX: urgency across (→), importance up (↑); a point's HUE says who owns it
        (gold = me, one colour per person, grey = nobody), its SIZE says the charge, and a thin
@@ -811,6 +823,9 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     function asMatrix(l, records) {
         const done = l.states.find((s) => s.done);
         const placed = []; const rest = [];
+        /* Not started yet: off the square, unless "Coming" is on. */
+        const soonCount = records.filter((r) => notYet(r)).length;
+        if (!mxSoon) records = records.filter((r) => !notYet(r));
         for (const r of records) (urgencyOf(r) !== null && score(r, MATRIX_AXES.y) !== null ? placed : rest).push(r);
         const X = MATRIX_AXES.x; const Y = MATRIX_AXES.y; const SIZE = MATRIX_AXES.size; const TINT = MATRIX_AXES.tint;
         const stName = (r) => l.states.find((s) => s.id === r.state)?.name ?? r.state;
@@ -1090,6 +1105,11 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             lateBtn.addEventListener('click', () => { mxLate = !mxLate; if (mxLate) lateBtn.setAttribute('data-on', 'true'); else lateBtn.removeAttribute?.('data-on'); renderDots(); });
             legend.append(lateBtn);
         } else mxLate = false;
+        if (soonCount) {
+            const soonBtn = h('button', { type: 'button', class: 'binder-leg binder-leg-soon', 'aria-pressed': String(mxSoon) }, document.createTextNode(`▷ ${w('soon')} · ${soonCount}`));
+            soonBtn.addEventListener('click', () => { mxSoon = !mxSoon; paint(); });
+            legend.append(soonBtn);
+        }
         legend.append(h('span', { class: 'binder-size-key' }, h('span', { class: 'binder-sz binder-sz1' }), h('span', { class: 'binder-sz binder-sz2' }), h('span', { class: 'binder-sz binder-sz3' }), document.createTextNode(` ${w('legend-size')}`)));
         /* What to bring forward: all, what I carry, where I am the reinforcement. The rest is
            faded, never hidden -- I am in on every card, and the square says so. */

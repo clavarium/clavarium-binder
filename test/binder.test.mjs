@@ -8,7 +8,7 @@ import { seed } from '../server/templates.mjs';
 import { keeper } from '../host/binder-host.mjs';
 import { ask, asked, TOOLS } from '../server/binder.mjs';
 import { say } from '../host/binder-host.mjs';
-import { blocks, toggled, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, canMatrix, score, trailOf, placeNames, spreadOf, courseAt, urgencyOf, importanceOf, lateOf, callingOf, MATRIX_AXES, KEYS, mount } from '../ui/binder-ui.js';
+import { blocks, toggled, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, canMatrix, score, trailOf, placeNames, spreadOf, courseAt, urgencyOf, importanceOf, notYet, lateOf, callingOf, MATRIX_AXES, KEYS, mount } from '../ui/binder-ui.js';
 import { isPicture as storeIsPicture } from '../server/store.mjs';
 import { DESCRIPTION_MAX, AGENT_LISTS_MAX, AGENT_LISTS_DEFAULT } from '../server/store.mjs';
 import { run, read } from '../bin/binder.mjs';
@@ -1232,4 +1232,18 @@ test('a course is kept by the binder, and removed by "none" (#267)', () => {
     assert.equal(k.act('get', { id: r.id }, ME).data.record.course.length, 2);
     k.act('edit', { id: r.id, course: 'none' }, ME);
     assert.equal(k.act('get', { id: r.id }, ME).data.record.course, undefined);
+});
+
+test('a card may have a start: before it, not on a matrix (02-11)', () => {
+    const k = keeper(tmp());
+    const l = k.act('create-list', { template: 'batches' }, ME).data;
+    const r = k.act('add', { list: l.id, title: 'Plus tard' }, ME).data;
+    assert.equal(k.act('edit', { id: r.id, start: '2027-05-12' }, ME).ok, true);
+    assert.equal(k.act('get', { id: r.id }, ME).data.record.start, '2027-05-12');
+    assert.equal(k.act('edit', { id: r.id, start: 'mai' }, ME).ok, false);
+    assert.equal(notYet({ start: '2027-05-12' }, Date.parse('2027-05-11T12:00:00')), true);
+    assert.equal(notYet({ start: '2027-05-12' }, Date.parse('2027-05-12T08:00:00')), false);
+    assert.equal(notYet({}), false);
+    k.act('edit', { id: r.id, start: 'none' }, ME);
+    assert.equal(k.act('get', { id: r.id }, ME).data.record.start, undefined);
 });

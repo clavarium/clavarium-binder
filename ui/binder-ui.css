@@ -489,6 +489,10 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-course { display: flex; align-items: center; overflow-x: auto; padding: 4px 0 8px; }
 .binder-course-col { flex: none; position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 8px; border: 1px solid var(--binder-line); border-radius: 10px; background: var(--binder-panel); }
 .binder-course-day { border: 0; background: transparent; color: var(--binder-text); font: inherit; font-weight: 600; font-size: .8rem; text-align: center; padding: 2px; border-radius: 6px; }
+.binder-course-start { justify-content: center; align-self: stretch; }
+.binder-course-gap { flex: none; width: 18px; height: 2px; background: var(--binder-line); }
+.binder-course-start-add { flex: none; margin-right: 12px; border: 1.5px dashed var(--binder-line); background: transparent; color: var(--binder-dim); border-radius: 10px; padding: 6px 10px; font: inherit; font-size: .78rem; cursor: pointer; }
+.binder-soon { color: var(--binder-dim); font-style: italic; }
 .binder-course-when { display: flex; align-items: center; gap: 2px; }
 .binder-course-tied { display: flex; align-items: center; gap: 4px; font-size: .74rem; }
 .binder-course-off { width: 3.2rem; padding: 1px 4px; border: 1px solid var(--binder-line); border-radius: 6px; background: var(--binder-panel); color: var(--binder-text); font: inherit; text-align: right; }

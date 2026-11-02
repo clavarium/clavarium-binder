@@ -152,5 +152,7 @@
   "done-archive": "Done, archive it",
   "drop-archive": "No longer relevant, archive it",
   "courseTie": "Follow the due date",
-  "daysShort": "d"
+  "daysShort": "d",
+  "start": "Start",
+  "soon": "Coming"
 }
