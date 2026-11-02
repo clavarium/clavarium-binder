@@ -912,6 +912,16 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                 kids.push(el('line', { x1: a.x + ux * back, y1: a.y + uy * back, x2: b.x - ux * cut, y2: b.y - uy * cut, 'marker-end': 'url(#binder-trail-head)', opacity: (0.3 + 0.5 * (i / (n - 1))).toFixed(2) }));
             }
             for (let i = 0; i < n - 1; i++) kids.push(el('circle', { cx: pts[i].x, cy: 100 - pts[i].y, r: 0.7, opacity: (0.3 + 0.4 * (i / Math.max(1, n - 1))).toFixed(2) }));
+            /* Its course (#267), where it goes: its dated points, numbered, joined by a dashed line. */
+            const course = Array.isArray(got.record?.course) ? [...got.record.course].sort((a, b) => a.at.localeCompare(b.at)) : [];
+            if (course.length >= 2) {
+                kids.push(el('polyline', { class: 'binder-course-line', points: course.map((c) => `${c.u},${100 - c.i}`).join(' ') }));
+                course.forEach((c, k) => {
+                    kids.push(el('circle', { class: 'binder-course-key', cx: c.u, cy: 100 - c.i, r: 2.4 }));
+                    const t = el('text', { class: 'binder-course-num', x: c.u, y: 100 - c.i + 1.1 }); t.textContent = String(k + 1); kids.push(t);
+                    const d = el('text', { class: 'binder-course-date', x: c.u + (c.u > 72 ? -3.4 : 3.4), y: 100 - c.i + 1, 'text-anchor': c.u > 72 ? 'end' : 'start' }); d.textContent = c.at.slice(5).split('-').reverse().join('/'); kids.push(d);
+                });
+            }
             trail.replaceChildren(...kids);
         };
         matrixTrailClear = clearTrail;

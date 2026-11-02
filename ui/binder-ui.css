@@ -504,3 +504,9 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-course-ease { border: 1px solid var(--binder-line); background: var(--binder-panel); color: var(--binder-dim); font: 600 .7rem ui-monospace, monospace; border-radius: 999px; padding: 2px 8px; white-space: nowrap; cursor: pointer; }
 .binder-course-add { flex: none; margin-left: 12px; width: 40px; height: 40px; border-radius: 50%; border: 1.5px dashed var(--binder-line); background: transparent; color: var(--binder-dim); font-size: 1.2rem; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .binder-course-run { animation: none; } }
+
+/* A tapped card's course on the matrix (#267): its dated points, numbered, on a dashed line. */
+.binder-trail .binder-course-line { fill: none; stroke: currentColor; stroke-width: .5; stroke-dasharray: 1.4 1.2; opacity: .75; }
+.binder-trail .binder-course-key { fill: var(--binder-panel); stroke: currentColor; stroke-width: .45; }
+.binder-trail .binder-course-num { font: 700 2.6px system-ui, sans-serif; text-anchor: middle; fill: currentColor; }
+.binder-trail .binder-course-date { font: 600 2.4px system-ui, sans-serif; fill: currentColor; opacity: .8; }
