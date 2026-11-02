@@ -46,7 +46,8 @@ export function matrixGuide(l, ids = [], people = []) {
         ...MATRIX_FIELDS.filter(([id]) => has(id)).map(([id, what]) => `  ${id}: ${what}`),
         `  binder edit ID --field urgence=80 --field importance=70${has('charge') ? ' --field charge=40' : ''}${has('delegabilite') ? ' --field delegabilite=20' : ''}`,
         ...ownerGuide(ids, people),
-        'Its urgency may instead rise on its own up to its due date: binder edit ID --due DATE --urgency-from DATE.'].join('\n');
+        'Its urgency may instead rise on its own up to its due date: binder edit ID --due DATE --urgency-from DATE.',
+        'Or give it a course: urgency and importance at 2 to 4 dates, either or both changing, and the card moves between them by itself each day: binder edit ID --course "2026-11-10 40 60 linear; 2026-11-20 80 70 ease-in; 2026-11-30 95 90 linear" (day, urgency, importance, how it goes to the next: linear, ease-in, ease-out, ease-in-out, steps). Use it when you know how a card will evolve; --course none removes it.'].join('\n');
 }
 /* Who may carry a card, by id: the person you work for first, then yourself ("me"), the other
    conversations, nobody. Without a roster, the ids already on the binder. */
