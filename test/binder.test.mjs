@@ -8,7 +8,7 @@ import { seed } from '../server/templates.mjs';
 import { keeper } from '../host/binder-host.mjs';
 import { ask, asked, TOOLS } from '../server/binder.mjs';
 import { say } from '../host/binder-host.mjs';
-import { blocks, toggled, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, canMatrix, score, trailOf, placeNames, lateOf, callingOf, MATRIX_AXES, KEYS, mount } from '../ui/binder-ui.js';
+import { blocks, toggled, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, canMatrix, score, trailOf, placeNames, spreadOf, lateOf, callingOf, MATRIX_AXES, KEYS, mount } from '../ui/binder-ui.js';
 import { isPicture as storeIsPicture } from '../server/store.mjs';
 import { DESCRIPTION_MAX, AGENT_LISTS_MAX, AGENT_LISTS_DEFAULT } from '../server/store.mjs';
 import { run, read } from '../bin/binder.mjs';
@@ -1133,4 +1133,16 @@ test('names of states and fields, and refs attached, too long are refused, never
     assert.throws(() => s.editList(l.id, { states: [...l.states, { name: 'y'.repeat(70) }] }, ME), /a state name is 70 characters/);
     assert.throws(() => s.attach(r.id, { kind: 'link', ref: `https://example.org/${'z'.repeat(1200)}` }, ME), /what is attached \(its ref\) is \d+ characters/);
     assert.equal(s.record(r.id, ME).record.attached.length, 0, 'nothing attached');
+});
+
+test('points on top of each other are fanned out around where they sit; a point alone stays (02-11)', () => {
+    const r = 8;
+    const { offsets, centres } = spreadOf([{ x: 100, y: 100, r }, { x: 100, y: 100, r }, { x: 300, y: 50, r }, { x: 102, y: 101, r }]);
+    assert.deepEqual(offsets[2], { dx: 0, dy: 0 }, 'alone: untouched');
+    assert.equal(centres.length, 1); assert.equal(centres[0].count, 3);
+    const at = [0, 1, 3].map((i) => ({ x: [100, 100, 102][[0, 1, 3].indexOf(i)] + offsets[i].dx, y: [100, 100, 101][[0, 1, 3].indexOf(i)] + offsets[i].dy }));
+    for (let i = 0; i < at.length; i++) for (let j = i + 1; j < at.length; j++) assert.ok(Math.hypot(at[i].x - at[j].x, at[i].y - at[j].y) >= 2 * r, `${i} and ${j} still touch`);
+    const two = spreadOf([{ x: 10, y: 10, r: 5 }, { x: 10, y: 10, r: 5 }]).offsets;
+    assert.ok(Math.abs((10 + two[0].dx) - (10 + two[1].dx)) >= 10, 'two: side by side');
+    assert.deepEqual(spreadOf([{ x: 0, y: 0, r: 5 }, { x: 20, y: 0, r: 5 }]).centres, [], 'apart: nothing to do');
 });

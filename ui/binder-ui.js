@@ -152,6 +152,36 @@ export function trailOf(history, r) {
    In pixels, y downwards: dots [{ x, y, r, w, h, left, narrow: { w, h } }] (centre, radius, its
    name's size, whether it would rather sit on the left), area { w, h }, walls [{ left, top, right, bottom }].
    Each answer: { x, y } (the name's top-left corner), lead (a line to draw), narrow, or null (no room). */
+/* POINTS ON TOP OF EACH OTHER (02-11): points closer than they are wide are fanned out on a small circle
+   around where they sit together, so each can be seen and taken; their true place is marked. Groups by
+   chains of near points. -> [{ dx, dy }] per point (0, 0 for a point alone), and the groups' centres. */
+export function spreadOf(points, { gap = 3 } = {}) {
+    const n = points.length; const group = points.map((_, i) => i);
+    const root = (i) => { while (group[i] !== i) { group[i] = group[group[i]]; i = group[i]; } return i; };
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+        const a = points[i]; const b = points[j];
+        if (Math.hypot(a.x - b.x, a.y - b.y) < a.r + b.r) group[root(i)] = root(j);
+    }
+    const out = points.map(() => ({ dx: 0, dy: 0 })); const centres = [];
+    const members = new Map();
+    for (let i = 0; i < n; i++) { const k = root(i); if (!members.has(k)) members.set(k, []); members.get(k).push(i); }
+    for (const list of members.values()) {
+        if (list.length < 2) continue;
+        const cx = list.reduce((t, i) => t + points[i].x, 0) / list.length; const cy = list.reduce((t, i) => t + points[i].y, 0) / list.length;
+        const big = Math.max(...list.map((i) => points[i].r));
+        /* On a circle wide enough that neighbours do not touch: chord between two of them >= 2 big + gap. */
+        const radius = list.length === 2 ? big + gap / 2 : (2 * big + gap) / (2 * Math.sin(Math.PI / list.length));
+        /* In a steady order (left to right, then top to bottom), from the top, clockwise. */
+        const order = [...list].sort((a, b) => points[a].x - points[b].x || points[a].y - points[b].y);
+        order.forEach((i, k) => {
+            const angle = list.length === 2 ? (k ? 0 : Math.PI) : -Math.PI / 2 + (2 * Math.PI * k) / list.length;
+            out[i] = { dx: cx + radius * Math.cos(angle) - points[i].x, dy: cy + radius * Math.sin(angle) - points[i].y };
+        });
+        centres.push({ x: cx, y: cy, count: list.length });
+    }
+    return { offsets: out, centres };
+}
+
 export function placeNames(dots, area, walls = [], { pad = 2, step = 12, rings = 6 } = {}) {
     const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
     const grow = (r, p) => ({ left: r.left - p, top: r.top - p, right: r.right + p, bottom: r.bottom + p });
@@ -829,6 +859,20 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             if (!plot.isConnected || !plot.getBoundingClientRect) return;
             const area = plot.getBoundingClientRect();
             const rel = (b) => ({ left: b.left - area.left, top: b.top - area.top, right: b.right - area.left, bottom: b.bottom - area.top });
+            /* Stacked points fanned out first: the names are then placed around where they are seen. */
+            for (const wrap of dotEls) wrap.style?.removeProperty?.('translate');
+            for (const o of plot.querySelectorAll('.binder-stack')) o.remove();
+            {
+                const shown = dotEls.filter((wrap) => wrap.querySelector('.binder-dot'));
+                const pts = shown.map((wrap) => { const p = wrap.querySelector('.binder-dot').getBoundingClientRect(); return { x: p.left - area.left + p.width / 2, y: p.top - area.top + p.height / 2, r: p.width / 2 }; });
+                const { offsets, centres } = spreadOf(pts);
+                shown.forEach((wrap, i) => { const o = offsets[i]; if (o.dx || o.dy) wrap.style.setProperty('translate', `${o.dx.toFixed(1)}px ${o.dy.toFixed(1)}px`); });
+                for (const c of centres) {
+                    const mark = h('span', { class: 'binder-stack', 'aria-hidden': 'true', title: String(c.count) });
+                    mark.style.left = `${c.x}px`; mark.style.top = `${c.y}px`;
+                    plot.insertBefore(mark, plot.querySelector('.binder-dot-wrap'));
+                }
+            }
             const items = dotEls.map((wrap) => ({ point: wrap.querySelector('.binder-dot'), label: wrap.querySelector('.binder-dot-label'), left: wrap.dataset?.side === 'left' })).filter((d) => d.point && d.label);
             for (const d of items) { d.label.classList.remove('binder-name-hidden', 'left', 'narrow'); d.label.style.transform = 'none'; }
             const size = (e) => { const b = e.getBoundingClientRect(); return { w: Math.ceil(b.width), h: Math.ceil(b.height) }; };
