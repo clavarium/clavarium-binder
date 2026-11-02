@@ -356,7 +356,7 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-who-dot { width: .62rem; height: .62rem; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .2); }
 .binder-pop-facts { font-size: .7rem; color: var(--binder-dim); margin-top: .3rem; font-variant-numeric: tabular-nums; }
 .binder-pop-desc { font-size: .8rem; line-height: 1.45; color: var(--binder-dim); margin: .5rem 0 0; }
-.binder-pop-open { margin-top: .6rem; font: inherit; font-size: .8rem; font-weight: 600; color: var(--binder-on-action) !important; background: var(--binder-action); border: 0; border-radius: 8px; padding: .4em .8em; cursor: pointer; width: 100%; }
+.binder-pop-open { margin-top: .6rem; font: inherit; font-size: .8rem; font-weight: 600; color: var(--binder-action) !important; background: transparent; border: 1px solid var(--binder-action); border-radius: 8px; padding: .4em .8em; cursor: pointer; width: 100%; }
 .binder-plot-empty { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: var(--binder-dim); font-size: .86rem; }
 .binder-plot.binder-is-empty .binder-plot-empty { display: flex; }
 .binder-legend { display: flex; flex-wrap: wrap; gap: .45rem .5rem; align-items: center; justify-content: center; }
@@ -383,7 +383,7 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-plot:has(.binder-dot-wrap.open) .binder-leaders { opacity: .35; }
 /* Moving points (#174): the page holds still under a finger, a taken point grows and shows
    its values above it, its name steps aside until it is set down. */
-.binder-move-btn[aria-pressed="true"] { background: var(--binder-action); color: var(--binder-on-action) !important; border-color: var(--binder-action); }
+.binder-move-btn[aria-pressed="true"] { background: transparent; color: var(--binder-action) !important; border-color: var(--binder-action); }
 .binder-plot.binder-moving { touch-action: none; outline: 2px dashed var(--binder-line); outline-offset: 4px; }
 .binder-plot.binder-moving .binder-dot { cursor: grab; touch-action: none; }
 .binder-dot-wrap.binder-dragging { z-index: 20; }
