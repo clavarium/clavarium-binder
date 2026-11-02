@@ -1171,9 +1171,9 @@ test('a card offers to act: at most three suggestions marked ✦, then Discuss a
         const text = root.textContent;
         assert.match(text, /Do A/); assert.match(text, /Do C/); assert.doesNotMatch(text, /Do D/, 'three at most');
         assert.match(text, /discuss/); assert.match(text, /comment/);
-        find(root, (e) => e.attrs.class === 'binder-act' && /Do B/.test(e.textContent)).on.click(); await settle();
+        find(root, (e) => e.tag === 'button' && /^✦Do B/.test(e.textContent)).on.click(); await settle();
         assert.deepEqual(ran, ['B']);
-        find(root, (e) => e.attrs.class === 'binder-act' && /discuss/.test(e.textContent)).on.click(); await settle();
+        find(root, (e) => e.tag === 'button' && /^💬discuss/.test(e.textContent)).on.click(); await settle();
         assert.deepEqual(talked, ['Devis cuisine']);
         b.destroy();
     } finally { for (const n of names) globalThis[n] = was[n]; }
