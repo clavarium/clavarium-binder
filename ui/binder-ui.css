@@ -495,7 +495,7 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-soon { color: var(--binder-dim); font-style: italic; }
 .binder-course-when { display: flex; align-items: center; gap: 2px; }
 .binder-course-tied { display: flex; align-items: center; gap: 4px; font-size: .74rem; }
-.binder-course-off { width: 3.2rem; padding: 1px 4px; border: 1px solid var(--binder-line); border-radius: 6px; background: var(--binder-panel); color: var(--binder-text); font: inherit; text-align: right; }
+.binder-course-off { width: 4.4rem; padding: 1px 4px; border: 1px solid var(--binder-line); border-radius: 6px; background: var(--binder-panel); color: var(--binder-text); font: inherit; text-align: right; }
 .binder-course-tie { border: 1px solid transparent; background: transparent; border-radius: 6px; padding: 0 3px; font-size: .78rem; line-height: 1.4; cursor: pointer; opacity: .45; }
 .binder-course-tie[aria-pressed="true"] { opacity: 1; border-color: var(--binder-line); background: var(--binder-panel); }
 .binder-course-pad { position: relative; width: 84px; height: 84px; border: 1px solid var(--binder-line); border-radius: 8px; touch-action: none; cursor: crosshair;
