@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openStore, Refused } from '../server/store.mjs';
+import { openStore, Refused, courseOf, courseAt as courseAtServer } from '../server/store.mjs';
 import { seed } from '../server/templates.mjs';
 import { keeper } from '../host/binder-host.mjs';
 import { ask, asked, TOOLS } from '../server/binder.mjs';
 import { say } from '../host/binder-host.mjs';
-import { blocks, toggled, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, canMatrix, score, trailOf, placeNames, spreadOf, lateOf, callingOf, MATRIX_AXES, KEYS, mount } from '../ui/binder-ui.js';
+import { blocks, toggled, inline, firstLine, rich, facts, isPicture, pictures, coverOf, imageOf, stateShown, canMatrix, score, trailOf, placeNames, spreadOf, courseAt, urgencyOf, importanceOf, lateOf, callingOf, MATRIX_AXES, KEYS, mount } from '../ui/binder-ui.js';
 import { isPicture as storeIsPicture } from '../server/store.mjs';
 import { DESCRIPTION_MAX, AGENT_LISTS_MAX, AGENT_LISTS_DEFAULT } from '../server/store.mjs';
 import { run, read } from '../bin/binder.mjs';
@@ -1177,4 +1177,36 @@ test('a card offers to act: at most three suggestions marked ✦, then Discuss a
         assert.deepEqual(talked, ['Devis cuisine']);
         b.destroy();
     } finally { for (const n of names) globalThis[n] = was[n]; }
+});
+
+test('a course: 2 to 4 dated points, read from text or given; the matrix moves the card between them (#267)', () => {
+    const c = courseOf('2026-11-16 70 70 ease-in; 2026-11-02 30 60 linear');
+    assert.deepEqual(c.map((p) => p.at), ['2026-11-02', '2026-11-16'], 'in time order');
+    assert.deepEqual(courseOf('none'), []);
+    assert.throws(() => courseOf('2026-11-02 30 160 linear; 2026-11-16 70 70 linear'), /0 to 100/);
+    assert.throws(() => courseOf('2026-11-02 30 60 bounce; 2026-11-16 70 70 linear'), /linear, ease-in/);
+    assert.throws(() => courseOf('2026-11-02 30 60; 2026-11-02 70 70'), /same day/);
+    assert.throws(() => courseOf(Array.from({ length: 5 }, (_, k) => ({ at: `2026-11-0${k + 1}`, u: 1, i: 1 }))), /4 points/);
+    const day = (s) => Date.parse(`${s}T00:00:00`);
+    for (const at of [courseAt, courseAtServer]) {
+        assert.deepEqual(at(c, day('2026-10-01')), { u: 30, i: 60 }, 'before: the first');
+        assert.deepEqual(at(c, day('2026-12-01')), { u: 70, i: 70 }, 'after: the last');
+        assert.deepEqual(at(c, day('2026-11-09')), { u: 50, i: 65 }, 'halfway, linear');
+    }
+    assert.deepEqual(courseAt([{ at: '2026-11-02', u: 0, i: 0, ease: 'ease-in' }, { at: '2026-11-12', u: 100, i: 100 }], day('2026-11-07')), { u: 25, i: 25 }, 'ease-in: slow first');
+    assert.deepEqual(courseAt([{ at: '2026-11-02', u: 0, i: 0, ease: 'steps' }, { at: '2026-11-12', u: 100, i: 100 }], day('2026-11-11')), { u: 0, i: 0 }, 'steps: changes on the day');
+    const r = { fields: { urgence: 10, importance: 20 }, course: c };
+    assert.equal(urgencyOf(r, day('2026-11-09')), 50); assert.equal(importanceOf(r, day('2026-11-09')), 65);
+    assert.equal(importanceOf({ fields: { importance: 20 } }), 20, 'no course: as set');
+});
+
+test('a course is kept by the binder, and removed by "none" (#267)', () => {
+    const k = keeper(tmp());
+    const l = k.act('create-list', { template: 'batches' }, ME).data;
+    const r = k.act('add', { list: l.id, title: 'Devis' }, ME).data;
+    const set = k.act('edit', { id: r.id, course: '2026-11-02 30 60 linear; 2026-11-16 70 70 ease-in' }, ME);
+    assert.equal(set.ok, true, set.text);
+    assert.equal(k.act('get', { id: r.id }, ME).data.record.course.length, 2);
+    k.act('edit', { id: r.id, course: 'none' }, ME);
+    assert.equal(k.act('get', { id: r.id }, ME).data.record.course, undefined);
 });

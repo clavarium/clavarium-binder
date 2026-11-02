@@ -132,6 +132,42 @@ const whoOf = (who) => {
 
 const empty = () => ({ v: 1, next: 1, lists: {}, records: {} });
 
+/* A COURSE (#267): 1 to 4 points -- a day, urgency and importance (0-100), and how it goes to the next
+   (a CSS easing name). Given as an array, or as text: "2026-11-02 30 60 linear; 2026-11-16 70 70 ease-in". */
+export const EASES = Object.freeze(['linear', 'ease-in', 'ease-out', 'ease-in-out', 'steps']);
+export const COURSE_MAX = 4;
+export function courseOf(given) {
+    if (given === null || given === '' || given === 'none') return [];
+    const items = Array.isArray(given) ? given : String(given).split(';').map((t) => t.trim()).filter(Boolean).map((t) => { const [at, u, i, ease] = t.split(/\s+/); return { at, u, i, ease }; });
+    if (items.length > COURSE_MAX) no(`a course has ${COURSE_MAX} points at most`);
+    const out = items.map((p) => {
+        const at = String(p?.at ?? p?.date ?? '').slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(at) || !Number.isFinite(Date.parse(at))) no('a point of a course: a day, 2026-11-16');
+        const u = Number(p?.u ?? p?.urgency ?? p?.urgence); const i = Number(p?.i ?? p?.importance);
+        if (![u, i].every((v) => Number.isFinite(v) && v >= 0 && v <= 100)) no('a point of a course: urgency and importance from 0 to 100');
+        const ease = String(p?.ease ?? 'linear');
+        if (!EASES.includes(ease)) no(`how it goes to the next point: ${EASES.join(', ')}`);
+        return { at, u: Math.round(u), i: Math.round(i), ease };
+    }).sort((a, b) => a.at.localeCompare(b.at));
+    if (new Set(out.map((p) => p.at)).size !== out.length) no('two points of a course on the same day');
+    return out;
+}
+const EASE_OF = { linear: (t) => t, 'ease-in': (t) => t * t, 'ease-out': (t) => 1 - (1 - t) ** 2, 'ease-in-out': (t) => (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) ** 2), steps: (t) => (t < 1 ? 0 : 1) };
+/* Where a course stands on a day: before its first point, the first; after its last, the last. */
+export function courseAt(course, now = Date.now()) {
+    if (!Array.isArray(course) || !course.length) return null;
+    const t = typeof now === 'number' ? now : Date.parse(now);
+    const p = [...course].sort((a, b) => a.at.localeCompare(b.at));
+    const day = (s) => Date.parse(`${s}T00:00:00`);
+    if (t <= day(p[0].at)) return { u: p[0].u, i: p[0].i };
+    if (t >= day(p.at(-1).at)) return { u: p.at(-1).u, i: p.at(-1).i };
+    for (let k = 0; k < p.length - 1; k++) {
+        const a = p[k], b = p[k + 1];
+        if (t <= day(b.at)) { const f = (EASE_OF[a.ease] ?? EASE_OF.linear)((t - day(a.at)) / (day(b.at) - day(a.at))); return { u: Math.round(a.u + (b.u - a.u) * f), i: Math.round(a.i + (b.i - a.i) * f) }; }
+    }
+    return null;
+}
+
 export function openStore(dir, { now = () => Date.now() } = {}) {
     mkdirSync(dir, { recursive: true });
     const STATE = join(dir, 'state.json');
@@ -440,7 +476,7 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
          * photo field set ("field:ID"; given by the field's id or name). Empty
          * clears it. Without one, a card is shown by its photo field set, else by
          * its only picture attached. */
-        edit(given, { title, description, fields, owners, due, remindBefore, cover, repeat, urgencyFrom } = {}, who) {
+        edit(given, { title, description, fields, owners, due, remindBefore, cover, repeat, urgencyFrom, course } = {}, who) {
             const w = whoOf(who);
             const { r, list } = recordOf(given, w, 'write');
             shareCheck(list, owners !== undefined ? ownersOf(owners) : r.owners, fields);
@@ -458,6 +494,12 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             if (urgencyFrom !== undefined) {
                 if (urgencyFrom === null || urgencyFrom === '' || urgencyFrom === 'none') { delete r.urgencyFrom; change.urgencyFrom = null; }
                 else { const day = oneLine(urgencyFrom, 20); if (!DUE.test(day) || dueAt(day) === null) no('urgency from: a date, 2026-11-04 (or 2026-11-04 09:00)'); r.urgencyFrom = change.urgencyFrom = day; }
+            }
+            /* ITS COURSE (#267): urgency and importance at a few dates, the matrix moving it between them
+               (CSS easing names). Empty or one point: no course, its fields as set. */
+            if (course !== undefined) {
+                const c = courseOf(course);
+                if (c.length >= 2) r.course = change.course = c; else { delete r.course; change.course = null; }
             }
             if (cover !== undefined) { const c = coverOf(list, r, cover); if (c) r.cover = change.cover = c; else { delete r.cover; change.cover = null; } }
             r.changed = stamp();

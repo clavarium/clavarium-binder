@@ -71,7 +71,7 @@ export function ownerGuide(ids = [], people = []) {
 /* What a card on a matrix still lacks to be placed and read: said after it is written. */
 export function matrixMissing(l, r) {
     if (!isMatrix(l)) return '';
-    const lack = ['urgence', 'importance'].filter((id) => r.fields?.[id] === undefined && !(id === 'urgence' && r.urgencyFrom && r.due));
+    const lack = r.course ? [] : ['urgence', 'importance'].filter((id) => r.fields?.[id] === undefined && !(id === 'urgence' && r.urgencyFrom && r.due));
     const out = [];
     if (lack.length) out.push(`Not on the matrix yet: it needs ${lack.join(' and ')} (0 to 100): binder edit ${r.id} ${lack.map((id) => `--field ${id}=..`).join(' ')}. "binder show ${l.id}" says what each means.`);
     if (!(r.owners ?? []).length) out.push(`Nobody carries it: binder edit ${r.id} --owner <the person's id> (theirs), me (yours), or leave it. "binder people" gives the ids.`);
@@ -105,6 +105,7 @@ export function say(op, data, list, people = []) {
             const st = l.states.find((x) => x.id === r.state);
             const out = [`#${r.id} ${r.title}`, `  list: ${l.title}; state: ${st?.name ?? r.state}${r.approved ? ' (approved)' : ''}${r.archived ? '; archived' : ''}${owners(r) ? `; owners:${owners(r)}` : ''}${due(r)}`];
             if (r.repeat) out.push(`  recurrent ↻: ${typeof r.repeat === 'number' ? `every ${r.repeat} days` : 'no fixed rhythm'} (a move to done reopens it, shifting its due)`);
+            if (r.course) out.push(`  course: ${r.course.map((p) => `${p.at} ${p.u} ${p.i} ${p.ease}`).join('; ')} -- urgency and importance move between these days by themselves; --course none removes it`);
             if (r.urgencyFrom) out.push(`  urgency: automatic, rising from ${r.urgencyFrom} to its due date${r.due ? '' : ' (no due date yet: none until one is set)'}; --urgency-from none sets it by hand`);
             if (r.description) out.push('Description:', ...r.description.split('\n').map((x) => (x ? `  ${x}` : '')));
             else out.push('No description yet: give one (what it is and why, 1-3 lines for a person) with binder edit ID --description "...".');
@@ -152,7 +153,7 @@ export function keeper(dir, { sides = () => [], now = () => Date.now(), people =
                 case 'get': data = store.record(a.id, who); break;
                 case 'search': data = store.search(a.text, who); break;
                 case 'add': data = store.add(a.list, { title: a.title, description: a.description, state: a.state, fields: a.fields, owners: me(a.owners), due: a.due, remindBefore: a.remindBefore, note: a.note }, who); break;
-                case 'edit': data = store.edit(a.id, { title: a.title, description: a.description, fields: a.fields, owners: me(a.owners), due: a.due, remindBefore: a.remindBefore, repeat: a.repeat, cover: a.cover, urgencyFrom: a.urgencyFrom }, who); break;
+                case 'edit': data = store.edit(a.id, { title: a.title, description: a.description, fields: a.fields, owners: me(a.owners), due: a.due, remindBefore: a.remindBefore, repeat: a.repeat, cover: a.cover, urgencyFrom: a.urgencyFrom, course: a.course }, who); break;
                 case 'move': { const r = store.move(a.id, a.state, who, { next: a.next }); data = { ...r, stateName: store.record(r.id, who).list.states.find((x) => x.id === r.state)?.name }; break; }
                 case 'note': data = store.note(a.id, a.text, who); break;
                 case 'attach': data = store.attach(a.id, { kind: a.kind, ref: a.ref, title: a.title }, who); break;

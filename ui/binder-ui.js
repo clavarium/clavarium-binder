@@ -114,7 +114,25 @@ export function score(r, id) {
    100 at its due date, rising as the days pass, recomputed at each look -- when it has both;
    else the one set by hand. */
 const when0 = (s) => Date.parse(String(s).replace(' ', 'T'));
+/* ITS COURSE (#267): urgency and importance at a few dates; between two, as the CSS easing named goes.
+   Before the first, the first; after the last, the last. (The same as the server's courseAt.) */
+export const EASES = Object.freeze(['linear', 'ease-in', 'ease-out', 'ease-in-out', 'steps']);
+const EASE_OF = { linear: (t) => t, 'ease-in': (t) => t * t, 'ease-out': (t) => 1 - (1 - t) ** 2, 'ease-in-out': (t) => (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) ** 2), steps: (t) => (t < 1 ? 0 : 1) };
+export function courseAt(course, now = Date.now()) {
+    if (!Array.isArray(course) || course.length < 2) return null;
+    const p = [...course].sort((a, b) => a.at.localeCompare(b.at));
+    const day = (s) => Date.parse(`${s}T00:00:00`);
+    if (now <= day(p[0].at)) return { u: p[0].u, i: p[0].i };
+    if (now >= day(p.at(-1).at)) return { u: p.at(-1).u, i: p.at(-1).i };
+    for (let k = 0; k < p.length - 1; k++) {
+        const a = p[k], b = p[k + 1];
+        if (now <= day(b.at)) { const f = (EASE_OF[a.ease] ?? EASE_OF.linear)((now - day(a.at)) / (day(b.at) - day(a.at))); return { u: Math.round(a.u + (b.u - a.u) * f), i: Math.round(a.i + (b.i - a.i) * f) }; }
+    }
+    return null;
+}
+export function importanceOf(r, now = Date.now()) { const c = courseAt(r?.course, now); return c ? c.i : score(r, MATRIX_AXES.y); }
 export function urgencyOf(r, now = Date.now()) {
+    { const c = courseAt(r?.course, now); if (c) return c.u; }
     if (r?.urgencyFrom && r?.due) {
         const from = when0(r.urgencyFrom); const to = when0(r.due);
         if (Number.isFinite(from) && Number.isFinite(to)) {
@@ -125,7 +143,7 @@ export function urgencyOf(r, now = Date.now()) {
     }
     return score(r, MATRIX_AXES.x);
 }
-export const urgencyAuto = (r) => Boolean(r?.urgencyFrom && r?.due);
+export const urgencyAuto = (r) => Boolean((r?.urgencyFrom && r?.due) || courseAt(r?.course));
 /* ITS PATH ON THE MATRIX (#167): the places a card stood, oldest first, rebuilt from its
    history (each change of its scores is kept there, with the first ones), ending where it
    stands now. A place is kept only once both axes are known, and only when it moved. */
@@ -140,7 +158,7 @@ export function trailOf(history, r) {
         if (Object.hasOwn(f, Y)) py = f[Y] === null ? null : score({ fields: f }, Y);
         push(px, py);
     }
-    push(urgencyOf(r), score(r, Y));
+    push(urgencyOf(r), importanceOf(r));
     return pts;
 }
 /* THE NAMES ON THE MATRIX, PLACED (point-feature labelling, as on a map): the points never
@@ -388,7 +406,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     function situation(l, r, { compact = false } = {}) {
         if (!canMatrix(l)) return null;
         const { x: X, y: Y, size: SIZE, tint: TINT } = MATRIX_AXES;
-        const u = urgencyOf(r); const i = score(r, Y);
+        const u = urgencyOf(r); const i = importanceOf(r);
         if (u === null || i === null) return null;
         const c = score(r, SIZE); const d = score(r, TINT);
         const me = (people() || []).find((p) => p.me)?.id ?? null;
@@ -568,6 +586,52 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     const factLine = (l, r, cls = 'binder-facts') => { const f = facts(l, r, lang); return f.length ? h('span', { class: cls }, f.map((x) => x.text).join(' · ')) : null; };
     const leave = () => { ui.open = null; ui.more = false; ui.draft = {}; };
     const open = (r) => { void soft(ask('get', { id: r.id }).then((d) => { leave(); ui.from = null; ui.record = d; ui.mode = 'record'; paint(); })); };
+    /* ITS COURSE, EDITED (#267): a column per date -- the day, a little square where its point is placed,
+       its two numbers under it; between two, a dot going there and back at the easing chosen (a click
+       changes it); "+" adds a date. One column: its urgency and importance as set, no course. */
+    const courseEditor = (r, l, can) => {
+        const day = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 10); };
+        const later = (s, n) => new Date(Date.parse(`${s}T12:00:00`) + n * 86_400_000).toISOString().slice(0, 10);
+        let pts = Array.isArray(r.course) && r.course.length ? r.course.map((p) => ({ ...p })) : [{ at: day(), u: Math.round(score(r, MATRIX_AXES.x) ?? 50), i: Math.round(score(r, MATRIX_AXES.y) ?? 50), ease: 'linear' }];
+        const box = h('div', { class: 'binder-course' });
+        const clamp = (v) => Math.round(Math.max(0, Math.min(100, v)) / 5) * 5;
+        const save = () => {
+            if (!can) return;
+            const sorted = [...pts].sort((a, b) => a.at.localeCompare(b.at));
+            const p = sorted.length >= 2 ? ask('edit', { id: r.id, course: sorted }) : ask('edit', { id: r.id, course: 'none', fields: { [MATRIX_AXES.x]: sorted[0].u, [MATRIX_AXES.y]: sorted[0].i } });
+            void soft(p).then(refresh);
+        };
+        const paintIt = () => {
+            const sorted = [...pts].sort((a, b) => a.at.localeCompare(b.at));
+            box.replaceChildren();
+            sorted.forEach((c, k) => {
+                const col = h('div', { class: 'binder-course-col' });
+                const date = h('input', { type: 'date', class: 'binder-course-day', value: c.at, disabled: can ? null : true, 'aria-label': w('due') });
+                date.addEventListener('change', () => { if (date.value) { c.at = date.value; paintIt(); save(); } });
+                const pad = h('div', { class: 'binder-course-pad', title: `${fieldName(l, MATRIX_AXES.x)} → · ${fieldName(l, MATRIX_AXES.y)} ↑` });
+                const m = h('span', { class: 'binder-course-m' }); pad.append(m);
+                const shown = h('div', { class: 'binder-course-vals' });
+                const show = () => { m.style.left = `${c.u}%`; m.style.top = `${100 - c.i}%`; shown.textContent = `${fieldName(l, MATRIX_AXES.x).slice(0, 1).toUpperCase()} ${c.u} · ${fieldName(l, MATRIX_AXES.y).slice(0, 1).toUpperCase()} ${c.i}`; };
+                show();
+                if (can) {
+                    const place = (e) => { const b = pad.getBoundingClientRect(); c.u = clamp(((e.clientX - b.left) / b.width) * 100); c.i = clamp((1 - (e.clientY - b.top) / b.height) * 100); show(); };
+                    pad.addEventListener('pointerdown', (e) => { pad.setPointerCapture?.(e.pointerId); place(e); pad.onpointermove = place; });
+                    pad.addEventListener('pointerup', () => { pad.onpointermove = null; save(); });
+                }
+                const x = can && sorted.length > 1 ? h('button', { type: 'button', class: 'binder-course-x', title: w('delete'), onclick: () => { pts = pts.filter((y) => y !== c); paintIt(); save(); } }, '×') : null;
+                col.append(date, pad, shown, ...(x ? [x] : []));
+                box.append(col);
+                if (k < sorted.length - 1) {
+                    const run = h('span', { class: 'binder-course-run' }); run.style.animationTimingFunction = c.ease === 'steps' ? 'steps(1, end)' : c.ease;
+                    const ease = h('button', { type: 'button', class: 'binder-course-ease', disabled: can ? null : true, onclick: () => { c.ease = EASES[(EASES.indexOf(c.ease) + 1) % EASES.length]; paintIt(); save(); } }, c.ease);
+                    box.append(h('div', { class: 'binder-course-hop' }, h('div', { class: 'binder-course-track' }, run), ease));
+                }
+            });
+            if (can && sorted.length < 4) box.append(h('button', { type: 'button', class: 'binder-course-add', title: '+', onclick: () => { const last = sorted.at(-1); pts.push({ at: later(last.at, 14), u: Math.min(100, last.u + 10), i: last.i, ease: 'linear' }); paintIt(); save(); } }, '+'));
+        };
+        paintIt();
+        return box;
+    };
     /* ACT (02-11): a few quick actions on a card -- at most three the host suggests (an AI, or rules), each
        marked ✦ with its reason; then two always there: discuss it (with an assistant), comment it. One look:
        the plain button. `actions(record, list)` -> [{ label, why, run }], `discuss(record, list)`. */
@@ -746,7 +810,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
         if (mxFor !== l.id) { mxFor = l.id; mxHide = new Set(!meId && present.has('none') && present.size > 1 ? ['none'] : []); mxRings = true; }
         const MINR = 0.6; const MAXR = 2.2;
         const dot = (r) => {
-            const x = urgencyOf(r); const y = score(r, Y);
+            const x = urgencyOf(r); const y = importanceOf(r);
             const c = score(r, SIZE); const d = score(r, TINT);
             const cat = ownerCat(r); const mine = cat === 'me';
             const helper = helperOf(r);
@@ -1285,6 +1349,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             hero,
             h('header', { class: 'binder-head' }, title, situation(l, r) ? otherFacts(l, r) : factLine(l, r), situation(l, r),
                 stateShown(l, r) || approve ? h('div', { class: 'binder-status' }, stateShown(l, r) ? h('div', { class: 'binder-state-wrap binder-pop' }, pillOf, menu) : null, approve) : null),
+            canMatrix(l) ? courseEditor(r, l, can) : null,
             quickActs(r, l, { row: true, comment: () => { const n = root.querySelector('.binder-record textarea[maxlength="2000"]'); n?.scrollIntoView?.({ block: 'center' }); n?.focus?.(); } }),
             about,
             whoLine || whoEdit ? h('div', { class: 'binder-who-wrap' }, whoLine, whoEdit) : null,
