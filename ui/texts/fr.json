@@ -162,5 +162,8 @@
   "q-later-why": "ni urgent ni important",
   "discuss": "En discuter",
   "comment": "Commenter",
-  "suggested": "Suggéré :"
+  "suggested": "Suggéré :",
+  "archive-it": "Archiver…",
+  "done-archive": "Terminé, archiver",
+  "drop-archive": "Plus d'intérêt, archiver"
 }

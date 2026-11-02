@@ -25,7 +25,7 @@
  */
 
 export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'no-lists', 'template', 'create', 'cancel', 'title', 'list', 'columns', 'cards', 'back',
-    'state', 'owners', 'due', 'notes', 'add-note', 'discuss', 'comment', 'suggested', 'attached', 'attach', 'history', 'archive', 'restore', 'delete', 'delete-sure', 'approved', 'settings',
+    'state', 'owners', 'due', 'notes', 'add-note', 'discuss', 'comment', 'suggested', 'archive-it', 'done-archive', 'drop-archive', 'attached', 'attach', 'history', 'archive', 'restore', 'delete', 'delete-sure', 'approved', 'settings',
     'states', 'fields', 'access', 'read', 'write', 'none', 'save', 'empty', 'archived', 'show-archived', 'gate', 'done', 'add-state', 'add-field',
     'kind-message', 'kind-file', 'kind-asset', 'kind-branch', 'kind-commit', 'kind-link', 'kind-record', 'kind-mail', 'kind-event', 'what', 'name', 'type', 'saved', 'edited', 'by', 'mine', 'all',
     'delete-list', 'delete-list-sure', 'archive-list', 'no-records', 'none-archived', 'none-mine', 'search', 'description', 'edit', 'more', 'approve', 'add', 'ok',
@@ -388,7 +388,7 @@ export function rich(text, tick = null) {
         : h('p', {}, b.lines.flatMap((l, i) => (i ? [h('br'), ...parts(l)] : parts(l)))))));
 }
 
-export function mount(root, { call, words = {}, lang = 'en', people = () => [], picture = () => null, openAttached = null, place: start = null, onPlace = null, onBack = null, actions = null, discuss = null } = {}) {
+export function mount(root, { call, words = {}, lang = 'en', people = () => [], picture = () => null, openAttached = null, place: start = null, onPlace = null, onBack = null, actions = null, discuss = null, endings = null } = {}) {
     const w = (k) => words[k] ?? k;
     /* A state's name as shown: a template's own name in the page's words (a list made in another language keeps its data). */
     const sn = (st) => (st ? words[`state:${st.name}`] ?? st.name : '');
@@ -644,9 +644,20 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             b.addEventListener('click', async () => { b.disabled = true; try { await run(); } finally { b.disabled = false; } });
             return b;
         };
+        /* Its two endings, archived either way (02-11): one button, its two choices shown on a tap. */
+        const ending = endings && !r.archived ? (() => {
+            const wrap = h('div', { class: 'binder-act-endings' });
+            const open = button('▣', w('archive-it'), null, async () => { choices.hidden = !choices.hidden; });
+            const choices = h('div', { class: 'binder-act-choices', hidden: true },
+                button('✓', w('done-archive'), null, async () => { await endings(r, l, 'done'); refresh(); }),
+                button('✕', w('drop-archive'), null, async () => { await endings(r, l, 'drop'); refresh(); }));
+            wrap.append(open, choices);
+            return wrap;
+        })() : null;
         const fixed = [
             discuss ? button('💬', w('discuss'), null, () => discuss(r, l)) : null,
             comment ? button('✎', w('comment'), null, comment) : null,
+            ending,
         ].filter(Boolean);
         box.append(...fixed);
         if (actions) {

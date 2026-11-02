@@ -510,3 +510,9 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-trail .binder-course-key { fill: var(--binder-panel); stroke: currentColor; stroke-width: .45; }
 .binder-trail .binder-course-num { font: 700 2.6px system-ui, sans-serif; text-anchor: middle; fill: currentColor; }
 .binder-trail .binder-course-date { font: 600 2.4px system-ui, sans-serif; fill: currentColor; opacity: .8; }
+
+.binder-act-endings { display: flex; flex-direction: column; gap: 6px; }
+.binder-acts-row .binder-act-endings { flex-direction: row; flex-wrap: wrap; }
+.binder-act-choices { display: flex; flex-direction: column; gap: 6px; padding-left: 14px; border-left: 2px solid var(--binder-line); }
+.binder-acts-row .binder-act-choices { flex-direction: row; padding-left: 0; border-left: 0; }
+.binder-act-choices[hidden] { display: none; }

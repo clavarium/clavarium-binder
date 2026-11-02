@@ -147,5 +147,8 @@
   "q-later-why": "neither urgent nor important",
   "discuss": "Discuss",
   "comment": "Comment",
-  "suggested": "Suggested:"
+  "suggested": "Suggested:",
+  "archive-it": "Archive…",
+  "done-archive": "Done, archive it",
+  "drop-archive": "No longer relevant, archive it"
 }
