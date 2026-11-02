@@ -165,5 +165,7 @@
   "suggested": "Suggéré :",
   "archive-it": "Archiver…",
   "done-archive": "Terminé, archiver",
-  "drop-archive": "Plus d'intérêt, archiver"
+  "drop-archive": "Plus d'intérêt, archiver",
+  "courseTie": "Suivre l'échéance",
+  "daysShort": "j"
 }

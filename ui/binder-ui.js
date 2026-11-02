@@ -118,21 +118,31 @@ const when0 = (s) => Date.parse(String(s).replace(' ', 'T'));
    Before the first, the first; after the last, the last. (The same as the server's courseAt.) */
 export const EASES = Object.freeze(['linear', 'ease-in', 'ease-out', 'ease-in-out', 'steps']);
 const EASE_OF = { linear: (t) => t, 'ease-in': (t) => t * t, 'ease-out': (t) => 1 - (1 - t) ** 2, 'ease-in-out': (t) => (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) ** 2), steps: (t) => (t < 1 ? 0 : 1) };
-export function courseAt(course, now = Date.now()) {
-    if (!Array.isArray(course) || course.length < 2) return null;
-    const p = [...course].sort((a, b) => a.at.localeCompare(b.at));
+/* A point's day: its own, or tied to the card's due date (due, due-7, due+3), following it. (As the server's.) */
+const TIED = /^due([+-]\d{1,3})?$/;
+export function courseDay(at, due) {
+    const m = TIED.exec(String(at ?? ''));
+    if (!m) return /^\d{4}-\d{2}-\d{2}$/.test(String(at ?? '')) ? at : null;
+    const d = String(due ?? '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+    return new Date(Date.parse(`${d}T12:00:00Z`) + Number(m[1] ?? 0) * 86_400_000).toISOString().slice(0, 10);
+}
+export const courseDays = (course, due) => (Array.isArray(course) ? course : []).map((p) => ({ ...p, day: courseDay(p.at, due) })).filter((p) => p.day).sort((a, b) => a.day.localeCompare(b.day));
+export function courseAt(course, now = Date.now(), due = null) {
+    const p = courseDays(course, due);
+    if (p.length < 2) return null;
     const day = (s) => Date.parse(`${s}T00:00:00`);
-    if (now <= day(p[0].at)) return { u: p[0].u, i: p[0].i };
-    if (now >= day(p.at(-1).at)) return { u: p.at(-1).u, i: p.at(-1).i };
+    if (now <= day(p[0].day)) return { u: p[0].u, i: p[0].i };
+    if (now >= day(p.at(-1).day)) return { u: p.at(-1).u, i: p.at(-1).i };
     for (let k = 0; k < p.length - 1; k++) {
         const a = p[k], b = p[k + 1];
-        if (now <= day(b.at)) { const f = (EASE_OF[a.ease] ?? EASE_OF.linear)((now - day(a.at)) / (day(b.at) - day(a.at))); return { u: Math.round(a.u + (b.u - a.u) * f), i: Math.round(a.i + (b.i - a.i) * f) }; }
+        if (now <= day(b.day)) { const span = day(b.day) - day(a.day); const f = span > 0 ? (EASE_OF[a.ease] ?? EASE_OF.linear)((now - day(a.day)) / span) : 1; return { u: Math.round(a.u + (b.u - a.u) * f), i: Math.round(a.i + (b.i - a.i) * f) }; }
     }
     return null;
 }
-export function importanceOf(r, now = Date.now()) { const c = courseAt(r?.course, now); return c ? c.i : score(r, MATRIX_AXES.y); }
+export function importanceOf(r, now = Date.now()) { const c = courseAt(r?.course, now, r?.due); return c ? c.i : score(r, MATRIX_AXES.y); }
 export function urgencyOf(r, now = Date.now()) {
-    { const c = courseAt(r?.course, now); if (c) return c.u; }
+    { const c = courseAt(r?.course, now, r?.due); if (c) return c.u; }
     if (r?.urgencyFrom && r?.due) {
         const from = when0(r.urgencyFrom); const to = when0(r.due);
         if (Number.isFinite(from) && Number.isFinite(to)) {
@@ -143,7 +153,7 @@ export function urgencyOf(r, now = Date.now()) {
     }
     return score(r, MATRIX_AXES.x);
 }
-export const urgencyAuto = (r) => Boolean((r?.urgencyFrom && r?.due) || courseAt(r?.course));
+export const urgencyAuto = (r) => Boolean((r?.urgencyFrom && r?.due) || courseAt(r?.course, Date.now(), r?.due));
 /* ITS PATH ON THE MATRIX (#167): the places a card stood, oldest first, rebuilt from its
    history (each change of its scores is kept there, with the first ones), ending where it
    stands now. A place is kept only once both axes are known, and only when it moved. */
@@ -591,23 +601,40 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
        changes it); "+" adds a date. One column: its urgency and importance as set, no course. */
     const courseEditor = (r, l, can) => {
         const day = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 10); };
-        const later = (s, n) => new Date(Date.parse(`${s}T12:00:00`) + n * 86_400_000).toISOString().slice(0, 10);
+        const later = (s, n) => new Date(Date.parse(`${s}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+        const due = /^\d{4}-\d{2}-\d{2}/.test(String(r.due ?? '')) ? String(r.due).slice(0, 10) : null;
+        const dayOf = (c) => courseDay(c.at, due) ?? c.at;
+        const offOf = (c) => Number(TIED.exec(c.at)?.[1] ?? 0);
+        const tiedAt = (n) => (n ? `due${n > 0 ? '+' : ''}${n}` : 'due');
         let pts = Array.isArray(r.course) && r.course.length ? r.course.map((p) => ({ ...p })) : [{ at: day(), u: Math.round(score(r, MATRIX_AXES.x) ?? 50), i: Math.round(score(r, MATRIX_AXES.y) ?? 50), ease: 'linear' }];
         const box = h('div', { class: 'binder-course' });
         const clamp = (v) => Math.round(Math.max(0, Math.min(100, v)) / 5) * 5;
+        const inTime = () => [...pts].sort((a, b) => dayOf(a).localeCompare(dayOf(b)));
         const save = () => {
             if (!can) return;
-            const sorted = [...pts].sort((a, b) => a.at.localeCompare(b.at));
+            const sorted = inTime().map(({ at, u, i, ease }) => ({ at, u, i, ease }));
             const p = sorted.length >= 2 ? ask('edit', { id: r.id, course: sorted }) : ask('edit', { id: r.id, course: 'none', fields: { [MATRIX_AXES.x]: sorted[0].u, [MATRIX_AXES.y]: sorted[0].i } });
             void soft(p).then(refresh);
         };
         const paintIt = () => {
-            const sorted = [...pts].sort((a, b) => a.at.localeCompare(b.at));
+            const sorted = inTime();
             box.replaceChildren();
             sorted.forEach((c, k) => {
                 const col = h('div', { class: 'binder-course-col' });
-                const date = h('input', { type: 'date', class: 'binder-course-day', value: c.at, disabled: can ? null : true, 'aria-label': w('due') });
-                date.addEventListener('change', () => { if (date.value) { c.at = date.value; paintIt(); save(); } });
+                /* Its day: fixed, or tied to the due date (so many days before or after it), following it. */
+                const tied = TIED.test(c.at);
+                let when;
+                if (tied) {
+                    const n = h('input', { type: 'number', step: '1', min: '-999', max: '999', class: 'binder-course-off', value: String(offOf(c)), disabled: can ? null : true, 'aria-label': w('due') });
+                    n.addEventListener('change', () => { const v = Math.round(Number(n.value)); if (Number.isFinite(v)) { c.at = tiedAt(v); paintIt(); save(); } });
+                    when = h('div', { class: 'binder-course-day binder-course-tied', title: dayOf(c) }, h('span', {}, w('due')), n, h('span', {}, w('daysShort')));
+                } else {
+                    when = h('input', { type: 'date', class: 'binder-course-day', value: c.at, disabled: can ? null : true, 'aria-label': w('due') });
+                    when.addEventListener('change', () => { if (when.value) { c.at = when.value; paintIt(); save(); } });
+                }
+                const tie = can && due ? h('button', { type: 'button', class: 'binder-course-tie', 'aria-pressed': tied ? 'true' : 'false', title: w('courseTie'),
+                    onclick: () => { c.at = tied ? dayOf(c) : tiedAt(Math.round((Date.parse(`${dayOf(c)}T12:00:00Z`) - Date.parse(`${due}T12:00:00Z`)) / 86_400_000)); paintIt(); save(); } },
+                    ICON.link) : null;
                 const pad = h('div', { class: 'binder-course-pad', title: `${fieldName(l, MATRIX_AXES.x)} → · ${fieldName(l, MATRIX_AXES.y)} ↑` });
                 const m = h('span', { class: 'binder-course-m' }); pad.append(m);
                 const shown = h('div', { class: 'binder-course-vals' });
@@ -619,7 +646,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                     pad.addEventListener('pointerup', () => { pad.onpointermove = null; save(); });
                 }
                 const x = can && sorted.length > 1 ? h('button', { type: 'button', class: 'binder-course-x', title: w('delete'), onclick: () => { pts = pts.filter((y) => y !== c); paintIt(); save(); } }, '×') : null;
-                col.append(date, pad, shown, ...(x ? [x] : []));
+                col.append(h('div', { class: 'binder-course-when' }, when, ...(tie ? [tie] : [])), pad, shown, ...(x ? [x] : []));
                 box.append(col);
                 if (k < sorted.length - 1) {
                     const run = h('span', { class: 'binder-course-run' }); run.style.animationTimingFunction = c.ease === 'steps' ? 'steps(1, end)' : c.ease;
@@ -627,7 +654,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
                     box.append(h('div', { class: 'binder-course-hop' }, h('div', { class: 'binder-course-track' }, run), ease));
                 }
             });
-            if (can && sorted.length < 4) box.append(h('button', { type: 'button', class: 'binder-course-add', title: '+', onclick: () => { const last = sorted.at(-1); pts.push({ at: later(last.at, 14), u: Math.min(100, last.u + 10), i: last.i, ease: 'linear' }); paintIt(); save(); } }, '+'));
+            if (can && sorted.length < 4) box.append(h('button', { type: 'button', class: 'binder-course-add', title: '+', onclick: () => { const last = sorted.at(-1); const lt = TIED.test(last.at); pts.push({ at: lt ? tiedAt(offOf(last) + 7) : later(last.at, 14), u: Math.min(100, last.u + 10), i: last.i, ease: 'linear' }); paintIt(); save(); } }, '+'));
         };
         paintIt();
         return box;
@@ -924,13 +951,13 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             }
             for (let i = 0; i < n - 1; i++) kids.push(el('circle', { cx: pts[i].x, cy: 100 - pts[i].y, r: 0.7, opacity: (0.3 + 0.4 * (i / Math.max(1, n - 1))).toFixed(2) }));
             /* Its course (#267), where it goes: its dated points, numbered, joined by a dashed line. */
-            const course = Array.isArray(got.record?.course) ? [...got.record.course].sort((a, b) => a.at.localeCompare(b.at)) : [];
+            const course = courseDays(got.record?.course, got.record?.due);
             if (course.length >= 2) {
                 kids.push(el('polyline', { class: 'binder-course-line', points: course.map((c) => `${c.u},${100 - c.i}`).join(' ') }));
                 course.forEach((c, k) => {
                     kids.push(el('circle', { class: 'binder-course-key', cx: c.u, cy: 100 - c.i, r: 2.4 }));
                     const t = el('text', { class: 'binder-course-num', x: c.u, y: 100 - c.i + 1.1 }); t.textContent = String(k + 1); kids.push(t);
-                    const d = el('text', { class: 'binder-course-date', x: c.u + (c.u > 72 ? -3.4 : 3.4), y: 100 - c.i + 1, 'text-anchor': c.u > 72 ? 'end' : 'start' }); d.textContent = c.at.slice(5).split('-').reverse().join('/'); kids.push(d);
+                    const d = el('text', { class: 'binder-course-date', x: c.u + (c.u > 72 ? -3.4 : 3.4), y: 100 - c.i + 1, 'text-anchor': c.u > 72 ? 'end' : 'start' }); d.textContent = c.day.slice(5).split('-').reverse().join('/'); kids.push(d);
                 });
             }
             trail.replaceChildren(...kids);

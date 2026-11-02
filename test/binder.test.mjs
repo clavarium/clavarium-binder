@@ -1200,6 +1200,29 @@ test('a course: 2 to 4 dated points, read from text or given; the matrix moves t
     assert.equal(importanceOf({ fields: { importance: 20 } }), 20, 'no course: as set');
 });
 
+test('a course point may be tied to the due date, and follows it (#267)', () => {
+    const c = courseOf('due 95 90 linear; 2026-11-02 30 60 linear; due-7 70 70 ease-in');
+    assert.deepEqual(c.map((p) => p.at), ['2026-11-02', 'due-7', 'due']);
+    assert.throws(() => courseOf('due+x 1 1; 2026-11-02 1 1'), /due-7/);
+    const day = (s) => Date.parse(`${s}T00:00:00`);
+    for (const at of [courseAt, courseAtServer]) {
+        assert.deepEqual(at(c, day('2026-11-23'), '2026-11-30 18:00'), { u: 70, i: 70 }, 'a week before the due date');
+        assert.deepEqual(at(c, day('2026-11-30'), '2026-12-14'), { u: 62, i: 68 }, 'the due date moved: so did its points');
+    }
+    assert.deepEqual(courseAt(c, day('2026-11-02')), null, 'no due date: one point left, no course');
+    assert.equal(urgencyOf({ due: '2026-11-30', course: c }, day('2026-12-01')), 95);
+});
+
+test('a course tied to the due date needs one, kept by the binder (#267)', () => {
+    const k = keeper(tmp());
+    const l = k.act('create-list', { template: 'batches' }, ME).data;
+    const r = k.act('add', { list: l.id, title: 'Devis' }, ME).data;
+    assert.equal(k.act('edit', { id: r.id, course: 'due-7 30 60 linear; due 70 70 linear' }, ME).ok, false, 'no due date');
+    assert.equal(k.act('edit', { id: r.id, due: '2026-11-30', course: 'due-7 30 60 linear; due 70 70 linear' }, ME).ok, true);
+    assert.equal(k.act('edit', { id: r.id, due: '' }, ME).ok, false, 'its due date stays while the course is tied to it');
+    assert.equal(k.act('get', { id: r.id }, ME).data.record.due.slice(0, 10), '2026-11-30');
+});
+
 test('a course is kept by the binder, and removed by "none" (#267)', () => {
     const k = keeper(tmp());
     const l = k.act('create-list', { template: 'batches' }, ME).data;

@@ -133,37 +133,53 @@ const whoOf = (who) => {
 const empty = () => ({ v: 1, next: 1, lists: {}, records: {} });
 
 /* A COURSE (#267): 1 to 4 points -- a day, urgency and importance (0-100), and how it goes to the next
-   (a CSS easing name). Given as an array, or as text: "2026-11-02 30 60 linear; 2026-11-16 70 70 ease-in". */
+   (a CSS easing name). Given as an array, or as text: "2026-11-02 30 60 linear; 2026-11-16 70 70 ease-in".
+   A point's day is fixed (2026-11-16) or tied to the card's due date (due, due-7, due+3: days before or
+   after it), following it when the due date moves; both may be mixed on one card. */
 export const EASES = Object.freeze(['linear', 'ease-in', 'ease-out', 'ease-in-out', 'steps']);
 export const COURSE_MAX = 4;
+const TIED = /^due([+-]\d{1,3})?$/;
+/* The day a point stands on: its own, or its due date's moved by so many days; null without a due date. */
+export function courseDay(at, due) {
+    const m = TIED.exec(String(at ?? ''));
+    if (!m) return /^\d{4}-\d{2}-\d{2}$/.test(String(at ?? '')) ? at : null;
+    const d = String(due ?? '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+    return new Date(Date.parse(`${d}T12:00:00Z`) + Number(m[1] ?? 0) * 86_400_000).toISOString().slice(0, 10);
+}
+export const courseTied = (course) => Array.isArray(course) && course.some((p) => TIED.test(String(p?.at ?? '')));
 export function courseOf(given) {
     if (given === null || given === '' || given === 'none') return [];
     const items = Array.isArray(given) ? given : String(given).split(';').map((t) => t.trim()).filter(Boolean).map((t) => { const [at, u, i, ease] = t.split(/\s+/); return { at, u, i, ease }; });
     if (items.length > COURSE_MAX) no(`a course has ${COURSE_MAX} points at most`);
     const out = items.map((p) => {
-        const at = String(p?.at ?? p?.date ?? '').slice(0, 10);
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(at) || !Number.isFinite(Date.parse(at))) no('a point of a course: a day, 2026-11-16');
+        const raw = String(p?.at ?? p?.date ?? '').replace(/\s+/g, '');
+        const at = TIED.test(raw) ? raw.replace(/^due[+-]0+$/, 'due') : raw.slice(0, 10);
+        if (!TIED.test(at) && (!/^\d{4}-\d{2}-\d{2}$/.test(at) || !Number.isFinite(Date.parse(at)))) no('a point of a course: a day, 2026-11-16, or one tied to the due date: due, due-7, due+3');
         const u = Number(p?.u ?? p?.urgency ?? p?.urgence); const i = Number(p?.i ?? p?.importance);
         if (![u, i].every((v) => Number.isFinite(v) && v >= 0 && v <= 100)) no('a point of a course: urgency and importance from 0 to 100');
         const ease = String(p?.ease ?? 'linear');
         if (!EASES.includes(ease)) no(`how it goes to the next point: ${EASES.join(', ')}`);
         return { at, u: Math.round(u), i: Math.round(i), ease };
-    }).sort((a, b) => a.at.localeCompare(b.at));
+    }).sort((a, b) => { const ta = TIED.test(a.at), tb = TIED.test(b.at); if (ta !== tb) return ta ? 1 : -1;
+        return ta ? Number(TIED.exec(a.at)[1] ?? 0) - Number(TIED.exec(b.at)[1] ?? 0) : a.at.localeCompare(b.at); });
     if (new Set(out.map((p) => p.at)).size !== out.length) no('two points of a course on the same day');
     return out;
 }
 const EASE_OF = { linear: (t) => t, 'ease-in': (t) => t * t, 'ease-out': (t) => 1 - (1 - t) ** 2, 'ease-in-out': (t) => (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) ** 2), steps: (t) => (t < 1 ? 0 : 1) };
+/* Its points on their days, in time; a point tied to a due date the card lacks is left out. */
+export const courseDays = (course, due) => (Array.isArray(course) ? course : []).map((p) => ({ ...p, day: courseDay(p.at, due) })).filter((p) => p.day).sort((a, b) => a.day.localeCompare(b.day));
 /* Where a course stands on a day: before its first point, the first; after its last, the last. */
-export function courseAt(course, now = Date.now()) {
-    if (!Array.isArray(course) || !course.length) return null;
+export function courseAt(course, now = Date.now(), due = null) {
+    const p = courseDays(course, due);
+    if (!p.length) return null;
     const t = typeof now === 'number' ? now : Date.parse(now);
-    const p = [...course].sort((a, b) => a.at.localeCompare(b.at));
     const day = (s) => Date.parse(`${s}T00:00:00`);
-    if (t <= day(p[0].at)) return { u: p[0].u, i: p[0].i };
-    if (t >= day(p.at(-1).at)) return { u: p.at(-1).u, i: p.at(-1).i };
+    if (t <= day(p[0].day)) return { u: p[0].u, i: p[0].i };
+    if (t >= day(p.at(-1).day)) return { u: p.at(-1).u, i: p.at(-1).i };
     for (let k = 0; k < p.length - 1; k++) {
         const a = p[k], b = p[k + 1];
-        if (t <= day(b.at)) { const f = (EASE_OF[a.ease] ?? EASE_OF.linear)((t - day(a.at)) / (day(b.at) - day(a.at))); return { u: Math.round(a.u + (b.u - a.u) * f), i: Math.round(a.i + (b.i - a.i) * f) }; }
+        if (t <= day(b.day)) { const span = day(b.day) - day(a.day); const f = span > 0 ? (EASE_OF[a.ease] ?? EASE_OF.linear)((t - day(a.day)) / span) : 1; return { u: Math.round(a.u + (b.u - a.u) * f), i: Math.round(a.i + (b.i - a.i) * f) }; }
     }
     return null;
 }
@@ -480,6 +496,8 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             const w = whoOf(who);
             const { r, list } = recordOf(given, w, 'write');
             shareCheck(list, owners !== undefined ? ownersOf(owners) : r.owners, fields);
+            { const c = course === undefined ? r.course : courseOf(course); const d = due === undefined ? r.due : due;
+              if (Array.isArray(c) && c.length >= 2 && courseTied(c) && (d === null || d === '' || d === undefined)) no('a point of a course tied to the due date needs a due date'); }
             const change = {};
             if (repeat !== undefined) { if (repeat === null || repeat === '' || repeat === 'none' || repeat === false || repeat === 0) { delete r.repeat; change.repeat = null; } else r.repeat = change.repeat = repeatOf(repeat); }
             if (title !== undefined) { const t = whole(oneLine(title, Infinity), 'a title', TITLE_MAX); if (!t) no('a record needs a title'); r.title = change.title = t; }

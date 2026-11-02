@@ -150,5 +150,7 @@
   "suggested": "Suggested:",
   "archive-it": "Archive…",
   "done-archive": "Done, archive it",
-  "drop-archive": "No longer relevant, archive it"
+  "drop-archive": "No longer relevant, archive it",
+  "courseTie": "Follow the due date",
+  "daysShort": "d"
 }
