@@ -504,7 +504,7 @@ button.binder-who:hover span:not(.binder-dot) { text-decoration: underline; text
 .binder-course-pad::before { left: 50%; top: 0; bottom: 0; width: 1px; } .binder-course-pad::after { top: 50%; left: 0; right: 0; height: 1px; }
 .binder-course-m { position: absolute; width: 14px; height: 14px; margin: -7px; border-radius: 50%; background: var(--binder-action); box-shadow: 0 0 0 2px var(--binder-panel); }
 .binder-course-vals { font-size: .72rem; font-weight: 600; color: var(--binder-dim); }
-.binder-course-x { position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--binder-line); background: var(--binder-panel); color: var(--binder-dim); font-size: .8rem; line-height: 1; cursor: pointer; }
+.binder-course-x { position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; min-width: 0; min-height: 0; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--binder-line); background: var(--binder-panel); color: var(--binder-dim); font-size: .8rem; line-height: 1; cursor: pointer; }
 .binder-course-hop { flex: none; width: 92px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .binder-course-track { position: relative; width: 72px; height: 10px; }
 .binder-course-track::before { content: ""; position: absolute; left: 0; right: 0; top: 4px; height: 2px; border-radius: 2px; background: var(--binder-line); }
