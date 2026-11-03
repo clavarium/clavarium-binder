@@ -66,7 +66,7 @@
 .binder-menu.binder-menu-end { left: auto; right: 0; }
 .binder-primary { background: transparent; color: var(--binder-action) !important; border: 1px solid var(--binder-action); border-radius: 8px; padding: .45em 1em; font-weight: 600; }
 .binder-ghost { background: var(--binder-panel); border: 1px solid var(--binder-line); border-radius: 8px; padding: .45em .9em; }
-.binder-danger { background: var(--binder-danger); color: var(--binder-bg) !important; border: 0; border-radius: 8px; padding: .45em .9em; font-weight: 600; }
+.binder-danger { background: transparent; color: var(--binder-danger) !important; border: 1px solid var(--binder-danger); border-radius: 8px; padding: .45em .9em; font-weight: 600; }   /* outlined, as everywhere (the charter) */
 .binder-x { border: 0; background: transparent; color: var(--binder-dim); font-size: 1.2em; padding: 0 .4em; }
 .binder-link { border: 0; background: transparent; padding: 0; text-align: left; display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
 .binder-link small { color: var(--binder-dim); }
