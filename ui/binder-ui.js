@@ -460,11 +460,19 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     const ask = async (op, args) => { const r = await call(op, args); if (!r.ok) { ui.error = r.text; paint(); throw new Error(r.text); } ui.error = ''; return r.data; };
     const soft = (p) => p.catch(() => {});
 
+    /* Each reading numbered (06-11: Priorities then Batches clicked, the Priorities answer coming last left the
+       matrix under the Batches tab): an answer for an older reading is dropped, never drawn over the newer one. */
+    let loading = 0;
     async function load() {
-        ui.lists = (await ask('lists', {})).filter((l) => !l.archived);
+        const mine = ++loading;
+        const lists = (await ask('lists', {})).filter((l) => !l.archived);
+        if (mine !== loading) return;
+        ui.lists = lists;
         if (!ui.lists.some((l) => l.id === ui.at)) ui.at = ui.lists[0]?.id ?? null;
-        ui.data = ui.at ? await ask('show', { list: ui.at, archived: ui.archived, mine: ui.mine }) : null;
-        if (ui.record) { try { ui.record = await ask('get', { id: ui.record.record.id }); } catch { ui.record = null; ui.mode = 'list'; } }
+        const data = ui.at ? await ask('show', { list: ui.at, archived: ui.archived, mine: ui.mine }) : null;
+        if (mine !== loading) return;
+        ui.data = data;
+        if (ui.record) { let got = null; try { got = await ask('get', { id: ui.record.record.id }); } catch { got = null; } if (mine !== loading) return; if (got) ui.record = got; else { ui.record = null; ui.mode = 'list'; } }
     }
     /* Read again and drawn; says whether the reading came through (a page retries one that did not). */
     async function refresh() { if (!alive) return false; const ok = await load().then(() => true, () => false); paint(); return ok; }
@@ -472,7 +480,8 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
     /* ---- the parts ---- */
     /* THE BINDERS, as binders: tabs with a binder's mark, the one shown joined to it below;
      * on a narrow screen, one picker ("Binder: Batches ▾"). One binder alone: its title says it. */
-    const pick = (id) => { ui.at = id; ui.view = null; ui.mode = 'list'; ui.record = null; ui.open = null; ui.from = null; void refresh(); };
+    /* Another binder: the one before goes at once (no matrix of another under its tab), then the new one is read. */
+    const pick = (id) => { ui.at = id; ui.view = null; ui.mode = 'list'; ui.record = null; ui.open = null; ui.from = null; if (ui.data?.list?.id !== id) ui.data = null; paint(); void refresh(); };
     const mark = () => h('span', { class: 'binder-mark', 'aria-hidden': 'true' });
     /* Drag a tab to reorder the binders (a person's order, kept on the server). Works with a
        finger (press and hold) and with a mouse; a plain tap/click still opens the binder. */

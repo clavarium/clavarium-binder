@@ -1269,3 +1269,41 @@ test('a card may have a start: before it, not on a matrix (02-11)', () => {
     k.act('edit', { id: r.id, start: 'none' }, ME);
     assert.equal(k.act('get', { id: r.id }, ME).data.record.start, undefined);
 });
+
+test('two binders clicked quickly: the last one asked is drawn, never the late answer of the one before (06-11)', async () => {
+    class Node { constructor() { this.childNodes = []; } append(...k) { for (const c of k) { c.parent = this; this.childNodes.push(c); } }
+        replaceChildren(...k) { this.childNodes = []; this.append(...k); } remove() { if (this.parent) this.parent.childNodes = this.parent.childNodes.filter((c) => c !== this); }
+        get textContent() { return this.childNodes.map((c) => c.textContent).join(''); } set textContent(t) { this.childNodes = [new Text(String(t))]; } }
+    class Text extends Node { constructor(t) { super(); this.data = t; } get textContent() { return this.data; } }
+    class El extends Node { constructor(tag) { super(); this.tag = tag; this.attrs = {}; this.on = {}; } setAttribute(k, v) { this.attrs[k] = String(v); } addEventListener(k, f) { this.on[k] = f; } focus() {} setSelectionRange() {} querySelector() { return null; } }
+    const all = (n, f, out = []) => { if (n instanceof El && f(n)) out.push(n); for (const c of n.childNodes ?? []) all(c, f, out); return out; };
+    const names = ['document', 'Node', 'window', 'requestAnimationFrame'];
+    const was = Object.fromEntries(names.map((n) => [n, globalThis[n]]));
+    Object.assign(globalThis, { Node, window: {}, requestAnimationFrame: () => 0,
+        document: { createElement: (t) => new El(t), createTextNode: (t) => new Text(t), addEventListener() {}, removeEventListener() {} } });
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    try {
+        const k = keeper(tmp());
+        const batches = k.act('create-list', { template: 'batches' }, ME).data;
+        const clients = k.act('create-list', { template: 'customers', title: 'Clients' }, ME).data;
+        k.act('add', { list: batches.id, title: 'Fix diff line numbers' }, ME);
+        k.act('add', { list: clients.id, title: 'Alice' }, ME);
+        let slow = false;
+        const root = new El('div');
+        const b = mount(root, { call: async (op, args) => { if (slow && op === 'show' && args.list === batches.id) await wait(80); else await wait(5); return k.act(op, args, ME); } });
+        await wait(40);
+        const tab = (title) => all(root, (e) => e.attrs.role === 'tab' && e.textContent.includes(title))[0];
+        slow = true;
+        tab('Clients').on.click?.({ preventDefault() {}, stopPropagation() {} });
+        await wait(1);
+        const back = tab(batches.title || 'Batches') ?? all(root, (e) => e.attrs.role === 'tab')[0];
+        back.on.click?.({ preventDefault() {}, stopPropagation() {} });
+        await wait(20);   /* its list read, its slow « show » on the way */
+        tab('Clients').on.click?.({ preventDefault() {}, stopPropagation() {} });
+        await wait(150);
+        assert.equal(b.state.at, clients.id);
+        assert.match(root.textContent, /Alice/);
+        assert.doesNotMatch(root.textContent, /Fix diff line numbers/, 'the late answer of the binder before is not drawn');
+        b.destroy();
+    } finally { for (const n of names) globalThis[n] = was[n]; }
+});
