@@ -24,6 +24,7 @@ export const HELP = `binder: the lists you were given, and their records.
   binder note ID --delete N            take back note N of yours (its number in binder get)
   binder attach ID KIND REF ["title"]  KIND: message, file, asset, branch, commit, link, record, mail, event
                                        attach the sources a card stands on, generously; never copy their text into it
+                                       a mail: its Tether ref, binder attach 12 mail "mail:box/ID@example.com" "Quote · Ann · 4 Nov"
   binder detach ID WHAT
   binder archive ID | binder restore ID
   binder new TEMPLATE ["title"]        a list of your own, when none you were given fits

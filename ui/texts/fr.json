@@ -169,5 +169,7 @@
   "courseTie": "Suivre l'échéance",
   "daysShort": "j",
   "start": "Début",
-  "soon": "À venir"
+  "soon": "À venir",
+  "mail-old": "Référence ancienne : demandez à l'IA de la rattacher",
+  "mail-ref-hint": "mail:… (la réf. que donne l'IA)"
 }

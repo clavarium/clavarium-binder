@@ -50,6 +50,11 @@ export const NOTE_MAX = 2000;
 export const DESCRIPTION_MAX = 4000;
 export const FIELD_MAX = 1000;
 export const REF_MAX = 1000;
+/* A MAIL ATTACHED is its reference, as Tether gives it (mail:TARGET/MESSAGE-ID[?in=FOLDER&uid=N]: it opens the
+   mail again wherever it is moved), or a mail file (.eml). A bare id (a uid, kept by older cards) is still
+   shown and opened where it can be, never taken any more: it names another mail once that one is moved. */
+export const MAIL_REF = /^mail:[^/\s?#]{1,100}\/[^?\s#]{1,1000}(\?[^\s#]*)?$/;
+export const isMailAttach = (ref) => MAIL_REF.test(String(ref ?? '')) || /\.eml$/i.test(String(ref ?? ''));
 export const LISTS_MAX = 200;
 export const RECORDS_MAX = 5000;
 export const NOTES_MAX = 500;
@@ -591,7 +596,11 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
             const w = whoOf(who);
             const { r, list } = recordOf(given, w, 'write');
             if (!ATTACH_KINDS.includes(kind)) no(`attach one of: ${ATTACH_KINDS.join(', ')}`);
-            const what = whole(oneLine(ref, Infinity), 'what is attached (its ref)', REF_MAX); if (!what) no('say what to attach');
+            let asked = oneLine(ref, Infinity);
+            /* A mail's reference too long with its hints: its hints go, the mail it names stays the same. */
+            if (kind === 'mail' && MAIL_REF.test(asked) && asked.length > REF_MAX) asked = asked.split('?')[0];
+            const what = whole(asked, 'what is attached (its ref)', REF_MAX); if (!what) no('say what to attach');
+            if (kind === 'mail' && !isMailAttach(what)) no('a mail is attached by its ref, as Tether gives it (mail:TARGET/MESSAGE-ID, the "ref:" line of mail list, search or read), or a .eml file path -- not its number');
             if (kind === 'record') { const other = recordOf(what, w); if (other.r.id === r.id) no('a record is not attached to itself'); }
             if (kind === 'link' && !/^https?:\/\//i.test(what)) no('a link starts with http:// or https://');
             if (r.attached.length >= ATTACHED_MAX) no(`${ATTACHED_MAX} things attached at most`);

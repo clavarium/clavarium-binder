@@ -32,7 +32,7 @@ export const KEYS = Object.freeze(['lists', 'binder', 'new-list', 'new-item', 'n
     'add-what', 'owner', 'attachment', 'tools', 'cover', 'agent-lists', 'agent-columns', 'agent-fields', 'remind-before', 'no-remind', 'days',
     'op-add', 'op-edit', 'op-move', 'op-note', 'op-edit-note', 'op-remove-note', 'op-attach', 'op-detach', 'op-archive', 'op-restore', 'op-delete',
     'matrix', 'to-place', 'q-do', 'q-plan', 'q-delegate', 'q-later', 'legend-size', 'legend-colour', 'recurrent', 'retype', 'retype-hint', 'retype-apply', 'no-repeat', 'repeat-free', 'open-card', 'fullscreen', 'fullscreen-exit',
-    'legend-me', 'legend-none', 'delegability', 'shortcuts', 'mx-all', 'mx-mine', 'mx-deleg', 'all-hidden', 'urgency', 'urgency-hand', 'urgency-auto', 'urgency-from', 'auto', 'mx-move', 'mx-moved', 'mx-moved-hand', 'undo', 'my-share', 'nobody-yet', 'delegable-to', 'late', 'due-soon', 'to-handle', 'pick-point', 'lvl-low', 'lvl-mid', 'lvl-high', 'q-do-why', 'q-plan-why', 'q-delegate-why', 'q-later-why', 'start', 'soon']);
+    'legend-me', 'legend-none', 'delegability', 'shortcuts', 'mx-all', 'mx-mine', 'mx-deleg', 'all-hidden', 'urgency', 'urgency-hand', 'urgency-auto', 'urgency-from', 'auto', 'mx-move', 'mx-moved', 'mx-moved-hand', 'undo', 'my-share', 'nobody-yet', 'delegable-to', 'late', 'due-soon', 'to-handle', 'pick-point', 'lvl-low', 'lvl-mid', 'lvl-high', 'q-do-why', 'q-plan-why', 'q-delegate-why', 'q-later-why', 'start', 'soon', 'mail-old', 'mail-ref-hint']);
 const KINDS = ['message', 'file', 'asset', 'branch', 'commit', 'link', 'record', 'mail', 'event'];
 const ICON = { message: '💬', file: '📄', asset: '🗄', branch: '⑂', commit: '◉', link: '🔗', record: '▣', mail: '📧', event: '📅' };
 const TYPES = ['text', 'number', 'date', 'link', 'photo'];
@@ -42,6 +42,8 @@ const DESCRIPTION_MAX = 4000;
  * know no template: only a list's states and fields, and a record's values. */
 
 /* A file that is a picture, by its name: what a screen may put forward. */
+/* A mail attached by its reference (mail:TARGET/MESSAGE-ID) or as a file (.eml); anything else is an old bare id. */
+export const isMailRef = (ref) => /^mail:[^/\s?#]{1,100}\/[^?\s#]{1,1000}(\?[^\s#]*)?$/.test(String(ref ?? '')) || /\.eml$/i.test(String(ref ?? ''));
 export const isPicture = (ref) => /\.(jpe?g|png|webp|gif)$/i.test(String(ref ?? '').split(/[?#]/)[0]);
 
 /* A card's pictures: its photo fields set ("field:ID"), then its files attached
@@ -1333,7 +1335,7 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
 
         /* What is attached: an icon and a name; a tap opens it. */
         const openIt = (a) => { if (a.kind === 'record') open({ id: a.ref }); else if (a.kind === 'link') window.open(a.ref, '_blank', 'noopener'); else openAttached?.(a); };
-        const nameOfIt = (a) => a.title || (a.kind === 'record' ? ui.data?.records?.find((x) => x.id === a.ref)?.title ?? `#${a.ref}` : a.kind === 'file' ? a.ref.split('/').filter(Boolean).at(-1) ?? a.ref : a.ref);
+        const nameOfIt = (a) => a.title || (a.kind === 'record' ? ui.data?.records?.find((x) => x.id === a.ref)?.title ?? `#${a.ref}` : a.kind === 'file' ? a.ref.split('/').filter(Boolean).at(-1) ?? a.ref : a.kind === 'mail' ? w('kind-mail') : a.ref);
         let attachForm = null;
         if (can && ui.open === 'attach') {
             const kind = h('select', { 'aria-label': w('attach') }, KINDS.map((k) => h('option', { value: k }, w(`kind-${k}`))));
@@ -1342,7 +1344,11 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             const pickId = `binder-cards-${r.id}`;
             const pick = h('datalist', { id: pickId }, others.map((x) => h('option', { value: `#${x.n} ${x.title}` })));
             const ref = h('input', { type: 'text', placeholder: w('what'), 'aria-label': w('what') });
-            const follow = () => { if (kind.value === 'record') ref.setAttribute('list', pickId); else ref.removeAttribute?.('list'); };
+            const follow = () => {
+                if (kind.value === 'record') ref.setAttribute('list', pickId); else ref.removeAttribute?.('list');
+                /* A mail: its reference, as the AI has it from Tether (never its number). */
+                ref.setAttribute('placeholder', kind.value === 'mail' ? w('mail-ref-hint') : w('what'));
+            };
             kind.addEventListener('change', follow);
             later(() => ref.focus());
             const refOf = () => (kind.value === 'record' ? (/^#?(\d+)/.exec(ref.value.trim())?.[1] ?? ref.value.trim()) : ref.value);
@@ -1360,8 +1366,9 @@ export function mount(root, { call, words = {}, lang = 'en', people = () => [], 
             h('figcaption', {}, star(a.id), h('span', { class: 'binder-att-name' }, nameOfIt(a)), del(a))))) : null;
         const attached = r.attached.length || attachForm ? h('section', { class: 'binder-sec' }, h('h3', {}, w('attached')),
             gallery,
-            rest.length ? h('ul', { class: 'binder-atts' }, rest.map((a) => h('li', { class: 'binder-att', 'data-kind': a.kind },
-                h('button', { type: 'button', class: 'binder-link', title: `${w(`kind-${a.kind}`)} · ${a.kind === 'record' ? `#${a.ref}` : a.ref}`, onclick: () => openIt(a) },
+            rest.length ? h('ul', { class: 'binder-atts' }, rest.map((a) => h('li', { class: `binder-att${a.kind === 'mail' && !isMailRef(a.ref) ? ' binder-att-old' : ''}`, 'data-kind': a.kind },
+                /* An old mail id (kept before references): shown, opened where the page can, said old. */
+                h('button', { type: 'button', class: 'binder-link', title: a.kind === 'mail' && !isMailRef(a.ref) ? `${w('kind-mail')} · ${w('mail-old')}` : `${w(`kind-${a.kind}`)} · ${a.kind === 'record' ? `#${a.ref}` : a.ref}`, onclick: () => openIt(a) },
                     thumb(a), h('span', { class: 'binder-att-name' }, nameOfIt(a))),
                 del(a)))) : null,
             attachForm ?? (can ? h('button', { type: 'button', class: 'binder-text-btn', 'data-act': 'show-attach', onclick: () => set('attach') }, `+ ${w('attach')}`) : null)) : null;

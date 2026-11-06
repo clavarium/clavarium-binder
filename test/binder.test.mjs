@@ -89,13 +89,35 @@ test('a mail and a calendar event attach by their Tether ref, each with a title 
     const s = openStore(tmp());
     const l = s.createList({ template: 'simple', title: 'Sujets' }, ME);
     const r = s.add(l.id, { title: 'Atelier datacraft' }, ME);
-    s.attach(r.id, { kind: 'mail', ref: 'AAMkAGI2', title: 'RE: datacraft — alice@example.org — 28 oct.' }, ME);
+    const REF = 'mail:work-mail/CAF12%40example.org?in=INBOX&uid=7';
+    s.attach(r.id, { kind: 'mail', ref: REF, title: 'RE: datacraft — alice@example.org — 28 oct.' }, ME);
     s.attach(r.id, { kind: 'event', ref: 'evt-9f3', title: 'Atelier datacraft — 10 nov. 14:00' }, ME);
     const got = s.record(r.id, ME).record.attached;
-    assert.equal(got.find((a) => a.kind === 'mail').ref, 'AAMkAGI2', 'the mail keeps its Tether id');
+    assert.equal(got.find((a) => a.kind === 'mail').ref, REF, 'the mail keeps its Tether reference');
     assert.match(got.find((a) => a.kind === 'mail').title, /datacraft/, 'and the subject the card shows');
     assert.equal(got.find((a) => a.kind === 'event').ref, 'evt-9f3');
     assert.equal(got.length, 2);
+});
+
+test('a mail is attached by its reference or as a .eml file, never by its number; an old bare id kept is still read', () => {
+    const dir = tmp();
+    const s = openStore(dir);
+    const l = s.createList({ template: 'simple', title: 'Sujets' }, ME);
+    const r = s.add(l.id, { title: 'Devis' }, ME);
+    assert.throws(() => s.attach(r.id, { kind: 'mail', ref: 'AAMkAGI2' }, ME), /a mail is attached by its ref, as Tether gives it/);
+    assert.throws(() => s.attach(r.id, { kind: 'mail', ref: '42' }, ME), /not its number/);
+    assert.throws(() => s.attach(r.id, { kind: 'mail', ref: 'mail:work-mail' }, ME), /by its ref/);
+    s.attach(r.id, { kind: 'mail', ref: '/work/mails/devis.eml', title: 'Devis' }, ME);
+    /* A reference too long with its hints: the hints go, the mail it names stays. */
+    const long = `mail:work-mail/CAF12%40example.org?in=INBOX&uid=${'A'.repeat(1200)}`;
+    s.attach(r.id, { kind: 'mail', ref: long }, ME);
+    assert.ok(s.record(r.id, ME).record.attached.some((a) => a.ref === 'mail:work-mail/CAF12%40example.org'));
+    /* A card from before: its bare id is kept and shown, as it was. */
+    const state = JSON.parse(readFileSync(join(dir, 'state.json'), 'utf8'));
+    state.records[r.id].attached.push({ id: 'old-1', kind: 'mail', ref: 'AAMkAGI2', title: 'RE: old', at: new Date().toISOString(), by: ME.id });
+    writeFileSync(join(dir, 'state.json'), JSON.stringify(state));
+    const again = openStore(dir);
+    assert.equal(again.record(r.id, ME).record.attached.find((a) => a.id === 'old-1').ref, 'AAMkAGI2');
 });
 
 test('a note is changed only by whoever wrote it, and the history says so', () => {

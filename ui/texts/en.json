@@ -154,5 +154,7 @@
   "courseTie": "Follow the due date",
   "daysShort": "d",
   "start": "Start",
-  "soon": "Coming"
+  "soon": "Coming",
+  "mail-old": "Old reference: ask the AI to attach it again",
+  "mail-ref-hint": "mail:… (the ref the AI gives)"
 }
