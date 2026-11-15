@@ -618,7 +618,13 @@ test('binder field add/remove: a person adds fields to an existing list and remo
 
 test('an agent reshapes a list (fields, view, type) only when a person turns agentFields on; even then it adds, never removes, retypes or renames away data', () => {
     const s = openStore(tmp());
-    const l = s.createList({ template: 'simple', title: 'Suivi' }, BOT); // the agent's own list: it has write
+    /* A list it made itself (15-11): its own to shape, even off -- only adding, as below. */
+    const own = s.createList({ template: 'simple', title: 'Proches' }, BOT);
+    assert.equal(s.editList(own.id, { fields: [{ name: 'Photo', type: 'photo' }] }, BOT).fields.length, 1, 'its own list: a field added');
+    assert.equal(s.retype(own.id, { template: 'people' }, BOT).id, own.id, 'its own list: retyped');
+    /* A list a person made and gave it: off by default, refused. */
+    const l = s.createList({ template: 'simple', title: 'Suivi' }, ME);
+    s.grant(l.id, BOT.id, 'write', ME);
     /* Off by default: the agent is refused. */
     assert.throws(() => s.retype(l.id, { template: 'priorities' }, BOT), /not allowed an agent to change a list type/);
     assert.throws(() => s.editList(l.id, { fields: [{ name: 'Note', type: 'number' }] }, BOT), /not allowed an agent to change the fields or the view/);

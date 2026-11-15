@@ -22,7 +22,7 @@
  * SETTINGS: the store's own, a person's alone to change, in the history too.
  *   agentLists    lists an agent may have made and not archived (0 to 50; 0: none)
  *   agentColumns  whether an agent may change a list's columns/states (on by default)
- *   agentFields   whether an agent may change a list's fields and type/view (off by default)
+ *   agentFields   whether an agent may change a list's fields and type/view (off by default; a list it made itself is always its own to shape)
  */
 import { readFileSync, writeFileSync, appendFileSync, renameSync, mkdirSync, existsSync, lstatSync } from 'node:fs';
 import { join } from 'node:path';
@@ -357,7 +357,10 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
                    when agentFields is on (adds/renames fields, never removes one or changes a type). */
                 const set = settingsNow();
                 if (title !== undefined) no('an agent does not rename a list -- ask a person');
-                if ((fields !== undefined || view !== undefined) && !set.agentFields) no('a person has not allowed an agent to change the fields or the view -- reserved to a person, who may allow it (Clavarium: Settings > Binders, "fields an agent may change"); ask them, or ask them to add it');
+                /* A list it made itself (15-11, its owner's ask): its fields and view are its own to shape, as a
+                   person's -- still only added and renamed, never removed or retyped (agentFieldsOk). */
+                const mine = (() => { try { return listOf(given, w, 'write').by === w.id; } catch { return false; } })();
+                if ((fields !== undefined || view !== undefined) && !set.agentFields && !mine) no('a person has not allowed an agent to change the fields or the view -- reserved to a person, who may allow it (Clavarium: Settings > Binders, "fields an agent may change"); ask them, or ask them to add it');
                 if (states !== undefined && !set.agentColumns) no('a person turned off the columns an agent may change');
                 if (title === undefined && view === undefined && fields === undefined && states === undefined) no('say what to change');
             }
@@ -404,7 +407,9 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
          * data are left untouched; a person's, like any change to a list's shape. */
         retype(given, { template, lang = 'en' } = {}, who) {
             const w = whoOf(who);
-            if (!isPerson(w) && !settingsNow().agentFields) no('a person has not allowed an agent to change a list type');
+            /* A list it made itself (15-11): its own to retype. */
+            const mine = (() => { try { return listOf(given, w, 'write').by === w.id; } catch { return false; } })();
+            if (!isPerson(w) && !settingsNow().agentFields && !mine) no('a person has not allowed an agent to change a list type');
             const list = listOf(given, w, 'write');
             const base = seed(template, lang);
             const have = new Set(list.fields.map((f) => f.id));
