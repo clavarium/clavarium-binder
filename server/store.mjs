@@ -28,6 +28,7 @@ import { readFileSync, writeFileSync, appendFileSync, renameSync, mkdirSync, exi
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { seed, TEMPLATES, VIEWS, FIELD_TYPES } from './templates.mjs';
+import { lines } from './binder.mjs';
 
 export const TITLE_MAX = 200;
 /* Lists an agent may have made and not archived: 5 until a person sets it (settings.agentLists), 0 to 50. */
@@ -207,7 +208,8 @@ export function openStore(dir, { now = () => Date.now() } = {}) {
         for (const fn of listeners) { try { fn(line); } catch { /* a listener's fault is its own */ } }
         return line;
     };
-    const logLines = () => { try { return readFileSync(LOG, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean); } catch { return []; } };
+    /* Read once, then only what was added (18-11: read whole at every card opened; it only grows). Read it, never change it. */
+    const logLines = () => lines(LOG);
 
     /* ---- reading, as `who` may ---- */
     const access = (list, who) => (isPerson(who) ? 'write' : list.access?.[who.id] ?? null);
