@@ -17,21 +17,51 @@
  * The keeper says who asks by the folder the ask came from: an agent cannot
  * speak as another one, nor as a person. See docs/protocol.md.
  */
-import { appendFileSync, readFileSync, mkdirSync, statSync, lstatSync, realpathSync } from 'node:fs';
+import { appendFileSync, readFileSync, mkdirSync, statSync, lstatSync, realpathSync, openSync, readSync, closeSync, constants } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { createInterface } from 'node:readline';
 
-export const VERSION = '0.1.63-next.1';
+export const VERSION = '0.1.64-next.1';
 export const FOLDER = '.binder';
 /* How long an ask waits for its answer. The keeper answers within a second or two. */
 export const WAIT_MS = 45_000;
 export const NO_KEEPER = 'No answer: nobody keeps this binder right now -- its application is restarting (try again in a minute) or not running. Nothing was changed.';
 
 const parsed = (line) => { try { const j = JSON.parse(line); return j && typeof j === 'object' && !Array.isArray(j) ? j : null; } catch { return null; } };
+/* A JSON-lines file, its objects. READ ONCE, THEN ONLY WHAT WAS ADDED (18-11: the keeper read every folder's asks
+   and answers whole each second, and each ask read the answers whole 6 times a second: grown over weeks, that held
+   the owner's server): per file, where it was read up to; grown, only its new bytes; replaced or shrunk, read again
+   whole. The list given is the one kept: read it, never change it. Never through a link. */
+export const LINES_KEPT = 512;
+const kept = new Map();
 export function lines(file) {
-    try { if (lstatSync(file).isSymbolicLink()) return []; return readFileSync(file, 'utf8').split('\n').filter(Boolean).map(parsed).filter(Boolean); } catch { return []; }
+    let info;
+    try { info = lstatSync(file); } catch { kept.delete(file); return []; }
+    if (info.isSymbolicLink() || !info.isFile()) { kept.delete(file); return []; }
+    let k = kept.get(file);
+    if (k && (k.ino !== info.ino || k.dev !== info.dev || info.size < k.offset)) k = undefined;
+    if (k && info.size === k.size && info.mtimeMs === k.mtimeMs) return k.rows;
+    if (!k) k = { ino: info.ino, dev: info.dev, offset: 0, rows: [], size: 0, mtimeMs: 0 };
+    try {
+        const fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+        try {
+            const want = info.size - k.offset;
+            const buf = Buffer.alloc(Math.max(0, want));
+            let got = 0;
+            while (got < want) { const n = readSync(fd, buf, got, want - got, k.offset + got); if (n <= 0) break; got += n; }
+            const end = buf.subarray(0, got).lastIndexOf(0x0a);
+            if (end >= 0) {
+                for (const line of buf.subarray(0, end).toString('utf8').split('\n')) { if (!line) continue; const j = parsed(line); if (j) k.rows.push(j); }
+                k.offset += end + 1;
+            }
+            k.size = k.offset + (end >= 0 ? got - end - 1 : got); k.mtimeMs = info.mtimeMs;
+        } finally { closeSync(fd); }
+    } catch { kept.delete(file); return []; }
+    kept.delete(file); kept.set(file, k);
+    if (kept.size > LINES_KEPT) kept.delete(kept.keys().next().value);
+    return k.rows;
 }
 const isFolder = (path) => { try { return statSync(path).isDirectory(); } catch { return false; } };
 

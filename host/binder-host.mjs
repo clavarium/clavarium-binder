@@ -14,7 +14,7 @@
  * An ask too old is answered "too late", never done: the command that sent it
  * gave up waiting and said nothing was changed.
  */
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { appendFileSync, mkdirSync, lstatSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { openStore, Refused, oneLine } from '../server/store.mjs';
 import { lines } from '../server/binder.mjs';
@@ -23,6 +23,12 @@ import { TEMPLATES } from '../server/templates.mjs';
 export { openStore, Refused, TEMPLATES };
 /* Older than this, an ask is not done: its command stopped waiting (WAIT_MS) a while ago. */
 export const TOO_LATE_MS = 60_000;
+/* SMALL FILES (18-11): asks.jsonl and answers.jsonl are a mailbox, not a history (the list's log is). Past
+   ROTATE_BYTES the answers keep the last KEEP_MS, written whole by the keeper, their only writer; the asks are put
+   aside (asks.jsonl.old, still read) and go after OLD_MS. An ask older than KEEP_MS is history: never answered again. */
+export const ROTATE_BYTES = 256 * 1024;
+export const KEEP_MS = 60 * 60_000;
+export const OLD_MS = 10 * 60_000;
 
 const day = (iso) => String(iso ?? '').slice(0, 10);
 const owners = (r) => (r.owners.length ? ` @${r.owners.join(' @')}` : '');
@@ -222,11 +228,49 @@ export function keeper(dir, { sides = () => [], now = () => Date.now(), people =
         }
     };
     /* What each folder asked and was not answered yet. Answered asks are known by the answers file. */
+    const pumped = new Map();
+    const rotate = (side) => {
+        const answersFile = join(side.dir, 'answers.jsonl');
+        try {
+            const a = lstatSync(answersFile, { throwIfNoEntry: false });
+            if (a?.isFile() && a.size > ROTATE_BYTES) {
+                const kept = lines(answersFile).filter((x) => now() - Date.parse(x.at) < KEEP_MS);
+                const tmp = `${answersFile}.new`;
+                rmSync(tmp, { force: true });
+                writeFileSync(tmp, kept.map((x) => `${JSON.stringify(x)}\n`).join(''), { flag: 'wx' });
+                renameSync(tmp, answersFile);
+                pumped.delete(side.dir);
+            }
+        } catch { /* tried again next turn */ }
+        const asksFile = join(side.dir, 'asks.jsonl'); const aside = `${asksFile}.old`;
+        try {
+            const o = lstatSync(aside, { throwIfNoEntry: false });
+            if (o && now() - o.mtimeMs > OLD_MS) { rmSync(aside, { force: true }); pumped.delete(side.dir); }
+            else if (!o) {
+                const q = lstatSync(asksFile, { throwIfNoEntry: false });
+                if (q?.isFile() && q.size > ROTATE_BYTES) { renameSync(asksFile, aside); pumped.delete(side.dir); }
+            }
+        } catch { /* tried again next turn */ }
+    };
     const pump = () => {
         let n = 0;
         for (const side of sides()) {
-            const answered = new Set(lines(join(side.dir, 'answers.jsonl')).map((a) => a.ask));
-            for (const q of lines(join(side.dir, 'asks.jsonl'))) {
+            /* Only what was added since the last turn (18-11): the answered asks and those still open, kept up to date. */
+            rotate(side);
+            const answers = lines(join(side.dir, 'answers.jsonl'));
+            const asks = lines(join(side.dir, 'asks.jsonl'));
+            const asideRows = lines(join(side.dir, 'asks.jsonl.old'));
+            let st = pumped.get(side.dir);
+            if (!st || answers.length < st.answers || asks.length < st.asks || asideRows.length < st.aside) { st = { answers: 0, asks: 0, aside: 0, answered: new Set(), open: new Map() }; pumped.set(side.dir, st); }
+            for (let i = st.answers; i < answers.length; i++) { st.answered.add(answers[i].ask); st.open.delete(answers[i].ask); }
+            st.answers = answers.length;
+            const take = (q) => { if (typeof q.id === 'string' && !st.answered.has(q.id) && now() - Date.parse(q.at) < KEEP_MS) st.open.set(q.id, q); };
+            for (let i = st.aside; i < asideRows.length; i++) take(asideRows[i]);
+            for (let i = st.asks; i < asks.length; i++) take(asks[i]);
+            st.aside = asideRows.length; st.asks = asks.length;
+            const answered = st.answered;
+            for (const q of [...st.open.values()]) {
+                st.open.delete(q.id);
                 if (typeof q.id !== 'string' || answered.has(q.id)) continue;
                 const late = !(now() - Date.parse(q.at) < TOO_LATE_MS);
                 /* One ask that breaks is answered so, and never holds up the ones after it (nor the other
