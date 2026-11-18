@@ -229,16 +229,19 @@ export function keeper(dir, { sides = () => [], now = () => Date.now(), people =
     };
     /* What each folder asked and was not answered yet. Answered asks are known by the answers file. */
     const pumped = new Map();
+    const trimmedTo = new Map();
     const rotate = (side) => {
         const answersFile = join(side.dir, 'answers.jsonl');
         try {
             const a = lstatSync(answersFile, { throwIfNoEntry: false });
-            if (a?.isFile() && a.size > ROTATE_BYTES) {
+            /* Past ROTATE_BYTES, and twice what it kept the last time: a last hour bigger than that is not written again each turn. */
+            if (a?.isFile() && a.size > Math.max(ROTATE_BYTES, 2 * (trimmedTo.get(side.dir) ?? 0))) {
                 const kept = lines(answersFile).filter((x) => now() - Date.parse(x.at) < KEEP_MS);
                 const tmp = `${answersFile}.new`;
                 rmSync(tmp, { force: true });
                 writeFileSync(tmp, kept.map((x) => `${JSON.stringify(x)}\n`).join(''), { flag: 'wx' });
                 renameSync(tmp, answersFile);
+                trimmedTo.set(side.dir, lstatSync(answersFile).size);
                 pumped.delete(side.dir);
             }
         } catch { /* tried again next turn */ }
